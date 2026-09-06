@@ -3,6 +3,7 @@
 #include <n8v/ui.hpp>
 
 #include "core/clay_convert.hpp"
+#include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
 
 #include <clay.h>
@@ -19,6 +20,7 @@ static bool initialized = false;
 static std::vector<char> clayMemory;
 
 static std::deque<std::string> textStorage;
+static std::deque<std::string> urlStorage;
 static std::deque<std::function<void()>> clickCallbacks;
 static std::deque<n8v::detail::TextStyleFlags> textStyleStorage;
 
@@ -55,6 +57,12 @@ void dispatchClick(Clay_ElementId /*elementId*/, Clay_PointerData pointerData, i
   if (callback && *callback) (*callback)();
 }
 
+void dispatchLinkClick(Clay_ElementId /*elementId*/, Clay_PointerData pointerData, intptr_t userData) {
+  if (pointerData.state != CLAY_POINTER_DATA_PRESSED_THIS_FRAME) return;
+  auto *url = reinterpret_cast<std::string *>(userData);
+  if (url) n8v::detail::openUrl(*url);
+}
+
 } // namespace
 
 namespace n8v::detail {
@@ -62,6 +70,7 @@ namespace n8v::detail {
 void beginFrame() {
   ensureInitialized();
   textStorage.clear();
+  urlStorage.clear();
   clickCallbacks.clear();
   textStyleStorage.clear();
 
@@ -117,8 +126,24 @@ void LeafBuilder::operator()(std::string_view label) && {
     CLAY_TEXT(internString(label), Clay__StoreTextElementConfig(textConfig));
 
     Clay__CloseElement();
+  } else if (!textOptions.url.empty()) {
+    Clay__OpenElement();
+    Clay_ElementDeclaration decl = {};
+    Clay__ConfigureOpenElement(decl);
+
+    urlStorage.emplace_back(textOptions.url);
+    Clay_OnHover(dispatchLinkClick, reinterpret_cast<intptr_t>(&urlStorage.back()));
+
+    textStyleStorage.push_back(n8v::detail::TextStyleFlags{textOptions.bold, textOptions.italic, true});
+    Clay_TextElementConfig textConfig = {};
+    textConfig.textColor = toClay(activePaint().text(textOptions));
+    textConfig.fontSize = 16;
+    textConfig.userData = &textStyleStorage.back();
+    CLAY_TEXT(internString(label), Clay__StoreTextElementConfig(textConfig));
+
+    Clay__CloseElement();
   } else {
-    textStyleStorage.push_back(n8v::detail::TextStyleFlags{textOptions.bold, textOptions.italic, !textOptions.url.empty()});
+    textStyleStorage.push_back(n8v::detail::TextStyleFlags{textOptions.bold, textOptions.italic, false});
     Clay_TextElementConfig textConfig = {};
     textConfig.textColor = toClay(activePaint().text(textOptions));
     textConfig.fontSize = 16;

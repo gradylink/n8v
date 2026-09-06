@@ -47,6 +47,7 @@ target_include_directories(sdl2_lazy PUBLIC ${_N8V_SDL2_INCLUDE_DIRS})
 
 add_library(n8v
   source/core/clay_impl.cpp
+  source/core/open_url.cpp
   source/core/ui_core.cpp
   source/styles/plain/plain_style.cpp
   source/backends/clay_fallback/backend_select.cpp
