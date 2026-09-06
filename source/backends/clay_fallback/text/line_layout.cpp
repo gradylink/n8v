@@ -1,28 +1,15 @@
 #include "line_layout.hpp"
 
-#include "font_resolve.hpp"
+#include "bundled_font.hpp"
 #include "utf8.hpp"
-
-#include <fstream>
 
 namespace n8v::detail {
 namespace {
 
-std::vector<unsigned char> readFile(const std::string &path) {
-  std::ifstream file(path, std::ios::binary | std::ios::ate);
-  if (!file) return {};
-  std::streamsize size = file.tellg();
-  if (size <= 0) return {};
-  file.seekg(0, std::ios::beg);
-  std::vector<unsigned char> buffer((size_t)size);
-  if (!file.read(reinterpret_cast<char *>(buffer.data()), size)) return {};
-  return buffer;
-}
-
-std::shared_ptr<FontAtlas> ensureAtlas(const std::string &path) {
-  std::shared_ptr<FontAtlas> atlas = FontManager::acquire(path);
+std::shared_ptr<FontAtlas> ensureAtlas(bool bold, bool italic) {
+  std::shared_ptr<FontAtlas> atlas = FontManager::acquire(bundledFontKey(bold, italic));
   if (!atlas->isValid()) {
-    std::vector<unsigned char> bytes = readFile(path);
+    std::vector<unsigned char> bytes = bundledFontBytes(bold, italic);
     if (bytes.empty() || !atlas->loadFromMemory(std::move(bytes))) return nullptr;
   }
   return atlas;
@@ -31,10 +18,7 @@ std::shared_ptr<FontAtlas> ensureAtlas(const std::string &path) {
 } // namespace
 
 bool layoutLine(std::string_view utf8Text, uint16_t pixelSize, bool bold, bool italic, LineLayoutResult &out) {
-  std::string fontPath = resolveSystemFont(bold, italic);
-  if (fontPath.empty()) return false;
-
-  std::shared_ptr<FontAtlas> atlas = ensureAtlas(fontPath);
+  std::shared_ptr<FontAtlas> atlas = ensureAtlas(bold, italic);
   if (!atlas || !atlas->isValid()) return false;
 
   std::vector<uint32_t> codepoints = utf8::decode(utf8Text);
