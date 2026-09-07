@@ -11,6 +11,8 @@ struct FlexOptions {
   Direction direction = Direction::Horizontal;
   uint16_t gap = 0;
   Padding padding = {};
+  Align hAlign = Align::Start;
+  Align vAlign = Align::Start;
 };
 
 struct TextOptions {

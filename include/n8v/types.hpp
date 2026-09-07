@@ -9,6 +9,12 @@ enum class Direction {
   Vertical,
 };
 
+enum class Align {
+  Start,
+  Center,
+  End,
+};
+
 enum class ButtonStyle {
   Primary,
   Secondary,

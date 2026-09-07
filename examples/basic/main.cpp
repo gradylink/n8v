@@ -23,7 +23,7 @@ int main() {
                   std::cout << std::to_string(clickCount) << std::endl;
                 }})("Click me");
 
-        flex({.direction = Direction::Horizontal, .gap = 8}) {
+        flex({.direction = Direction::Horizontal, .gap = 8, .hAlign = Align::Center, .vAlign = Align::Center}) {
           button({.style = ButtonStyle::Secondary})("Secondary");
           text({})("this text is a plain container, styled buttons above it, and a link below");
         }

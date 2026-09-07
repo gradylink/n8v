@@ -151,6 +151,7 @@ void openFlex(const FlexOptions &options) {
   decl.layout.layoutDirection = options.direction == Direction::Horizontal ? CLAY_LEFT_TO_RIGHT : CLAY_TOP_TO_BOTTOM;
   decl.layout.childGap = options.gap;
   decl.layout.padding = toClay(options.padding);
+  decl.layout.childAlignment = {toClayX(options.hAlign), toClayY(options.vAlign)};
 
   Clay__ConfigureOpenElement(decl);
 }
