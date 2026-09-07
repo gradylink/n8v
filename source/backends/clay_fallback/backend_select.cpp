@@ -10,6 +10,11 @@
 #include "gtk4_lazy_vars.h"
 #endif
 
+#ifdef N8V_HAS_QT_BACKEND
+#include "backends/native_qt/qt_backend.hpp"
+#include "qt6widgets_lazy_vars.h"
+#endif
+
 #include <cstdio>
 #include <memory>
 
@@ -38,6 +43,11 @@ std::unique_ptr<Backend> selectBackend() {
 #ifdef N8V_HAS_GTK4_BACKEND
   if ((!preferredBackend || std::strcmp(preferredBackend, "gtk") == 0 || strcmp(preferredBackend, "gtk4") == 0) && lzy_gtk4_lazy_is_available()) {
     return detail::makeGtk4Backend();
+  }
+#endif
+#ifdef N8V_HAS_QT_BACKEND
+  if ((!preferredBackend || std::strcmp(preferredBackend, "qt") == 0 || std::strcmp(preferredBackend, "qt6") == 0) && lzy_qt6widgets_lazy_is_available()) {
+    return detail::makeQtBackend();
   }
 #endif
   if (lzy_sdl2_lazy_is_available()) {

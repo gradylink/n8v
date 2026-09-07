@@ -103,6 +103,7 @@ cmrc_add_resource_library(n8v_fonts
 )
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/backends/gtk4.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/backends/qt.cmake")
 
 add_library(n8v
   source/core/clay_impl.cpp
@@ -129,6 +130,12 @@ if(N8V_HAVE_GTK4)
   target_sources(n8v PRIVATE source/backends/native_gtk4/gtk4_backend.cpp)
   target_compile_definitions(n8v PRIVATE N8V_HAS_GTK4_BACKEND)
   target_link_libraries(n8v PRIVATE gtk4_lazy gobject_lazy glib_lazy)
+endif()
+
+if(N8V_HAVE_QT)
+  target_sources(n8v PRIVATE source/backends/native_qt/qt_backend.cpp)
+  target_compile_definitions(n8v PRIVATE N8V_HAS_QT_BACKEND)
+  target_link_libraries(n8v PRIVATE qt6widgets_lazy qt6gui_lazy qt6core_lazy)
 endif()
 
 option(N8V_EXAMPLES "Build the n8v example apps." ${PROJECT_IS_TOP_LEVEL})
