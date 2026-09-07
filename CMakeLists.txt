@@ -102,6 +102,8 @@ cmrc_add_resource_library(n8v_fonts
   ${_N8V_FONT_FILES}
 )
 
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/backends/gtk4.cmake")
+
 add_library(n8v
   source/core/clay_impl.cpp
   source/core/open_url.cpp
@@ -122,6 +124,12 @@ target_include_directories(n8v PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/source)
 target_link_libraries(n8v PRIVATE sdl2_lazy n8v_fonts)
 cl_add_dep(n8v clay PUBLIC)
 cl_add_dep(n8v stb_truetype PRIVATE)
+
+if(N8V_HAVE_GTK4)
+  target_sources(n8v PRIVATE source/backends/native_gtk4/gtk4_backend.cpp)
+  target_compile_definitions(n8v PRIVATE N8V_HAS_GTK4_BACKEND)
+  target_link_libraries(n8v PRIVATE gtk4_lazy gobject_lazy glib_lazy)
+endif()
 
 option(N8V_EXAMPLES "Build the n8v example apps." ${PROJECT_IS_TOP_LEVEL})
 if(N8V_EXAMPLES)

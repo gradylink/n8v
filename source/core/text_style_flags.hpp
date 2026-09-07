@@ -9,6 +9,8 @@ struct TextStyleFlags {
   bool bold = false;
   bool italic = false;
   bool underline = false;
+  bool ownedByWidget = false;
+  int ordinal = 0;
 };
 
 } // namespace n8v::detail

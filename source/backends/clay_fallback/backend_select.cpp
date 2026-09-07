@@ -1,7 +1,14 @@
+#include <cstdlib>
+#include <cstring>
 #include <n8v/backend.hpp>
 
 #include "renderers/sdl2/sdl2_backend.hpp"
 #include "sdl2_lazy_vars.h"
+
+#ifdef N8V_HAS_GTK4_BACKEND
+#include "backends/native_gtk4/gtk4_backend.hpp"
+#include "gtk4_lazy_vars.h"
+#endif
 
 #include <cstdio>
 #include <memory>
@@ -26,6 +33,13 @@ public:
 };
 
 std::unique_ptr<Backend> selectBackend() {
+  const char *preferredBackend = std::getenv("N8V_BACKEND");
+
+#ifdef N8V_HAS_GTK4_BACKEND
+  if ((!preferredBackend || std::strcmp(preferredBackend, "gtk") == 0 || strcmp(preferredBackend, "gtk4") == 0) && lzy_gtk4_lazy_is_available()) {
+    return detail::makeGtk4Backend();
+  }
+#endif
   if (lzy_sdl2_lazy_is_available()) {
     return detail::makeSdl2Backend();
   }

@@ -34,6 +34,11 @@ enum class CursorKind {
   Pointer,
 };
 
+enum class NativeWidgetKind {
+  Button,
+  Link,
+};
+
 struct Color {
   float r = 0, g = 0, b = 0, a = 255;
 };

@@ -3,6 +3,7 @@
 #include <n8v/ui.hpp>
 
 #include "core/clay_convert.hpp"
+#include "core/native_widget_meta.hpp"
 #include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
 
@@ -26,9 +27,10 @@ static std::deque<std::string> textStorage;
 static std::deque<std::string> urlStorage;
 static std::deque<std::function<void()>> clickCallbacks;
 static std::deque<n8v::detail::TextStyleFlags> textStyleStorage;
+static std::deque<n8v::detail::NativeWidgetMeta> widgetMetaStorage;
 
 static float currentDelta = 0.0f;
-static int buttonOrdinal = 0;
+static int widgetOrdinal = 0;
 static n8v::CursorKind pendingCursor = n8v::CursorKind::Default;
 
 struct RadiusAnimation {
@@ -121,12 +123,13 @@ namespace n8v::detail {
 void beginFrame() {
   ensureInitialized();
   currentDelta = frameDelta();
-  buttonOrdinal = 0;
+  widgetOrdinal = 0;
   pendingCursor = CursorKind::Default;
   textStorage.clear();
   urlStorage.clear();
   clickCallbacks.clear();
   textStyleStorage.clear();
+  widgetMetaStorage.clear();
 
   Backend &backend = activeBackend();
   backend.beginFrame();
@@ -158,6 +161,7 @@ void LeafBuilder::operator()(std::string_view label) && {
   if (isButton) {
     Clay__OpenElement();
 
+    const int ordinal = widgetOrdinal++;
     const bool hovered = Clay_Hovered();
     if (hovered) pendingCursor = CursorKind::Pointer;
     const bool pressed = hovered && activeBackend().pointerDown();
@@ -166,50 +170,82 @@ void LeafBuilder::operator()(std::string_view label) && {
     Clay_ElementDeclaration decl = {};
     decl.layout.padding = toClay(paint.padding);
     decl.backgroundColor = toClay(paint.background);
-    float radius = easeRadius(buttonOrdinal++, paint.cornerRadius.topLeft, paint.transitionSeconds);
+    float radius = easeRadius(ordinal, paint.cornerRadius.topLeft, paint.transitionSeconds);
     decl.cornerRadius = {radius, radius, radius, radius};
     if (paint.transitionSeconds > 0.0f) {
       decl.transition.handler = Clay_EaseOut;
       decl.transition.duration = paint.transitionSeconds;
       decl.transition.properties = CLAY_TRANSITION_PROPERTY_BACKGROUND_COLOR;
     }
-    Clay__ConfigureOpenElement(decl);
 
-    if (buttonOptions.onClick) {
-      clickCallbacks.push_back(std::move(buttonOptions.onClick));
-      Clay_OnHover(dispatchClick, &clickCallbacks.back());
+    Clay_Dimensions nativeSize = activeBackend().measureNativeChrome(NativeWidgetKind::Button, label, paint.fontSize);
+    if (nativeSize.width > 0 && nativeSize.height > 0) {
+      decl.layout.sizing.width = CLAY_SIZING_FIXED(nativeSize.width);
+      decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
     }
 
-    textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false});
+    const bool hasOnClick = static_cast<bool>(buttonOptions.onClick);
+    if (hasOnClick) {
+      clickCallbacks.push_back(std::move(buttonOptions.onClick));
+      widgetMetaStorage.push_back(NativeWidgetMeta{NativeWidgetKind::Button, ordinal, &clickCallbacks.back(), nullptr});
+    } else {
+      widgetMetaStorage.push_back(NativeWidgetMeta{NativeWidgetKind::Button, ordinal, nullptr, nullptr});
+    }
+    decl.userData = &widgetMetaStorage.back();
+
+    Clay__ConfigureOpenElement(decl);
+
+    if (hasOnClick) {
+      Clay_OnHover(dispatchClick, widgetMetaStorage.back().onClick);
+    }
+
+    textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
     Clay_TextElementConfig textConfig = {};
     textConfig.textColor = toClay(paint.textColor);
     textConfig.fontSize = paint.fontSize;
+    textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
     textConfig.userData = &textStyleStorage.back();
     CLAY_TEXT(internString(label), textConfig);
 
     Clay__CloseElement();
   } else if (!textOptions.url.empty()) {
     Clay__OpenElement();
-    Clay_ElementDeclaration decl = {};
-    Clay__ConfigureOpenElement(decl);
 
+    const int ordinal = widgetOrdinal++;
     if (Clay_Hovered()) pendingCursor = CursorKind::Pointer;
 
     urlStorage.emplace_back(textOptions.url);
-    Clay_OnHover(dispatchLinkClick, &urlStorage.back());
+    widgetMetaStorage.push_back(NativeWidgetMeta{NativeWidgetKind::Link, ordinal, nullptr, &urlStorage.back()});
+
+    Clay_ElementDeclaration decl = {};
+    decl.backgroundColor = {255, 255, 255, 255};
+    decl.userData = &widgetMetaStorage.back();
 
     const TextPaint textPaint = activePaint().text(textOptions);
-    textStyleStorage.push_back(n8v::detail::TextStyleFlags{textPaint.font, textOptions.bold, textOptions.italic, true});
+
+    Clay_Dimensions nativeSize = activeBackend().measureNativeChrome(NativeWidgetKind::Link, label, textPaint.fontSize);
+    if (nativeSize.width > 0 && nativeSize.height > 0) {
+      decl.layout.sizing.width = CLAY_SIZING_FIXED(nativeSize.width);
+      decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
+    }
+
+    Clay__ConfigureOpenElement(decl);
+
+    Clay_OnHover(dispatchLinkClick, widgetMetaStorage.back().url);
+
+    textStyleStorage.push_back(n8v::detail::TextStyleFlags{textPaint.font, textOptions.bold, textOptions.italic, true, true, ordinal});
     Clay_TextElementConfig textConfig = {};
     textConfig.textColor = toClay(textPaint.color);
     textConfig.fontSize = textPaint.fontSize;
+    textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
     textConfig.userData = &textStyleStorage.back();
     CLAY_TEXT(internString(label), textConfig);
 
     Clay__CloseElement();
   } else {
+    const int ordinal = widgetOrdinal++;
     const TextPaint textPaint = activePaint().text(textOptions);
-    textStyleStorage.push_back(n8v::detail::TextStyleFlags{textPaint.font, textOptions.bold, textOptions.italic, false});
+    textStyleStorage.push_back(n8v::detail::TextStyleFlags{textPaint.font, textOptions.bold, textOptions.italic, false, false, ordinal});
     Clay_TextElementConfig textConfig = {};
     textConfig.textColor = toClay(textPaint.color);
     textConfig.fontSize = textPaint.fontSize;

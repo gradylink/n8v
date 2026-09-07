@@ -32,6 +32,8 @@ struct Backend {
    */
   virtual Clay_Dimensions measureText(std::string_view text, FontFamily family, uint16_t fontSize, bool bold, bool italic) const = 0;
 
+  virtual Clay_Dimensions measureNativeChrome(NativeWidgetKind, std::string_view, uint16_t) const { return {0, 0}; }
+
   virtual void beginFrame() = 0;
   virtual void present(Clay_RenderCommandArray commands) = 0;
   virtual void setCursor(CursorKind cursor) = 0;
