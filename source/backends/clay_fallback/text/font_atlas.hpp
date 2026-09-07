@@ -19,6 +19,7 @@ struct GlyphQuad {
 
 struct FontGeneration {
   int pixelSize = 0;
+  int oversample = 2;
   int atlasWidth = 0;
   int atlasHeight = 0;
   std::vector<unsigned char> pixels;
@@ -53,8 +54,6 @@ public:
 
   bool loadFromMemory(std::vector<unsigned char> buffer);
   bool isValid() const { return loaded; }
-
-  int pickBucket(float requestedPixelSize, int currentBucket) const;
 
   FontGeneration &ensureGeneration(int bucket, const std::vector<uint32_t> &codepoints);
 

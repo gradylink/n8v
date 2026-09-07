@@ -2,6 +2,8 @@
 
 #include "font_atlas.hpp"
 
+#include <n8v/types.hpp>
+
 #include <clay.h>
 
 #include <memory>
@@ -18,8 +20,8 @@ struct LineLayoutResult {
   float width = 0, height = 0;
 };
 
-bool layoutLine(std::string_view utf8Text, uint16_t pixelSize, bool bold, bool italic, LineLayoutResult &out);
+bool layoutLine(std::string_view utf8Text, FontFamily family, uint16_t pixelSize, bool bold, bool italic, LineLayoutResult &out);
 
-Clay_Dimensions measureLine(std::string_view utf8Text, uint16_t pixelSize, bool bold, bool italic);
+Clay_Dimensions measureLine(std::string_view utf8Text, FontFamily family, uint16_t pixelSize, bool bold, bool italic);
 
 } // namespace n8v::detail

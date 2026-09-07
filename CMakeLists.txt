@@ -8,6 +8,7 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5) # Fixes CMakeRC
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/cl-bootstrap.cmake)
 cl_repo()
+cl_repo("${CMAKE_CURRENT_SOURCE_DIR}/cmake/recipes")
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/lzy-bootstrap.cmake)
 
@@ -54,25 +55,59 @@ cl_import_source(
 )
 include("${CL_SOURCE_DIR}/CMakeRC.cmake")
 
+set(_N8V_FONT_STAGE "${CMAKE_CURRENT_BINARY_DIR}/n8v_fonts")
+
 cl_import_source(
   NAME dejavu_fonts
   DOWNLOAD_ONLY
   URL https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.tar.bz2
 )
+foreach(_face DejaVuSans DejaVuSans-Bold DejaVuSans-Oblique DejaVuSans-BoldOblique)
+  configure_file("${CL_SOURCE_DIR}/ttf/${_face}.ttf" "${_N8V_FONT_STAGE}/${_face}.ttf" COPYONLY)
+endforeach()
+
+cl_import_source(
+  NAME roboto_fonts
+  DOWNLOAD_ONLY
+  URL https://github.com/googlefonts/roboto/releases/download/v2.138/roboto-unhinted.zip
+)
+foreach(_face Roboto-Regular Roboto-Bold Roboto-Italic Roboto-BoldItalic)
+  configure_file("${CL_SOURCE_DIR}/${_face}.ttf" "${_N8V_FONT_STAGE}/${_face}.ttf" COPYONLY)
+endforeach()
+
+cl_import_source(
+  NAME inter_fonts
+  DOWNLOAD_ONLY
+  URL https://github.com/rsms/inter/releases/download/v3.19/Inter-3.19.zip
+)
+foreach(_face Inter-Regular Inter-Bold Inter-Italic Inter-BoldItalic)
+  configure_file("${CL_SOURCE_DIR}/Inter Hinted for Windows/Desktop/${_face}.ttf" "${_N8V_FONT_STAGE}/${_face}.ttf" COPYONLY)
+endforeach()
+
+cl_import_source(
+  NAME selawik_fonts
+  DOWNLOAD_ONLY
+  URL https://github.com/microsoft/Selawik/releases/download/1.01/Selawik_Release.zip
+)
+configure_file("${CL_SOURCE_DIR}/selawk.ttf" "${_N8V_FONT_STAGE}/Selawik-Regular.ttf" COPYONLY)
+configure_file("${CL_SOURCE_DIR}/selawkb.ttf" "${_N8V_FONT_STAGE}/Selawik-Bold.ttf" COPYONLY)
+
+file(GLOB _N8V_FONT_FILES "${_N8V_FONT_STAGE}/*.ttf")
 cmrc_add_resource_library(n8v_fonts
   NAMESPACE n8v_fonts
-  WHENCE "${CL_SOURCE_DIR}/ttf"
-  "${CL_SOURCE_DIR}/ttf/DejaVuSans.ttf"
-  "${CL_SOURCE_DIR}/ttf/DejaVuSans-Bold.ttf"
-  "${CL_SOURCE_DIR}/ttf/DejaVuSans-Oblique.ttf"
-  "${CL_SOURCE_DIR}/ttf/DejaVuSans-BoldOblique.ttf"
+  WHENCE "${_N8V_FONT_STAGE}"
+  ${_N8V_FONT_FILES}
 )
 
 add_library(n8v
   source/core/clay_impl.cpp
   source/core/open_url.cpp
   source/core/ui_core.cpp
+  source/styles/style_registry.cpp
   source/styles/plain/plain_style.cpp
+  source/styles/material/material_style.cpp
+  source/styles/cupertino/cupertino_style.cpp
+  source/styles/fluent/fluent_style.cpp
   source/backends/clay_fallback/backend_select.cpp
   source/backends/clay_fallback/text/bundled_font.cpp
   source/backends/clay_fallback/text/font_atlas.cpp

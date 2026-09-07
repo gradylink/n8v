@@ -9,7 +9,6 @@
 
 namespace n8v::detail {
 
-static constexpr int bucketSteps[] = {12, 16, 20, 24, 32, 40, 50, 64, 80, 100, 128, 160, 200, 256};
 static constexpr int maxAtlasDim = 2048;
 static constexpr unsigned int evictAfterTicks = 5000;
 
@@ -39,27 +38,6 @@ bool FontAtlas::loadFromMemory(std::vector<unsigned char> buffer) {
   return true;
 }
 
-int FontAtlas::pickBucket(float requestedPixelSize, int currentBucket) const {
-  if (requestedPixelSize < 1.0f) requestedPixelSize = 1.0f;
-
-  if (currentBucket != 0) {
-    float lower = currentBucket * 0.75f;
-    float upper = currentBucket * 1.35f;
-    if (requestedPixelSize >= lower && requestedPixelSize <= upper) return currentBucket;
-  }
-
-  int nearest = bucketSteps[0];
-  float bestDiff = std::fabs(requestedPixelSize - (float)bucketSteps[0]);
-  for (int step : bucketSteps) {
-    float diff = std::fabs(requestedPixelSize - (float)step);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      nearest = step;
-    }
-  }
-  return nearest;
-}
-
 void FontAtlas::growAndRepackAll(FontGeneration &gen) {
   if (gen.atlasWidth >= maxAtlasDim || gen.atlasHeight >= maxAtlasDim) {
     std::fprintf(stderr, "[n8v] FontAtlas: hit max atlas size, some glyphs may not render\n");
@@ -72,7 +50,7 @@ void FontAtlas::growAndRepackAll(FontGeneration &gen) {
   gen.pixels.assign((size_t)gen.atlasWidth * (size_t)gen.atlasHeight, 0);
 
   stbtt_PackBegin(&gen.packCtx, gen.pixels.data(), gen.atlasWidth, gen.atlasHeight, 0, 1, nullptr);
-  stbtt_PackSetOversampling(&gen.packCtx, 2, 2);
+  stbtt_PackSetOversampling(&gen.packCtx, gen.oversample, gen.oversample);
 
   std::vector<int> allCodepoints(gen.bakedCodepoints.begin(), gen.bakedCodepoints.end());
 
@@ -143,7 +121,8 @@ FontGeneration &FontAtlas::ensureGeneration(int bucket, const std::vector<uint32
     gen.pixels.assign((size_t)initialDim * (size_t)initialDim, 0);
 
     stbtt_PackBegin(&gen.packCtx, gen.pixels.data(), initialDim, initialDim, 0, 1, nullptr);
-    stbtt_PackSetOversampling(&gen.packCtx, 2, 2);
+    gen.oversample = bucket <= 24 ? 3 : 2;
+    stbtt_PackSetOversampling(&gen.packCtx, gen.oversample, gen.oversample);
   }
 
   FontGeneration &gen = it->second;
@@ -164,8 +143,11 @@ bool FontAtlas::getGlyphQuad(FontGeneration &gen, uint32_t codepoint, float &pen
     return false;
   }
 
+  // align_to_integer must stay off: it rounds every glyph independently by its own
+  // fractional bearing, so characters drift onto different pixel phases relative to each
+  // other. Oversampling covers sharpness instead, and callers snap the line origin once.
   stbtt_aligned_quad q;
-  stbtt_GetPackedQuad(gen.packedChars.data(), gen.atlasWidth, gen.atlasHeight, it->second, &penX, &penY, &q, 1);
+  stbtt_GetPackedQuad(gen.packedChars.data(), gen.atlasWidth, gen.atlasHeight, it->second, &penX, &penY, &q, 0);
   out.x0 = q.x0;
   out.y0 = q.y0;
   out.x1 = q.x1;

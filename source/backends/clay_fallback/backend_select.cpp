@@ -16,8 +16,9 @@ public:
     return true;
   }
   bool pumpEvents() override { return false; }
+  bool pointerDown() const override { return false; }
   Clay_Dimensions windowSize() const override { return {0, 0}; }
-  Clay_Dimensions measureText(std::string_view, uint16_t, bool, bool) const override { return {0, 0}; }
+  Clay_Dimensions measureText(std::string_view, FontFamily, uint16_t, bool, bool) const override { return {0, 0}; }
   void beginFrame() override {}
   void present(Clay_RenderCommandArray) override {}
   void shutdown() override {}

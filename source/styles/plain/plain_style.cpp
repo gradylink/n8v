@@ -1,41 +1,41 @@
-#include <n8v/style.hpp>
+#include "styles/style_registry.hpp"
 
-namespace n8v {
+namespace n8v::detail {
 namespace {
 
 class PlainPaint final : public Paint {
 public:
-  ButtonPaint button(ButtonStyle style, bool /*hovered*/) const override {
+  ButtonPaint button(ButtonStyle style, bool hovered, bool pressed) const override {
     ButtonPaint paint{};
     if (style == ButtonStyle::Primary) {
-      paint.background = {40, 90, 200, 255};
-      paint.hoverBackground = {60, 110, 220, 255};
+      paint.background = pressed ? Color{30, 72, 160, 255} : hovered ? Color{60, 110, 220, 255} : Color{40, 90, 200, 255};
       paint.textColor = {255, 255, 255, 255};
     } else {
-      paint.background = {225, 225, 225, 255};
-      paint.hoverBackground = {210, 210, 210, 255};
+      paint.background = pressed ? Color{195, 195, 195, 255} : hovered ? Color{210, 210, 210, 255} : Color{225, 225, 225, 255};
       paint.textColor = {20, 20, 20, 255};
     }
-    paint.cornerRadius = {4, 4, 4, 4};
-    paint.padding = {12, 12, 8, 8};
+    paint.cornerRadius = {3, 3, 3, 3};
+    paint.padding = {12, 12, 7, 7};
+    paint.font = FontFamily::DejaVuSans;
+    paint.fontSize = 15;
+    paint.transitionSeconds = 0.1f;
     return paint;
   }
 
-  Color text(const TextOptions &options) const override {
-    if (!options.url.empty()) return {40, 90, 200, 255}; // link color - the SDL2 renderer also underlines it
-    return options.color;
+  TextPaint text(const TextOptions &options) const override {
+    TextPaint paint{};
+    paint.color = options.url.empty() ? options.color : Color{40, 90, 200, 255};
+    paint.font = FontFamily::DejaVuSans;
+    paint.fontSize = 15;
+    return paint;
   }
 };
 
-StyleFamily g_family = StyleFamily::Plain;
-PlainPaint g_plainPaint;
-
 } // namespace
 
-const Paint &activePaint() { return g_plainPaint; }
+const Paint &plainPaint() {
+  static PlainPaint instance;
+  return instance;
+}
 
-void setStyleFamily(StyleFamily family) { g_family = family; }
-
-StyleFamily activeStyleFamily() { return g_family; }
-
-} // namespace n8v
+} // namespace n8v::detail

@@ -21,6 +21,14 @@ enum class StyleFamily {
   Fluent,
 };
 
+/** Bundled font families. Selawik has no italic face and falls back to its regular. */
+enum class FontFamily {
+  DejaVuSans,
+  Roboto,
+  Inter,
+  Selawik,
+};
+
 struct Color {
   float r = 0, g = 0, b = 0, a = 255;
 };
