@@ -29,6 +29,7 @@ static std::deque<n8v::detail::TextStyleFlags> textStyleStorage;
 
 static float currentDelta = 0.0f;
 static int buttonOrdinal = 0;
+static n8v::CursorKind pendingCursor = n8v::CursorKind::Default;
 
 struct RadiusAnimation {
   float start = 0.0f;
@@ -121,6 +122,7 @@ void beginFrame() {
   ensureInitialized();
   currentDelta = frameDelta();
   buttonOrdinal = 0;
+  pendingCursor = CursorKind::Default;
   textStorage.clear();
   urlStorage.clear();
   clickCallbacks.clear();
@@ -134,7 +136,9 @@ void beginFrame() {
 
 void endFrame() {
   Clay_RenderCommandArray commands = Clay_EndLayout(currentDelta);
-  activeBackend().present(commands);
+  Backend &backend = activeBackend();
+  backend.present(commands);
+  backend.setCursor(pendingCursor);
 }
 
 void openFlex(const FlexOptions &options) {
@@ -155,6 +159,7 @@ void LeafBuilder::operator()(std::string_view label) && {
     Clay__OpenElement();
 
     const bool hovered = Clay_Hovered();
+    if (hovered) pendingCursor = CursorKind::Pointer;
     const bool pressed = hovered && activeBackend().pointerDown();
     const ButtonPaint paint = activePaint().button(buttonOptions.style, hovered, pressed);
 
@@ -187,6 +192,8 @@ void LeafBuilder::operator()(std::string_view label) && {
     Clay__OpenElement();
     Clay_ElementDeclaration decl = {};
     Clay__ConfigureOpenElement(decl);
+
+    if (Clay_Hovered()) pendingCursor = CursorKind::Pointer;
 
     urlStorage.emplace_back(textOptions.url);
     Clay_OnHover(dispatchLinkClick, &urlStorage.back());

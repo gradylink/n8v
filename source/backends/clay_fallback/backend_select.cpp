@@ -21,6 +21,7 @@ public:
   Clay_Dimensions measureText(std::string_view, FontFamily, uint16_t, bool, bool) const override { return {0, 0}; }
   void beginFrame() override {}
   void present(Clay_RenderCommandArray) override {}
+  void setCursor(CursorKind) override {}
   void shutdown() override {}
 };
 

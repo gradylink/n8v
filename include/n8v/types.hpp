@@ -29,6 +29,11 @@ enum class FontFamily {
   Selawik,
 };
 
+enum class CursorKind {
+  Default,
+  Pointer,
+};
+
 struct Color {
   float r = 0, g = 0, b = 0, a = 255;
 };

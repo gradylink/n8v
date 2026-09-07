@@ -45,6 +45,9 @@ lzy_add_wrapper(sdl2_lazy
     SDL_UpdateTexture
     SDL_RenderGeometry
     SDL_RenderDrawLine
+    SDL_CreateSystemCursor
+    SDL_SetCursor
+    SDL_FreeCursor
 )
 target_include_directories(sdl2_lazy PUBLIC ${_N8V_SDL2_INCLUDE_DIRS})
 

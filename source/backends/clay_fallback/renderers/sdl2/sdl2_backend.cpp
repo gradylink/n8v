@@ -103,7 +103,26 @@ public:
     SDL_RenderPresent(renderer_);
   }
 
+  void setCursor(CursorKind cursor) override {
+    if (cursor == currentCursorKind_) return;
+    currentCursorKind_ = cursor;
+
+    SDL_Cursor *&handle = cursor == CursorKind::Pointer ? pointerCursor_ : defaultCursor_;
+    if (!handle) {
+      handle = SDL_CreateSystemCursor(cursor == CursorKind::Pointer ? SDL_SYSTEM_CURSOR_HAND : SDL_SYSTEM_CURSOR_ARROW);
+    }
+    if (handle) SDL_SetCursor(handle);
+  }
+
   void shutdown() override {
+    if (pointerCursor_) {
+      SDL_FreeCursor(pointerCursor_);
+      pointerCursor_ = nullptr;
+    }
+    if (defaultCursor_) {
+      SDL_FreeCursor(defaultCursor_);
+      defaultCursor_ = nullptr;
+    }
     if (renderer_) {
       SDL_DestroyRenderer(renderer_);
       renderer_ = nullptr;
@@ -252,6 +271,9 @@ private:
   SDL_Renderer *renderer_ = nullptr;
   float pointerX_ = 0.0f, pointerY_ = 0.0f;
   bool pointerDown_ = false;
+  SDL_Cursor *defaultCursor_ = nullptr;
+  SDL_Cursor *pointerCursor_ = nullptr;
+  CursorKind currentCursorKind_ = CursorKind::Default;
 };
 
 } // namespace

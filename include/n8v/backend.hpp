@@ -34,6 +34,7 @@ struct Backend {
 
   virtual void beginFrame() = 0;
   virtual void present(Clay_RenderCommandArray commands) = 0;
+  virtual void setCursor(CursorKind cursor) = 0;
   virtual void shutdown() = 0;
 };
 
