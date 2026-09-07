@@ -15,6 +15,11 @@
 #include "qt6widgets_lazy_vars.h"
 #endif
 
+#ifdef N8V_HAS_MILSKO_BACKEND
+#include "backends/native_milsko/milsko_backend.hpp"
+#include "milsko_lazy_vars.h"
+#endif
+
 #include <cstdio>
 #include <memory>
 
@@ -48,6 +53,11 @@ std::unique_ptr<Backend> selectBackend() {
 #ifdef N8V_HAS_QT_BACKEND
   if ((!preferredBackend || std::strcmp(preferredBackend, "qt") == 0 || std::strcmp(preferredBackend, "qt6") == 0) && lzy_qt6widgets_lazy_is_available()) {
     return detail::makeQtBackend();
+  }
+#endif
+#ifdef N8V_HAS_MILSKO_BACKEND
+  if ((!preferredBackend || std::strcmp(preferredBackend, "milsko") == 0 || std::strcmp(preferredBackend, "mw") == 0) && lzy_milsko_lazy_is_available()) {
+    return detail::makeMilskoBackend();
   }
 #endif
   if (lzy_sdl2_lazy_is_available()) {
