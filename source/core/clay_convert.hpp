@@ -30,4 +30,14 @@ inline Clay_LayoutAlignmentY toClayY(Align align) {
   return CLAY_ALIGN_Y_TOP;
 }
 
+inline Clay_SizingAxis toClay(const Sizing &sizing) {
+  switch (sizing.mode) {
+  case SizingMode::Fit: return CLAY_SIZING_FIT(sizing.min, sizing.max);
+  case SizingMode::Grow: return CLAY_SIZING_GROW(sizing.min, sizing.max);
+  case SizingMode::Fixed: return CLAY_SIZING_FIXED(sizing.value);
+  case SizingMode::Percent: return CLAY_SIZING_PERCENT(sizing.value);
+  }
+  return CLAY_SIZING_FIT(0, 0);
+}
+
 } // namespace n8v::detail

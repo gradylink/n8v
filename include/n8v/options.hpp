@@ -14,6 +14,8 @@ struct FlexOptions {
   Padding padding = {};
   Align hAlign = Align::Start;
   Align vAlign = Align::Start;
+  Sizing width = Sizing::fit();
+  Sizing height = Sizing::fit();
 };
 
 struct TextOptions {

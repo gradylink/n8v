@@ -167,6 +167,8 @@ void openFlex(const FlexOptions &options) {
   decl.layout.childGap = options.gap;
   decl.layout.padding = toClay(options.padding);
   decl.layout.childAlignment = {toClayX(options.hAlign), toClayY(options.vAlign)};
+  decl.layout.sizing.width = toClay(options.width);
+  decl.layout.sizing.height = toClay(options.height);
 
   Clay__ConfigureOpenElement(decl);
 }

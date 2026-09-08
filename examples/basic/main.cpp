@@ -1,3 +1,4 @@
+#include "n8v/types.hpp"
 #include <iostream>
 #include <n8v/backend.hpp>
 #include <n8v/ui.hpp>
@@ -18,7 +19,7 @@ int main() {
 
   while (backend.pumpEvents()) {
     UI() {
-      flex({.direction = Direction::Vertical, .gap = 12, .padding = {20, 20, 20, 20}}) {
+      flex({.direction = Direction::Vertical, .gap = 12, .padding = {20, 20, 20, 20}, .width = Sizing::grow()}) {
         text({.bold = true})("n8v basic example");
 
         button({.style = ButtonStyle::Primary, .onClick = [&clickCount] {
@@ -30,7 +31,7 @@ int main() {
 
         entry({.value = &name, .placeholder = passwordInput ? "Password" : "Your name", .password = passwordInput});
 
-        flex({.direction = Direction::Horizontal, .gap = 8, .hAlign = Align::Center, .vAlign = Align::Center}) {
+        flex({.direction = Direction::Horizontal, .gap = 8, .hAlign = Align::Center, .vAlign = Align::Center, .width = Sizing::grow()}) {
           button({.style = ButtonStyle::Secondary})("Secondary");
           text({})("this text is a plain container, styled buttons above it, and a link below");
         }
