@@ -5,12 +5,14 @@
 #include "core/text_style_flags.hpp"
 
 #include <QApplication>
+#include <QButtonGroup>
 #include <QCheckBox>
 #include <QFontMetrics>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QWidget>
 
 #include <functional>
@@ -67,6 +69,22 @@ protected:
   }
 };
 
+class N8VRadioButton final : public QRadioButton {
+public:
+  using QRadioButton::QRadioButton;
+  int *selectedPtr = nullptr;
+  int value = 0;
+  std::function<void(int)> onChange;
+
+protected:
+  void mouseReleaseEvent(QMouseEvent *event) override {
+    QRadioButton::mouseReleaseEvent(event);
+    if (!selectedPtr || !isChecked() || *selectedPtr == value) return;
+    *selectedPtr = value;
+    if (onChange) onChange(value);
+  }
+};
+
 class QtBackend final : public Backend {
 public:
   ~QtBackend() override { shutdown(); }
@@ -96,6 +114,9 @@ public:
 
     measureEntry_ = new QLineEdit(window_);
     measureEntry_->setVisible(false);
+
+    measureRadio_ = new QRadioButton(window_);
+    measureRadio_->setVisible(false);
 
     return true;
   }
@@ -131,6 +152,11 @@ public:
     if (kind == NativeWidgetKind::Entry) {
       QSize hint = measureEntry_->sizeHint();
       return {0, (float)hint.height()};
+    }
+    if (kind == NativeWidgetKind::Radio) {
+      measureRadio_->setText(qtext);
+      QSize hint = measureRadio_->sizeHint();
+      return {(float)hint.width(), (float)hint.height()};
     }
     measureLink_->setText(linkHtml(qtext, "about:blank"));
     QSize hint = measureLink_->sizeHint();
@@ -175,6 +201,8 @@ public:
             static_cast<N8VButton *>(pendingLabelTarget)->setText(qtext);
           } else if (pendingLabelTarget && pendingKind == NativeWidgetKind::Checkbox) {
             static_cast<N8VCheckBox *>(pendingLabelTarget)->setText(qtext);
+          } else if (pendingLabelTarget && pendingKind == NativeWidgetKind::Radio) {
+            static_cast<N8VRadioButton *>(pendingLabelTarget)->setText(qtext);
           } else if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry) {
             static_cast<N8VLinkLabel *>(pendingLabelTarget)->setText(linkHtml(qtext, QString::fromStdString(pendingLinkUrl)));
           }
@@ -271,6 +299,13 @@ private:
         lineEdit->setEchoMode(meta.password ? QLineEdit::Password : QLineEdit::Normal);
         lineEdit->setPlaceholderText(meta.placeholder ? QString::fromStdString(*meta.placeholder) : QString());
         syncEntry(lineEdit, meta, entryStates_[meta.ordinal]);
+      } else if (meta.kind == NativeWidgetKind::Radio && meta.radioSelected) {
+        auto *radio = static_cast<N8VRadioButton *>(it->second);
+        radio->selectedPtr = meta.radioSelected;
+        radio->value = meta.radioValue;
+        radio->onChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
+        bool shouldBeChecked = *meta.radioSelected == meta.radioValue;
+        if (radio->isChecked() != shouldBeChecked) radio->setChecked(shouldBeChecked);
       }
       return it->second;
     }
@@ -293,6 +328,19 @@ private:
       lineEdit->setPlaceholderText(meta.placeholder ? QString::fromStdString(*meta.placeholder) : QString());
       syncEntry(lineEdit, meta, entryStates_[meta.ordinal]);
       widget = lineEdit;
+    } else if (meta.kind == NativeWidgetKind::Radio) {
+      auto *radio = new N8VRadioButton(window_);
+      radio->setAutoExclusive(false);
+      radio->selectedPtr = meta.radioSelected;
+      radio->value = meta.radioValue;
+      radio->onChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
+      radio->setChecked(meta.radioSelected && *meta.radioSelected == meta.radioValue);
+      if (meta.radioSelected) {
+        QButtonGroup *&group = radioGroups_[meta.radioSelected];
+        if (!group) group = new QButtonGroup(window_);
+        group->addButton(radio);
+      }
+      widget = radio;
     } else {
       auto *label = new N8VLinkLabel(window_);
       label->setTextFormat(Qt::RichText);
@@ -325,10 +373,12 @@ private:
   QLabel *measureLink_ = nullptr;
   QCheckBox *measureCheckbox_ = nullptr;
   QLineEdit *measureEntry_ = nullptr;
+  QRadioButton *measureRadio_ = nullptr;
 
   std::map<WidgetKey, QWidget *> widgets_;
   std::unordered_map<int, std::function<void()>> callbacks_;
   std::unordered_map<int, EntryState> entryStates_;
+  std::unordered_map<int *, QButtonGroup *> radioGroups_;
 };
 
 } // namespace

@@ -47,6 +47,11 @@ public:
     return paint;
   }
 
+  RadioPaint radio(bool selected, bool hovered, bool pressed) const override {
+    CheckboxPaint cb = checkbox(selected, hovered, pressed);
+    return RadioPaint{cb.background, cb.textColor, cb.cornerRadius, cb.padding, cb.font, cb.fontSize, cb.transitionSeconds};
+  }
+
   EntryPaint entry() const override {
     EntryPaint paint{};
     paint.background = {255, 255, 255, 255};

@@ -25,6 +25,9 @@ struct ClickAction {
   std::string url;
   bool *checked = nullptr;
   std::function<void(bool)> onChange;
+  int *radioSelected = nullptr;
+  int radioValue = 0;
+  std::function<void(int)> onRadioChange;
 };
 
 class MilskoBackend final : public Backend {
@@ -99,7 +102,7 @@ public:
         seenKeys.insert(key);
         MwWidget widget = ensureWidget(key, *meta);
 
-        if (meta->kind == NativeWidgetKind::Checkbox) {
+        if (meta->kind == NativeWidgetKind::Checkbox || meta->kind == NativeWidgetKind::Radio) {
           pendingCheckboxWidget = widget;
           pendingCheckboxOrdinal = meta->ordinal;
         } else {
@@ -203,6 +206,14 @@ private:
     if (action->onChange) action->onChange(newValue);
   }
 
+  static void MWAPI onRadioChanged(MwWidget handle, void *userData, void * /*callData*/) {
+    auto *action = static_cast<ClickAction *>(userData);
+    if (!action || !action->radioSelected || MwGetInteger(handle, MwNchecked) == 0) return;
+    if (*action->radioSelected == action->radioValue) return;
+    *action->radioSelected = action->radioValue;
+    if (action->onRadioChange) action->onRadioChange(action->radioValue);
+  }
+
   struct EntryState {
     std::string *value = nullptr;
     std::function<void(std::string_view)> onChange;
@@ -245,6 +256,11 @@ private:
       } else if (meta.kind == NativeWidgetKind::Entry) {
         MwSetInteger(it->second, MwNhideInput, meta.password ? 1 : 0);
         syncEntry(it->second, meta, entryStates_[meta.ordinal]);
+      } else if (meta.kind == NativeWidgetKind::Radio && meta.radioSelected) {
+        action.radioSelected = meta.radioSelected;
+        action.radioValue = meta.radioValue;
+        action.onRadioChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
+        MwSetInteger(it->second, MwNchecked, *meta.radioSelected == meta.radioValue ? 1 : 0);
       } else {
         action.url = meta.url ? *meta.url : std::string();
       }
@@ -265,6 +281,13 @@ private:
       widget = MwCreateWidget(MwEntryClass, "n8v-entry", window_, 0, 0, 1, 1);
       MwSetInteger(widget, MwNhideInput, meta.password ? 1 : 0);
       syncEntry(widget, meta, entryStates_[meta.ordinal]);
+    } else if (meta.kind == NativeWidgetKind::Radio) {
+      action.radioSelected = meta.radioSelected;
+      action.radioValue = meta.radioValue;
+      action.onRadioChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
+      widget = MwCreateWidget(MwCheckBoxClass, "n8v-radio", window_, 0, 0, 1, 1);
+      MwSetInteger(widget, MwNchecked, meta.radioSelected && *meta.radioSelected == meta.radioValue ? 1 : 0);
+      MwAddUserHandler(widget, MwNchangedHandler, onRadioChanged, &action);
     } else {
       if (action.isLink) {
         action.url = meta.url ? *meta.url : std::string();

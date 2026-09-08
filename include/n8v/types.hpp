@@ -46,6 +46,7 @@ enum class NativeWidgetKind {
   Link,
   Checkbox,
   Entry,
+  Radio,
 };
 
 enum class SizingMode {

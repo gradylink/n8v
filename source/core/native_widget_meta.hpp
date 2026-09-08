@@ -21,6 +21,9 @@ struct NativeWidgetMeta {
   std::string *placeholder = nullptr;                            // Entry only
   bool password = false;                                         // Entry only
   std::function<void(std::string_view)> *onEntryChange = nullptr; // Entry only
+  int *radioSelected = nullptr;                                  // Radio only
+  int radioValue = 0;                                            // Radio only
+  std::function<void(int)> *onRadioChange = nullptr;             // Radio only
 };
 
 } // namespace n8v::detail

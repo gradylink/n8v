@@ -31,6 +31,12 @@ struct CheckboxBuilder {
   void operator()(std::string_view label) &&;
 };
 
+struct RadioBuilder {
+  RadioOptions options;
+
+  void operator()(std::string_view label) &&;
+};
+
 } // namespace n8v::detail
 
 namespace n8v {
@@ -40,6 +46,8 @@ inline detail::LeafBuilder button(ButtonOptions options) { return detail::LeafBu
 inline detail::LeafBuilder text(TextOptions options) { return detail::LeafBuilder{false, {}, std::move(options)}; }
 
 inline detail::CheckboxBuilder checkbox(CheckboxOptions options) { return detail::CheckboxBuilder{std::move(options)}; }
+
+inline detail::RadioBuilder radio(RadioOptions options) { return detail::RadioBuilder{std::move(options)}; }
 
 inline void entry(EntryOptions options) { detail::entry(options); }
 

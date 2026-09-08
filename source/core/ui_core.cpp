@@ -30,6 +30,7 @@ static std::deque<std::string> placeholderStorage;
 static std::deque<std::function<void()>> clickCallbacks;
 static std::deque<std::function<void(bool)>> changeCallbacks;
 static std::deque<std::function<void(std::string_view)>> entryChangeCallbacks;
+static std::deque<std::function<void(int)>> radioChangeCallbacks;
 static std::deque<n8v::detail::TextStyleFlags> textStyleStorage;
 static std::deque<n8v::detail::NativeWidgetMeta> widgetMetaStorage;
 
@@ -128,6 +129,14 @@ void dispatchCheckboxToggle(Clay_ElementId /*elementId*/, Clay_PointerData point
   if (meta->onChange && *meta->onChange) (*meta->onChange)(*meta->checked);
 }
 
+void dispatchRadioSelect(Clay_ElementId /*elementId*/, Clay_PointerData pointerData, void *userData) {
+  if (pointerData.state != CLAY_POINTER_DATA_PRESSED_THIS_FRAME) return;
+  auto *meta = static_cast<n8v::detail::NativeWidgetMeta *>(userData);
+  if (!meta || !meta->radioSelected || *meta->radioSelected == meta->radioValue) return;
+  *meta->radioSelected = meta->radioValue;
+  if (meta->onRadioChange && *meta->onRadioChange) (*meta->onRadioChange)(meta->radioValue);
+}
+
 } // namespace
 
 namespace n8v::detail {
@@ -143,6 +152,7 @@ void beginFrame() {
   clickCallbacks.clear();
   changeCallbacks.clear();
   entryChangeCallbacks.clear();
+  radioChangeCallbacks.clear();
   textStyleStorage.clear();
   widgetMetaStorage.clear();
 
@@ -249,6 +259,7 @@ void LeafBuilder::operator()(std::string_view label) && {
     Clay_ElementDeclaration decl = {};
     decl.layout.padding = toClay(paint.padding);
     decl.backgroundColor = toClay(paint.background);
+
     float radius = easeRadius(ordinal, paint.cornerRadius.topLeft, paint.transitionSeconds);
     decl.cornerRadius = {radius, radius, radius, radius};
     if (paint.transitionSeconds > 0.0f) {
@@ -380,6 +391,69 @@ void CheckboxBuilder::operator()(std::string_view label) && {
 
   if (options.checked) {
     Clay_OnHover(dispatchCheckboxToggle, &widgetMetaStorage.back());
+  }
+
+  textStyleStorage.push_back(n8v::detail::TextStyleFlags{labelPaint.font, false, false, false, true, ordinal});
+  Clay_TextElementConfig textConfig = {};
+  textConfig.textColor = toClay(labelPaint.color);
+  textConfig.fontSize = labelPaint.fontSize;
+  textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
+  textConfig.userData = &textStyleStorage.back();
+  CLAY_TEXT(internString(label), textConfig);
+
+  Clay__CloseElement();
+}
+
+void RadioBuilder::operator()(std::string_view label) && {
+  Clay__OpenElement();
+
+  const int ordinal = widgetOrdinal++;
+  const bool hovered = Clay_Hovered();
+  if (hovered) pendingCursor = CursorKind::Pointer;
+  const bool pressed = hovered && activeBackend().pointerDown();
+  const bool selectedValue = options.selected && *options.selected == options.value;
+  const RadioPaint paint = activePaint().radio(selectedValue, hovered, pressed);
+  const TextPaint labelPaint = activePaint().text({});
+
+  Clay_Dimensions labelDims = activeBackend().measureText(label, labelPaint.font, labelPaint.fontSize, false, false);
+  float indicatorSize = labelDims.height;
+  float indicatorGap = indicatorSize * 0.4f;
+
+  Clay_ElementDeclaration decl = {};
+  Padding pad = paint.padding;
+  pad.left = (uint16_t)(indicatorSize + indicatorGap);
+  decl.layout.padding = toClay(pad);
+  decl.backgroundColor = toClay(paint.background);
+  float radius = easeRadius(ordinal, indicatorSize / 2.0f, paint.transitionSeconds);
+  decl.cornerRadius = {radius, radius, radius, radius};
+  if (paint.transitionSeconds > 0.0f) {
+    decl.transition.handler = Clay_EaseOut;
+    decl.transition.duration = paint.transitionSeconds;
+    decl.transition.properties = CLAY_TRANSITION_PROPERTY_BACKGROUND_COLOR;
+  }
+
+  Clay_Dimensions nativeSize = activeBackend().measureNativeChrome(NativeWidgetKind::Radio, label, labelPaint.fontSize);
+  if (nativeSize.width > 0 && nativeSize.height > 0) {
+    decl.layout.sizing.width = CLAY_SIZING_FIXED(nativeSize.width);
+    decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
+  }
+
+  widgetMetaStorage.push_back(NativeWidgetMeta{});
+  NativeWidgetMeta &meta = widgetMetaStorage.back();
+  meta.kind = NativeWidgetKind::Radio;
+  meta.ordinal = ordinal;
+  meta.radioSelected = options.selected;
+  meta.radioValue = options.value;
+  if (options.onChange) {
+    radioChangeCallbacks.push_back(std::move(options.onChange));
+    meta.onRadioChange = &radioChangeCallbacks.back();
+  }
+  decl.userData = &meta;
+
+  Clay__ConfigureOpenElement(decl);
+
+  if (options.selected) {
+    Clay_OnHover(dispatchRadioSelect, &meta);
   }
 
   textStyleStorage.push_back(n8v::detail::TextStyleFlags{labelPaint.font, false, false, false, true, ordinal});

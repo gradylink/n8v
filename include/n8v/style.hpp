@@ -31,6 +31,16 @@ struct CheckboxPaint {
   float transitionSeconds = 0.0f;
 };
 
+struct RadioPaint {
+  Color background;
+  Color textColor;
+  CornerRadius cornerRadius;
+  Padding padding;
+  FontFamily font = FontFamily::DejaVuSans;
+  uint16_t fontSize = 16;
+  float transitionSeconds = 0.0f;
+};
+
 struct EntryPaint {
   Color background;
   Color textColor;
@@ -46,6 +56,7 @@ struct Paint {
   virtual ButtonPaint button(ButtonStyle style, bool hovered, bool pressed) const = 0;
   virtual TextPaint text(const TextOptions &options) const = 0;
   virtual CheckboxPaint checkbox(bool checked, bool hovered, bool pressed) const = 0;
+  virtual RadioPaint radio(bool selected, bool hovered, bool pressed) const = 0;
   virtual EntryPaint entry() const = 0;
 };
 

@@ -182,6 +182,7 @@ public:
 
   void present(Clay_RenderCommandArray commands) override {
     bool pendingIsCheckbox = false;
+    bool pendingIsRadio = false;
     Clay_Color pendingCheckboxColor{};
     Clay_CornerRadius pendingCheckboxRadius{};
     bool pendingChecked = false;
@@ -196,10 +197,11 @@ public:
       case CLAY_RENDER_COMMAND_TYPE_RECTANGLE: {
         auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
         pendingIsCheckbox = meta && meta->kind == NativeWidgetKind::Checkbox;
-        if (pendingIsCheckbox) {
+        pendingIsRadio = meta && meta->kind == NativeWidgetKind::Radio;
+        if (pendingIsCheckbox || pendingIsRadio) {
           pendingCheckboxColor = command->renderData.rectangle.backgroundColor;
           pendingCheckboxRadius = command->renderData.rectangle.cornerRadius;
-          pendingChecked = meta->checked && *meta->checked;
+          pendingChecked = pendingIsRadio ? (meta->radioSelected && *meta->radioSelected == meta->radioValue) : (meta->checked && *meta->checked);
           break;
         }
 
@@ -228,13 +230,18 @@ public:
         break;
       }
       case CLAY_RENDER_COMMAND_TYPE_TEXT: {
-        if (pendingIsCheckbox) {
+        if (pendingIsCheckbox || pendingIsRadio) {
           float squareSize = command->boundingBox.height;
           float gap = squareSize * 0.4f;
           Clay_BoundingBox squareBox{command->boundingBox.x - squareSize - gap, command->boundingBox.y, squareSize, squareSize};
           drawRoundedRect(squareBox, pendingCheckboxColor, pendingCheckboxRadius);
-          if (pendingChecked) drawCheckmark(squareBox);
+          if (pendingIsRadio) {
+            if (pendingChecked) drawRadioDot(squareBox);
+          } else if (pendingChecked) {
+            drawCheckmark(squareBox);
+          }
           pendingIsCheckbox = false;
+          pendingIsRadio = false;
         }
 
         if (pendingEntryMeta) {
@@ -291,6 +298,7 @@ public:
       }
       default:
         pendingIsCheckbox = false;
+        pendingIsRadio = false;
         pendingEntryMeta = nullptr;
         pendingEntryClicked = false;
         pendingEntryDragging = false;
@@ -650,6 +658,12 @@ private:
     float x1 = box.x + box.width - pad, y1 = box.y + pad * 0.7f;
     SDL_RenderDrawLine(renderer_, (int)x0, (int)y0, (int)xm, (int)ym);
     SDL_RenderDrawLine(renderer_, (int)xm, (int)ym, (int)x1, (int)y1);
+  }
+
+  void drawRadioDot(const Clay_BoundingBox &box) {
+    float dotSize = box.width * 0.44f;
+    Clay_BoundingBox dotBox{box.x + (box.width - dotSize) * 0.5f, box.y + (box.height - dotSize) * 0.5f, dotSize, dotSize};
+    drawRoundedRect(dotBox, Clay_Color{255, 255, 255, 255}, {dotSize * 0.5f, dotSize * 0.5f, dotSize * 0.5f, dotSize * 0.5f});
   }
 
   void drawFilledRect(const Clay_BoundingBox &box, const Clay_Color &color) {

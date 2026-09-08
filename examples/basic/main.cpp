@@ -16,6 +16,7 @@ int main() {
   int clickCount = 0;
   bool passwordInput = false;
   std::string name;
+  int favoriteColor = 0;
 
   while (backend.pumpEvents()) {
     UI() {
@@ -30,6 +31,12 @@ int main() {
         checkbox({.checked = &passwordInput})("Password mode.");
 
         entry({.value = &name, .placeholder = passwordInput ? "Password" : "Your name", .password = passwordInput});
+
+        flex({.direction = Direction::Vertical, .gap = 4}) {
+          radio({.selected = &favoriteColor, .value = 0})("Red");
+          radio({.selected = &favoriteColor, .value = 1})("Green");
+          radio({.selected = &favoriteColor, .value = 2})("Blue");
+        }
 
         flex({.direction = Direction::Horizontal, .gap = 8, .hAlign = Align::Center, .vAlign = Align::Center, .width = Sizing::grow()}) {
           button({.style = ButtonStyle::Secondary})("Secondary");

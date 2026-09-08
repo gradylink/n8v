@@ -124,7 +124,7 @@ public:
         std::string text(command->renderData.text.stringContents.chars, (size_t)command->renderData.text.stringContents.length);
 
         if (flags && flags->ownedByWidget) {
-          if (pendingLabelTarget && pendingKind == NativeWidgetKind::Checkbox) {
+          if (pendingLabelTarget && (pendingKind == NativeWidgetKind::Checkbox || pendingKind == NativeWidgetKind::Radio)) {
             gtk_check_button_set_label(GTK_CHECK_BUTTON(pendingLabelTarget), text.c_str());
           } else if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry) {
             gtk_button_set_label(GTK_BUTTON(pendingLabelTarget), text.c_str());
@@ -153,6 +153,11 @@ public:
         buttonCallbacks_.erase(it->first.ordinal);
         checkboxStates_.erase(it->first.ordinal);
         entryStates_.erase(it->first.ordinal);
+        radioStates_.erase(it->first.ordinal);
+        for (auto groupIt = radioGroups_.begin(); groupIt != radioGroups_.end();) {
+          if (groupIt->second == it->second) groupIt = radioGroups_.erase(groupIt);
+          else ++groupIt;
+        }
         it = widgets_.erase(it);
       } else {
         ++it;
@@ -211,6 +216,20 @@ private:
     if (state->onChange) state->onChange(newValue);
   }
 
+  struct RadioState {
+    int *selected = nullptr;
+    int value = 0;
+    std::function<void(int)> onChange;
+  };
+
+  static void onRadioToggled(GtkCheckButton *button, gpointer userData) {
+    auto *state = static_cast<RadioState *>(userData);
+    if (!state || !state->selected || !gtk_check_button_get_active(button)) return;
+    if (*state->selected == state->value) return;
+    *state->selected = state->value;
+    if (state->onChange) state->onChange(state->value);
+  }
+
   struct EntryState {
     std::string *value = nullptr;
     std::function<void(std::string_view)> onChange;
@@ -256,6 +275,14 @@ private:
         gtk_entry_set_visibility(GTK_ENTRY(it->second), !meta.password);
         gtk_entry_set_placeholder_text(GTK_ENTRY(it->second), meta.placeholder ? meta.placeholder->c_str() : "");
         syncEntry(it->second, meta, entryStates_[meta.ordinal]);
+      } else if (meta.kind == NativeWidgetKind::Radio && meta.radioSelected) {
+        RadioState &state = radioStates_[meta.ordinal];
+        state.selected = meta.radioSelected;
+        state.value = meta.radioValue;
+        state.onChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
+        bool shouldBeActive = *meta.radioSelected == meta.radioValue;
+        gboolean current = gtk_check_button_get_active(GTK_CHECK_BUTTON(it->second));
+        if ((bool)current != shouldBeActive) gtk_check_button_set_active(GTK_CHECK_BUTTON(it->second), shouldBeActive);
       }
       return it->second;
     }
@@ -277,6 +304,19 @@ private:
       gtk_entry_set_visibility(GTK_ENTRY(widget), !meta.password);
       gtk_entry_set_placeholder_text(GTK_ENTRY(widget), meta.placeholder ? meta.placeholder->c_str() : "");
       syncEntry(widget, meta, entryStates_[meta.ordinal]);
+    } else if (meta.kind == NativeWidgetKind::Radio) {
+      widget = gtk_check_button_new();
+      RadioState &state = radioStates_[meta.ordinal];
+      state.selected = meta.radioSelected;
+      state.value = meta.radioValue;
+      state.onChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
+      gtk_check_button_set_active(GTK_CHECK_BUTTON(widget), meta.radioSelected && *meta.radioSelected == meta.radioValue);
+      if (meta.radioSelected) {
+        GtkWidget *&leader = radioGroups_[meta.radioSelected];
+        if (leader) gtk_check_button_set_group(GTK_CHECK_BUTTON(widget), GTK_CHECK_BUTTON(leader));
+        else leader = widget;
+      }
+      g_signal_connect_data(widget, "toggled", G_CALLBACK(&Gtk4Backend::onRadioToggled), &radioStates_[meta.ordinal], nullptr, (GConnectFlags)0);
     } else {
       widget = gtk_link_button_new(meta.url ? meta.url->c_str() : "");
     }
@@ -317,6 +357,8 @@ private:
   std::unordered_map<int, std::function<void()>> buttonCallbacks_;
   std::unordered_map<int, CheckboxState> checkboxStates_;
   std::unordered_map<int, EntryState> entryStates_;
+  std::unordered_map<int, RadioState> radioStates_;
+  std::unordered_map<int *, GtkWidget *> radioGroups_;
 };
 
 } // namespace
