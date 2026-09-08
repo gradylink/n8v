@@ -25,6 +25,15 @@ void g_object_unref(gpointer object);
 namespace n8v::detail {
 namespace {
 
+std::string linkMarkup(std::string_view text, std::string_view url) {
+  gchar *escapedText = g_markup_escape_text(std::string(text).c_str(), -1);
+  gchar *escapedUrl = g_markup_escape_text(std::string(url).c_str(), -1);
+  std::string result = std::string("<a href=\"") + escapedUrl + "\">" + escapedText + "</a>";
+  g_free(escapedText);
+  g_free(escapedUrl);
+  return result;
+}
+
 class Gtk4Backend final : public Backend {
 public:
   ~Gtk4Backend() override { shutdown(); }
@@ -49,11 +58,18 @@ public:
     measureButton_ = gtk_button_new_with_label("");
     g_object_ref_sink(measureButton_);
 
-    measureLink_ = gtk_link_button_new_with_label("about:blank", "");
+    measureLink_ = gtk_label_new("");
+    gtk_label_set_use_markup(GTK_LABEL(measureLink_), TRUE);
     g_object_ref_sink(measureLink_);
 
     measureEntry_ = gtk_entry_new();
     g_object_ref_sink(measureEntry_);
+
+    measureCheckbox_ = gtk_check_button_new();
+    g_object_ref_sink(measureCheckbox_);
+
+    measureRadio_ = gtk_check_button_new();
+    g_object_ref_sink(measureRadio_);
 
     return true;
   }
@@ -85,11 +101,25 @@ public:
       gtk_widget_measure(measureEntry_, GTK_ORIENTATION_VERTICAL, -1, &minH, &natH, nullptr, nullptr);
       return {0, (float)natH};
     }
-    GtkWidget *probe = kind == NativeWidgetKind::Button ? measureButton_ : measureLink_;
-    gtk_button_set_label(GTK_BUTTON(probe), std::string(text).c_str());
+    if (kind == NativeWidgetKind::Link) {
+      gtk_label_set_markup(GTK_LABEL(measureLink_), linkMarkup(text, "about:blank").c_str());
+      int minW = 0, natW = 0, minH = 0, natH = 0;
+      gtk_widget_measure(measureLink_, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
+      gtk_widget_measure(measureLink_, GTK_ORIENTATION_VERTICAL, -1, &minH, &natH, nullptr, nullptr);
+      return {(float)natW, (float)natH};
+    }
+    if (kind == NativeWidgetKind::Checkbox || kind == NativeWidgetKind::Radio) {
+      GtkWidget *probe = kind == NativeWidgetKind::Radio ? measureRadio_ : measureCheckbox_;
+      gtk_check_button_set_label(GTK_CHECK_BUTTON(probe), std::string(text).c_str());
+      int minW = 0, natW = 0, minH = 0, natH = 0;
+      gtk_widget_measure(probe, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
+      gtk_widget_measure(probe, GTK_ORIENTATION_VERTICAL, -1, &minH, &natH, nullptr, nullptr);
+      return {(float)natW, (float)natH};
+    }
+    gtk_button_set_label(GTK_BUTTON(measureButton_), std::string(text).c_str());
     int minW = 0, natW = 0, minH = 0, natH = 0;
-    gtk_widget_measure(probe, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
-    gtk_widget_measure(probe, GTK_ORIENTATION_VERTICAL, -1, &minH, &natH, nullptr, nullptr);
+    gtk_widget_measure(measureButton_, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
+    gtk_widget_measure(measureButton_, GTK_ORIENTATION_VERTICAL, -1, &minH, &natH, nullptr, nullptr);
     return {(float)natW, (float)natH};
   }
 
@@ -100,6 +130,7 @@ public:
     std::set<WidgetKey> seenKeys;
     GtkWidget *pendingLabelTarget = nullptr;
     NativeWidgetKind pendingKind = NativeWidgetKind::Button;
+    std::string pendingLinkUrl;
 
     for (int32_t i = 0; i < commands.length; ++i) {
       Clay_RenderCommand *command = Clay_RenderCommandArray_Get(&commands, i);
@@ -116,6 +147,7 @@ public:
         positionWidget(widget, command->boundingBox);
         pendingLabelTarget = widget;
         pendingKind = meta->kind;
+        pendingLinkUrl = meta->kind == NativeWidgetKind::Link && meta->url ? *meta->url : std::string();
         continue;
       }
 
@@ -126,6 +158,8 @@ public:
         if (flags && flags->ownedByWidget) {
           if (pendingLabelTarget && (pendingKind == NativeWidgetKind::Checkbox || pendingKind == NativeWidgetKind::Radio)) {
             gtk_check_button_set_label(GTK_CHECK_BUTTON(pendingLabelTarget), text.c_str());
+          } else if (pendingLabelTarget && pendingKind == NativeWidgetKind::Link) {
+            gtk_label_set_markup(GTK_LABEL(pendingLabelTarget), linkMarkup(text, pendingLinkUrl).c_str());
           } else if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry) {
             gtk_button_set_label(GTK_BUTTON(pendingLabelTarget), text.c_str());
           }
@@ -183,6 +217,14 @@ public:
     if (measureEntry_) {
       g_object_unref(measureEntry_);
       measureEntry_ = nullptr;
+    }
+    if (measureCheckbox_) {
+      g_object_unref(measureCheckbox_);
+      measureCheckbox_ = nullptr;
+    }
+    if (measureRadio_) {
+      g_object_unref(measureRadio_);
+      measureRadio_ = nullptr;
     }
     if (window_) {
       gtk_window_destroy(GTK_WINDOW(window_));
@@ -263,8 +305,6 @@ private:
     if (it != widgets_.end()) {
       if (meta.kind == NativeWidgetKind::Button) {
         buttonCallbacks_[meta.ordinal] = meta.onClick ? *meta.onClick : std::function<void()>{};
-      } else if (meta.kind == NativeWidgetKind::Link && meta.url) {
-        gtk_link_button_set_uri(GTK_LINK_BUTTON(it->second), meta.url->c_str());
       } else if (meta.kind == NativeWidgetKind::Checkbox && meta.checked) {
         CheckboxState &state = checkboxStates_[meta.ordinal];
         state.checked = meta.checked;
@@ -318,7 +358,10 @@ private:
       }
       g_signal_connect_data(widget, "toggled", G_CALLBACK(&Gtk4Backend::onRadioToggled), &radioStates_[meta.ordinal], nullptr, (GConnectFlags)0);
     } else {
-      widget = gtk_link_button_new(meta.url ? meta.url->c_str() : "");
+      widget = gtk_label_new("");
+      gtk_label_set_use_markup(GTK_LABEL(widget), TRUE);
+      gtk_label_set_xalign(GTK_LABEL(widget), 0.0f);
+      gtk_widget_set_valign(widget, GTK_ALIGN_START);
     }
 
     gtk_fixed_put(GTK_FIXED(fixed_), widget, 0, 0);
@@ -351,6 +394,8 @@ private:
   GtkWidget *measureButton_ = nullptr;
   GtkWidget *measureLink_ = nullptr;
   GtkWidget *measureEntry_ = nullptr;
+  GtkWidget *measureCheckbox_ = nullptr;
+  GtkWidget *measureRadio_ = nullptr;
   bool closeRequested_ = false;
 
   std::map<WidgetKey, GtkWidget *> widgets_;
