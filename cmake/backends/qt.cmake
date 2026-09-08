@@ -23,7 +23,7 @@ if(N8V_BACKEND_QT)
         "libQt6Widgets.dylib"
         "Qt6Widgets.dll"
       LIBRARY "${_N8V_QT6WIDGETS_SO}"
-      RTTI_SHIMS QPushButton QLabel
+      RTTI_SHIMS QPushButton QLabel QCheckBox
     )
     target_include_directories(qt6widgets_lazy PUBLIC ${_N8V_QT6WIDGETS_INCLUDE_DIRS})
     target_compile_definitions(qt6widgets_lazy PUBLIC QT_WIDGETS_LIB QT_GUI_LIB QT_CORE_LIB)

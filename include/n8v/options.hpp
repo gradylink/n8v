@@ -30,4 +30,9 @@ struct ButtonOptions {
   std::function<void()> onClick = nullptr;
 };
 
+struct CheckboxOptions {
+  bool *checked = nullptr;
+  std::function<void(bool)> onChange = nullptr;
+};
+
 } // namespace n8v

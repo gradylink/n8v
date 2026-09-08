@@ -12,6 +12,7 @@ int main() {
   }
 
   int clickCount = 0;
+  bool darkMode = false;
 
   while (backend.pumpEvents()) {
     UI() {
@@ -22,6 +23,8 @@ int main() {
                   ++clickCount;
                   std::cout << std::to_string(clickCount) << std::endl;
                 }})("Click me");
+
+        checkbox({.checked = &darkMode, .onChange = [](bool value) { std::cout << "dark mode: " << value << std::endl; }})("Dark mode");
 
         flex({.direction = Direction::Horizontal, .gap = 8, .hAlign = Align::Center, .vAlign = Align::Center}) {
           button({.style = ButtonStyle::Secondary})("Secondary");

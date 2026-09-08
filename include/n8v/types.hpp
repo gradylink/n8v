@@ -43,6 +43,7 @@ enum class CursorKind {
 enum class NativeWidgetKind {
   Button,
   Link,
+  Checkbox,
 };
 
 struct Color {

@@ -90,6 +90,7 @@ public:
     std::map<int, int> wrapLineCounts;
     std::set<WidgetKey> seenKeys;
     GtkWidget *pendingLabelTarget = nullptr;
+    NativeWidgetKind pendingKind = NativeWidgetKind::Button;
 
     for (int32_t i = 0; i < commands.length; ++i) {
       Clay_RenderCommand *command = Clay_RenderCommandArray_Get(&commands, i);
@@ -105,6 +106,7 @@ public:
         GtkWidget *widget = ensureWidget(key, *meta);
         positionWidget(widget, command->boundingBox);
         pendingLabelTarget = widget;
+        pendingKind = meta->kind;
         continue;
       }
 
@@ -113,7 +115,13 @@ public:
         std::string text(command->renderData.text.stringContents.chars, (size_t)command->renderData.text.stringContents.length);
 
         if (flags && flags->ownedByWidget) {
-          if (pendingLabelTarget) gtk_button_set_label(GTK_BUTTON(pendingLabelTarget), text.c_str());
+          if (pendingLabelTarget) {
+            if (pendingKind == NativeWidgetKind::Checkbox) {
+              gtk_check_button_set_label(GTK_CHECK_BUTTON(pendingLabelTarget), text.c_str());
+            } else {
+              gtk_button_set_label(GTK_BUTTON(pendingLabelTarget), text.c_str());
+            }
+          }
           pendingLabelTarget = nullptr;
           continue;
         }
@@ -136,6 +144,7 @@ public:
       if (!seenKeys.count(it->first)) {
         gtk_fixed_remove(GTK_FIXED(fixed_), it->second);
         buttonCallbacks_.erase(it->first.ordinal);
+        checkboxStates_.erase(it->first.ordinal);
         it = widgets_.erase(it);
       } else {
         ++it;
@@ -176,6 +185,20 @@ private:
     if (callback && *callback) (*callback)();
   }
 
+  struct CheckboxState {
+    bool *checked = nullptr;
+    std::function<void(bool)> onChange;
+  };
+
+  static void onCheckboxToggled(GtkCheckButton *button, gpointer userData) {
+    auto *state = static_cast<CheckboxState *>(userData);
+    if (!state || !state->checked) return;
+    bool newValue = gtk_check_button_get_active(button);
+    if (newValue == *state->checked) return;
+    *state->checked = newValue;
+    if (state->onChange) state->onChange(newValue);
+  }
+
   struct WidgetKey {
     int ordinal;
     int subIndex; // -1 for a button/link. 0, 1, 2... per wrapped line of standalone text
@@ -189,6 +212,12 @@ private:
         buttonCallbacks_[meta.ordinal] = meta.onClick ? *meta.onClick : std::function<void()>{};
       } else if (meta.kind == NativeWidgetKind::Link && meta.url) {
         gtk_link_button_set_uri(GTK_LINK_BUTTON(it->second), meta.url->c_str());
+      } else if (meta.kind == NativeWidgetKind::Checkbox && meta.checked) {
+        CheckboxState &state = checkboxStates_[meta.ordinal];
+        state.checked = meta.checked;
+        state.onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
+        gboolean current = gtk_check_button_get_active(GTK_CHECK_BUTTON(it->second));
+        if ((bool)current != *meta.checked) gtk_check_button_set_active(GTK_CHECK_BUTTON(it->second), *meta.checked);
       }
       return it->second;
     }
@@ -198,6 +227,13 @@ private:
       widget = gtk_button_new_with_label("");
       buttonCallbacks_[meta.ordinal] = meta.onClick ? *meta.onClick : std::function<void()>{};
       g_signal_connect_data(widget, "clicked", G_CALLBACK(&Gtk4Backend::onButtonClicked), &buttonCallbacks_[meta.ordinal], nullptr, (GConnectFlags)0);
+    } else if (meta.kind == NativeWidgetKind::Checkbox) {
+      widget = gtk_check_button_new();
+      CheckboxState &state = checkboxStates_[meta.ordinal];
+      state.checked = meta.checked;
+      state.onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
+      gtk_check_button_set_active(GTK_CHECK_BUTTON(widget), meta.checked && *meta.checked);
+      g_signal_connect_data(widget, "toggled", G_CALLBACK(&Gtk4Backend::onCheckboxToggled), &checkboxStates_[meta.ordinal], nullptr, (GConnectFlags)0);
     } else {
       widget = gtk_link_button_new(meta.url ? meta.url->c_str() : "");
     }
@@ -235,6 +271,7 @@ private:
 
   std::map<WidgetKey, GtkWidget *> widgets_;
   std::unordered_map<int, std::function<void()>> buttonCallbacks_;
+  std::unordered_map<int, CheckboxState> checkboxStates_;
 };
 
 } // namespace

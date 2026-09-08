@@ -1,6 +1,7 @@
 #include "sdl2_backend.hpp"
 
 #include "backends/clay_fallback/text/line_layout.hpp"
+#include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
 
 #include <SDL2/SDL.h>
@@ -83,20 +84,42 @@ public:
   }
 
   void present(Clay_RenderCommandArray commands) override {
+    bool pendingIsCheckbox = false;
+    Clay_Color pendingCheckboxColor{};
+    Clay_CornerRadius pendingCheckboxRadius{};
+    bool pendingChecked = false;
+
     for (int32_t i = 0; i < commands.length; ++i) {
       Clay_RenderCommand *command = Clay_RenderCommandArray_Get(&commands, i);
       switch (command->commandType) {
       case CLAY_RENDER_COMMAND_TYPE_RECTANGLE: {
+        auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
+        pendingIsCheckbox = meta && meta->kind == NativeWidgetKind::Checkbox;
+        if (pendingIsCheckbox) {
+          pendingCheckboxColor = command->renderData.rectangle.backgroundColor;
+          pendingCheckboxRadius = command->renderData.rectangle.cornerRadius;
+          pendingChecked = meta->checked && *meta->checked;
+          break;
+        }
         const Clay_Color &color = command->renderData.rectangle.backgroundColor;
         if (color.a <= 0.0f) break;
         drawRoundedRect(command->boundingBox, color, command->renderData.rectangle.cornerRadius);
         break;
       }
       case CLAY_RENDER_COMMAND_TYPE_TEXT: {
+        if (pendingIsCheckbox) {
+          float squareSize = command->boundingBox.height;
+          float gap = squareSize * 0.4f;
+          Clay_BoundingBox squareBox{command->boundingBox.x - squareSize - gap, command->boundingBox.y, squareSize, squareSize};
+          drawRoundedRect(squareBox, pendingCheckboxColor, pendingCheckboxRadius);
+          if (pendingChecked) drawCheckmark(squareBox);
+          pendingIsCheckbox = false;
+        }
         drawText(*command);
         break;
       }
       default:
+        pendingIsCheckbox = false;
         break;
       }
     }
@@ -216,6 +239,16 @@ private:
       int underlineY = (int)std::round(command.boundingBox.y + command.boundingBox.height - 1.0f);
       SDL_RenderDrawLine(renderer_, (int)originX, underlineY, (int)std::round(originX + layout.width), underlineY);
     }
+  }
+
+  void drawCheckmark(const Clay_BoundingBox &box) {
+    SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
+    float pad = box.width * 0.22f;
+    float x0 = box.x + pad, y0 = box.y + box.height * 0.55f;
+    float xm = box.x + box.width * 0.42f, ym = box.y + box.height - pad;
+    float x1 = box.x + box.width - pad, y1 = box.y + pad * 0.7f;
+    SDL_RenderDrawLine(renderer_, (int)x0, (int)y0, (int)xm, (int)ym);
+    SDL_RenderDrawLine(renderer_, (int)xm, (int)ym, (int)x1, (int)y1);
   }
 
   void drawFilledRect(const Clay_BoundingBox &box, const Clay_Color &color) {

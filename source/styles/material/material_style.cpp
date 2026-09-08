@@ -32,6 +32,24 @@ public:
     return paint;
   }
 
+  CheckboxPaint checkbox(bool checked, bool hovered, bool pressed) const override {
+    CheckboxPaint paint{};
+    if (checked) {
+      paint.background = pressed ? Color{94, 72, 150, 255} : hovered ? Color{123, 100, 184, 255} : Color{103, 80, 164, 255};
+      paint.textColor = {255, 255, 255, 255};
+    } else {
+      paint.background = pressed ? Color{214, 202, 236, 255} : hovered ? Color{223, 211, 243, 255} : Color{232, 222, 248, 255};
+      paint.textColor = {29, 25, 43, 255};
+    }
+    float radius = pressed ? PressedRadius : RoundRadius;
+    paint.cornerRadius = {radius, radius, radius, radius};
+    paint.padding = {16, 16, 10, 10};
+    paint.font = FontFamily::Roboto;
+    paint.fontSize = 14;
+    paint.transitionSeconds = 0.2f;
+    return paint;
+  }
+
 private:
   static constexpr float RoundRadius = 20.0f;
   static constexpr float PressedRadius = 8.0f;

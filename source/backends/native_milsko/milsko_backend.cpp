@@ -23,6 +23,8 @@ struct ClickAction {
   bool isLink = false;
   std::function<void()> callback;
   std::string url;
+  bool *checked = nullptr;
+  std::function<void(bool)> onChange;
 };
 
 class MilskoBackend final : public Backend {
@@ -80,6 +82,8 @@ public:
     std::map<int, int> wrapLineCounts;
     std::set<WidgetKey> seenKeys;
     MwWidget pendingLabelTarget = nullptr;
+    MwWidget pendingCheckboxWidget = nullptr;
+    int pendingCheckboxOrdinal = -1;
 
     for (int32_t i = 0; i < commands.length; ++i) {
       Clay_RenderCommand *command = Clay_RenderCommandArray_Get(&commands, i);
@@ -93,14 +97,48 @@ public:
         WidgetKey key{meta->ordinal, -1};
         seenKeys.insert(key);
         MwWidget widget = ensureWidget(key, *meta);
-        positionWidget(widget, command->boundingBox);
-        pendingLabelTarget = widget;
+
+        if (meta->kind == NativeWidgetKind::Checkbox) {
+          pendingCheckboxWidget = widget;
+          pendingCheckboxOrdinal = meta->ordinal;
+        } else {
+          positionWidget(widget, command->boundingBox);
+          pendingLabelTarget = widget;
+        }
         continue;
       }
 
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_TEXT) {
         auto *flags = static_cast<TextStyleFlags *>(command->userData);
         std::string text(command->renderData.text.stringContents.chars, (size_t)command->renderData.text.stringContents.length);
+
+        if (flags && flags->ownedByWidget && pendingCheckboxWidget) {
+          const Clay_BoundingBox &box = command->boundingBox;
+          float squareSize = box.height;
+          float gap = squareSize * 0.4f;
+          MwVaApply(
+            pendingCheckboxWidget,
+            MwNx,
+            (int)std::floor(box.x - squareSize - gap),
+            MwNy,
+            (int)std::floor(box.y),
+            MwNwidth,
+            (int)std::ceil(squareSize),
+            MwNheight,
+            (int)std::ceil(squareSize),
+            NULL
+          );
+
+          WidgetKey labelKey{pendingCheckboxOrdinal, -2};
+          seenKeys.insert(labelKey);
+          MwWidget label = ensureLabel(labelKey);
+          MwSetText(label, MwNtext, text.c_str());
+          positionWidget(label, box);
+
+          pendingCheckboxWidget = nullptr;
+          pendingCheckboxOrdinal = -1;
+          continue;
+        }
 
         if (flags && flags->ownedByWidget) {
           if (pendingLabelTarget) MwSetText(pendingLabelTarget, MwNtext, text.c_str());
@@ -154,6 +192,14 @@ private:
     }
   }
 
+  static void MWAPI onCheckboxChanged(MwWidget handle, void *userData, void * /*callData*/) {
+    auto *action = static_cast<ClickAction *>(userData);
+    if (!action || !action->checked) return;
+    bool newValue = MwGetInteger(handle, MwNchecked) != 0;
+    *action->checked = newValue;
+    if (action->onChange) action->onChange(newValue);
+  }
+
   struct WidgetKey {
     int ordinal;
     int subIndex; // -1 for a button/link. 0, 1, 2... per wrapped line of standalone text
@@ -166,6 +212,10 @@ private:
       ClickAction &action = actions_[meta.ordinal];
       if (meta.kind == NativeWidgetKind::Button) {
         action.callback = meta.onClick ? *meta.onClick : std::function<void()>{};
+      } else if (meta.kind == NativeWidgetKind::Checkbox && meta.checked) {
+        action.checked = meta.checked;
+        action.onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
+        MwSetInteger(it->second, MwNchecked, *meta.checked ? 1 : 0);
       } else {
         action.url = meta.url ? *meta.url : std::string();
       }
@@ -174,18 +224,28 @@ private:
 
     ClickAction &action = actions_[meta.ordinal];
     action.isLink = meta.kind == NativeWidgetKind::Link;
-    if (action.isLink) {
-      action.url = meta.url ? *meta.url : std::string();
-    } else {
-      action.callback = meta.onClick ? *meta.onClick : std::function<void()>{};
-    }
 
-    MwWidget widget = MwCreateWidget(MwButtonClass, "n8v-widget", window_, 0, 0, 1, 1);
-    if (action.isLink) {
-      MwSetInteger(widget, MwNflat, 1);
-      MwSetText(widget, MwNforeground, "#4287f5");
+    MwWidget widget = nullptr;
+    if (meta.kind == NativeWidgetKind::Checkbox) {
+      action.checked = meta.checked;
+      action.onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
+      widget = MwCreateWidget(MwCheckBoxClass, "n8v-checkbox", window_, 0, 0, 1, 1);
+      MwSetInteger(widget, MwNchecked, meta.checked && *meta.checked ? 1 : 0);
+      MwAddUserHandler(widget, MwNchangedHandler, onCheckboxChanged, &action);
+    } else {
+      if (action.isLink) {
+        action.url = meta.url ? *meta.url : std::string();
+      } else {
+        action.callback = meta.onClick ? *meta.onClick : std::function<void()>{};
+      }
+
+      widget = MwCreateWidget(MwButtonClass, "n8v-widget", window_, 0, 0, 1, 1);
+      if (action.isLink) {
+        MwSetInteger(widget, MwNflat, 1);
+        MwSetText(widget, MwNforeground, "#4287f5");
+      }
+      MwAddUserHandler(widget, MwNactivateHandler, onActivate, &action);
     }
-    MwAddUserHandler(widget, MwNactivateHandler, onActivate, &action);
 
     widgets_[key] = widget;
     return widget;

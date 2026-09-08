@@ -22,6 +22,7 @@ if(N8V_BACKEND_MILSKO)
         MwWindowClass MwClass
         MwButtonClass MwClass
         MwLabelClass MwClass
+        MwCheckBoxClass MwClass
     )
     target_include_directories(milsko_lazy PUBLIC "${_N8V_MILSKO_INCLUDE_DIR}")
   else()

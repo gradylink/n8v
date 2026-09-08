@@ -5,6 +5,7 @@
 #include "core/text_style_flags.hpp"
 
 #include <QApplication>
+#include <QCheckBox>
 #include <QFontMetrics>
 #include <QLabel>
 #include <QMouseEvent>
@@ -47,6 +48,24 @@ protected:
   }
 };
 
+class N8VCheckBox final : public QCheckBox {
+public:
+  using QCheckBox::QCheckBox;
+  bool *checkedPtr = nullptr;
+  std::function<void(bool)> onChange;
+
+protected:
+  void mouseReleaseEvent(QMouseEvent *event) override {
+    QCheckBox::mouseReleaseEvent(event);
+    if (!checkedPtr) return;
+    bool newValue = isChecked();
+    if (newValue != *checkedPtr) {
+      *checkedPtr = newValue;
+      if (onChange) onChange(newValue);
+    }
+  }
+};
+
 class QtBackend final : public Backend {
 public:
   ~QtBackend() override { shutdown(); }
@@ -70,6 +89,9 @@ public:
     measureLink_ = new QLabel(window_);
     measureLink_->setTextFormat(Qt::RichText);
     measureLink_->setVisible(false);
+
+    measureCheckbox_ = new QCheckBox(window_);
+    measureCheckbox_->setVisible(false);
 
     return true;
   }
@@ -95,6 +117,11 @@ public:
     if (kind == NativeWidgetKind::Button) {
       measureButton_->setText(qtext);
       QSize hint = measureButton_->sizeHint();
+      return {(float)hint.width(), (float)hint.height()};
+    }
+    if (kind == NativeWidgetKind::Checkbox) {
+      measureCheckbox_->setText(qtext);
+      QSize hint = measureCheckbox_->sizeHint();
       return {(float)hint.width(), (float)hint.height()};
     }
     measureLink_->setText(linkHtml(qtext, "about:blank"));
@@ -138,6 +165,8 @@ public:
         if (flags && flags->ownedByWidget) {
           if (pendingLabelTarget && pendingKind == NativeWidgetKind::Button) {
             static_cast<N8VButton *>(pendingLabelTarget)->setText(qtext);
+          } else if (pendingLabelTarget && pendingKind == NativeWidgetKind::Checkbox) {
+            static_cast<N8VCheckBox *>(pendingLabelTarget)->setText(qtext);
           } else if (pendingLabelTarget) {
             static_cast<N8VLinkLabel *>(pendingLabelTarget)->setText(linkHtml(qtext, QString::fromStdString(pendingLinkUrl)));
           }
@@ -196,6 +225,11 @@ private:
         callbacks_[meta.ordinal] = meta.onClick ? *meta.onClick : std::function<void()>{};
       } else if (meta.kind == NativeWidgetKind::Link) {
         static_cast<N8VLinkLabel *>(it->second)->url = meta.url ? *meta.url : std::string();
+      } else if (meta.kind == NativeWidgetKind::Checkbox && meta.checked) {
+        auto *checkbox = static_cast<N8VCheckBox *>(it->second);
+        checkbox->checkedPtr = meta.checked;
+        checkbox->onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
+        checkbox->setChecked(*meta.checked);
       }
       return it->second;
     }
@@ -206,6 +240,12 @@ private:
       callbacks_[meta.ordinal] = meta.onClick ? *meta.onClick : std::function<void()>{};
       button->callback = &callbacks_[meta.ordinal];
       widget = button;
+    } else if (meta.kind == NativeWidgetKind::Checkbox) {
+      auto *checkbox = new N8VCheckBox(window_);
+      checkbox->checkedPtr = meta.checked;
+      checkbox->onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
+      checkbox->setChecked(meta.checked && *meta.checked);
+      widget = checkbox;
     } else {
       auto *label = new N8VLinkLabel(window_);
       label->setTextFormat(Qt::RichText);
@@ -236,6 +276,7 @@ private:
   QLabel *measureLabel_ = nullptr;
   QPushButton *measureButton_ = nullptr;
   QLabel *measureLink_ = nullptr;
+  QCheckBox *measureCheckbox_ = nullptr;
 
   std::map<WidgetKey, QWidget *> widgets_;
   std::unordered_map<int, std::function<void()>> callbacks_;
