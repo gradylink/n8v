@@ -143,9 +143,6 @@ bool FontAtlas::getGlyphQuad(FontGeneration &gen, uint32_t codepoint, float &pen
     return false;
   }
 
-  // align_to_integer must stay off: it rounds every glyph independently by its own
-  // fractional bearing, so characters drift onto different pixel phases relative to each
-  // other. Oversampling covers sharpness instead, and callers snap the line origin once.
   stbtt_aligned_quad q;
   stbtt_GetPackedQuad(gen.packedChars.data(), gen.atlasWidth, gen.atlasHeight, it->second, &penX, &penY, &q, 0);
   out.x0 = q.x0;

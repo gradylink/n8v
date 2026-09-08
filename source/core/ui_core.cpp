@@ -15,6 +15,7 @@
 #include <deque>
 #include <functional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -25,8 +26,10 @@ static std::vector<char> clayMemory;
 
 static std::deque<std::string> textStorage;
 static std::deque<std::string> urlStorage;
+static std::deque<std::string> placeholderStorage;
 static std::deque<std::function<void()>> clickCallbacks;
 static std::deque<std::function<void(bool)>> changeCallbacks;
+static std::deque<std::function<void(std::string_view)>> entryChangeCallbacks;
 static std::deque<n8v::detail::TextStyleFlags> textStyleStorage;
 static std::deque<n8v::detail::NativeWidgetMeta> widgetMetaStorage;
 
@@ -136,8 +139,10 @@ void beginFrame() {
   pendingCursor = CursorKind::Default;
   textStorage.clear();
   urlStorage.clear();
+  placeholderStorage.clear();
   clickCallbacks.clear();
   changeCallbacks.clear();
+  entryChangeCallbacks.clear();
   textStyleStorage.clear();
   widgetMetaStorage.clear();
 
@@ -167,6 +172,67 @@ void openFlex(const FlexOptions &options) {
 }
 
 void closeFlex() { Clay__CloseElement(); }
+
+void entry(const EntryOptions &options) {
+  Clay__OpenElement();
+
+  const int ordinal = widgetOrdinal++;
+  if (Clay_Hovered()) pendingCursor = CursorKind::Text;
+  const EntryPaint paint = activePaint().entry();
+
+  bool hasValue = options.value && !options.value->empty();
+  std::string maskedBuffer;
+  std::string_view displayText;
+  if (hasValue && options.password) {
+    size_t count = 0;
+    for (size_t i = 0; i < options.value->size();) {
+      unsigned char c = (unsigned char)(*options.value)[i];
+      i += (c & 0x80) == 0 ? 1 : (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : (c & 0xF8) == 0xF0 ? 4 : 1;
+      ++count;
+    }
+    maskedBuffer.assign(count, '*');
+    displayText = maskedBuffer;
+  } else {
+    displayText = hasValue ? std::string_view(*options.value) : options.placeholder;
+  }
+
+  Clay_ElementDeclaration decl = {};
+  decl.layout.padding = toClay(paint.padding);
+  decl.layout.sizing.width = CLAY_SIZING_GROW(0);
+  decl.backgroundColor = toClay(paint.background);
+  decl.cornerRadius = {paint.cornerRadius.topLeft, paint.cornerRadius.topRight, paint.cornerRadius.bottomLeft, paint.cornerRadius.bottomRight};
+
+  Clay_Dimensions nativeSize = activeBackend().measureNativeChrome(NativeWidgetKind::Entry, options.placeholder, paint.fontSize);
+  if (nativeSize.height > 0) {
+    decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
+  }
+
+  placeholderStorage.emplace_back(options.placeholder);
+  const bool hasOnChange = static_cast<bool>(options.onChange);
+  if (hasOnChange) entryChangeCallbacks.push_back(options.onChange);
+
+  widgetMetaStorage.push_back(NativeWidgetMeta{});
+  NativeWidgetMeta &meta = widgetMetaStorage.back();
+  meta.kind = NativeWidgetKind::Entry;
+  meta.ordinal = ordinal;
+  meta.entryValue = options.value;
+  meta.placeholder = &placeholderStorage.back();
+  meta.password = options.password;
+  meta.onEntryChange = hasOnChange ? &entryChangeCallbacks.back() : nullptr;
+  decl.userData = &meta;
+
+  Clay__ConfigureOpenElement(decl);
+
+  textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
+  Clay_TextElementConfig textConfig = {};
+  textConfig.textColor = toClay(hasValue ? paint.textColor : paint.placeholderColor);
+  textConfig.fontSize = paint.fontSize;
+  textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
+  textConfig.userData = &textStyleStorage.back();
+  CLAY_TEXT(internString(displayText), textConfig);
+
+  Clay__CloseElement();
+}
 
 void LeafBuilder::operator()(std::string_view label) && {
   if (isButton) {

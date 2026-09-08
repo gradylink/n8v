@@ -16,6 +16,7 @@ struct LineLayoutResult {
   std::shared_ptr<FontAtlas> atlas;
   FontGeneration *generation = nullptr;
   std::vector<GlyphQuad> quads;
+  std::vector<float> caretX;
   float scale = 1.0f;
   float width = 0, height = 0;
 };

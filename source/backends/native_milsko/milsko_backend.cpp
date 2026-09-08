@@ -82,6 +82,7 @@ public:
     std::map<int, int> wrapLineCounts;
     std::set<WidgetKey> seenKeys;
     MwWidget pendingLabelTarget = nullptr;
+    NativeWidgetKind pendingKind = NativeWidgetKind::Button;
     MwWidget pendingCheckboxWidget = nullptr;
     int pendingCheckboxOrdinal = -1;
 
@@ -104,6 +105,7 @@ public:
         } else {
           positionWidget(widget, command->boundingBox);
           pendingLabelTarget = widget;
+          pendingKind = meta->kind;
         }
         continue;
       }
@@ -141,7 +143,7 @@ public:
         }
 
         if (flags && flags->ownedByWidget) {
-          if (pendingLabelTarget) MwSetText(pendingLabelTarget, MwNtext, text.c_str());
+          if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry) MwSetText(pendingLabelTarget, MwNtext, text.c_str());
           pendingLabelTarget = nullptr;
           continue;
         }
@@ -164,6 +166,7 @@ public:
       if (!seenKeys.count(it->first)) {
         MwDestroyWidget(it->second);
         actions_.erase(it->first.ordinal);
+        entryStates_.erase(it->first.ordinal);
         it = widgets_.erase(it);
       } else {
         ++it;
@@ -200,6 +203,29 @@ private:
     if (action->onChange) action->onChange(newValue);
   }
 
+  struct EntryState {
+    std::string *value = nullptr;
+    std::function<void(std::string_view)> onChange;
+    std::string lastSynced;
+  };
+
+  static void syncEntry(MwWidget widget, const NativeWidgetMeta &meta, EntryState &state) {
+    if (!meta.entryValue) return;
+    state.value = meta.entryValue;
+    state.onChange = meta.onEntryChange ? *meta.onEntryChange : std::function<void(std::string_view)>{};
+
+    const char *raw = MwGetText(widget, MwNtext);
+    std::string widgetText = raw ? raw : "";
+    if (widgetText != state.lastSynced) {
+      *state.value = widgetText;
+      state.lastSynced = widgetText;
+      if (state.onChange) state.onChange(widgetText);
+    } else if (*state.value != state.lastSynced) {
+      MwSetText(widget, MwNtext, state.value->c_str());
+      state.lastSynced = *state.value;
+    }
+  }
+
   struct WidgetKey {
     int ordinal;
     int subIndex; // -1 for a button/link. 0, 1, 2... per wrapped line of standalone text
@@ -216,6 +242,9 @@ private:
         action.checked = meta.checked;
         action.onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
         MwSetInteger(it->second, MwNchecked, *meta.checked ? 1 : 0);
+      } else if (meta.kind == NativeWidgetKind::Entry) {
+        MwSetInteger(it->second, MwNhideInput, meta.password ? 1 : 0);
+        syncEntry(it->second, meta, entryStates_[meta.ordinal]);
       } else {
         action.url = meta.url ? *meta.url : std::string();
       }
@@ -232,6 +261,10 @@ private:
       widget = MwCreateWidget(MwCheckBoxClass, "n8v-checkbox", window_, 0, 0, 1, 1);
       MwSetInteger(widget, MwNchecked, meta.checked && *meta.checked ? 1 : 0);
       MwAddUserHandler(widget, MwNchangedHandler, onCheckboxChanged, &action);
+    } else if (meta.kind == NativeWidgetKind::Entry) {
+      widget = MwCreateWidget(MwEntryClass, "n8v-entry", window_, 0, 0, 1, 1);
+      MwSetInteger(widget, MwNhideInput, meta.password ? 1 : 0);
+      syncEntry(widget, meta, entryStates_[meta.ordinal]);
     } else {
       if (action.isLink) {
         action.url = meta.url ? *meta.url : std::string();
@@ -269,6 +302,7 @@ private:
 
   std::map<WidgetKey, MwWidget> widgets_;
   std::unordered_map<int, ClickAction> actions_;
+  std::unordered_map<int, EntryState> entryStates_;
 };
 
 } // namespace

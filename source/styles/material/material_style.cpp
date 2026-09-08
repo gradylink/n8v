@@ -50,6 +50,18 @@ public:
     return paint;
   }
 
+  EntryPaint entry() const override {
+    EntryPaint paint{};
+    paint.background = {231, 224, 236, 255};
+    paint.textColor = {29, 25, 43, 255};
+    paint.placeholderColor = {121, 116, 126, 255};
+    paint.cornerRadius = {4, 4, 0, 0};
+    paint.padding = {12, 12, 10, 10};
+    paint.font = FontFamily::Roboto;
+    paint.fontSize = 16;
+    return paint;
+  }
+
 private:
   static constexpr float RoundRadius = 20.0f;
   static constexpr float PressedRadius = 8.0f;

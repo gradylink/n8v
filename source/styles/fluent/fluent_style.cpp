@@ -46,6 +46,18 @@ public:
     paint.transitionSeconds = 0.1f;
     return paint;
   }
+
+  EntryPaint entry() const override {
+    EntryPaint paint{};
+    paint.background = {255, 255, 255, 255};
+    paint.textColor = {27, 27, 27, 255};
+    paint.placeholderColor = {150, 150, 150, 255};
+    paint.cornerRadius = {4, 4, 4, 4};
+    paint.padding = {10, 10, 6, 6};
+    paint.font = FontFamily::Selawik;
+    paint.fontSize = 14;
+    return paint;
+  }
 };
 
 } // namespace

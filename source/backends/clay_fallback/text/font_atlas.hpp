@@ -15,6 +15,7 @@ struct GlyphQuad {
   float x0 = 0, y0 = 0, x1 = 0, y1 = 0;
   float s0 = 0, t0 = 0, s1 = 0, t1 = 0;
   bool valid = false;
+  size_t codepointIndex = 0;
 };
 
 struct FontGeneration {

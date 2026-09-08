@@ -46,6 +46,18 @@ public:
     paint.transitionSeconds = 0.1f;
     return paint;
   }
+
+  EntryPaint entry() const override {
+    EntryPaint paint{};
+    paint.background = {240, 240, 240, 255};
+    paint.textColor = {20, 20, 20, 255};
+    paint.placeholderColor = {140, 140, 140, 255};
+    paint.cornerRadius = {3, 3, 3, 3};
+    paint.padding = {10, 10, 7, 7};
+    paint.font = FontFamily::DejaVuSans;
+    paint.fontSize = 15;
+    return paint;
+  }
 };
 
 } // namespace

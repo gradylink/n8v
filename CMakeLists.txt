@@ -48,6 +48,12 @@ lzy_add_wrapper(sdl2_lazy
     SDL_CreateSystemCursor
     SDL_SetCursor
     SDL_FreeCursor
+    SDL_StartTextInput
+    SDL_StopTextInput
+    SDL_GetClipboardText
+    SDL_SetClipboardText
+    SDL_free
+    SDL_GetTicks
 )
 target_include_directories(sdl2_lazy PUBLIC ${_N8V_SDL2_INCLUDE_DIRS})
 

@@ -15,6 +15,8 @@ void endFrame();
 void openFlex(const FlexOptions &options);
 void closeFlex();
 
+void entry(const EntryOptions &options);
+
 struct LeafBuilder {
   bool isButton;
   ButtonOptions buttonOptions;
@@ -38,6 +40,8 @@ inline detail::LeafBuilder button(ButtonOptions options) { return detail::LeafBu
 inline detail::LeafBuilder text(TextOptions options) { return detail::LeafBuilder{false, {}, std::move(options)}; }
 
 inline detail::CheckboxBuilder checkbox(CheckboxOptions options) { return detail::CheckboxBuilder{std::move(options)}; }
+
+inline void entry(EntryOptions options) { detail::entry(options); }
 
 } // namespace n8v
 

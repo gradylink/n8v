@@ -2,6 +2,7 @@
 #include <n8v/backend.hpp>
 #include <n8v/ui.hpp>
 #include <ostream>
+#include <string>
 
 using namespace n8v;
 
@@ -12,7 +13,8 @@ int main() {
   }
 
   int clickCount = 0;
-  bool darkMode = false;
+  bool passwordInput = false;
+  std::string name;
 
   while (backend.pumpEvents()) {
     UI() {
@@ -24,7 +26,9 @@ int main() {
                   std::cout << std::to_string(clickCount) << std::endl;
                 }})("Click me");
 
-        checkbox({.checked = &darkMode, .onChange = [](bool value) { std::cout << "dark mode: " << value << std::endl; }})("Dark mode");
+        checkbox({.checked = &passwordInput})("Password mode.");
+
+        entry({.value = &name, .placeholder = passwordInput ? "Password" : "Your name", .password = passwordInput});
 
         flex({.direction = Direction::Horizontal, .gap = 8, .hAlign = Align::Center, .vAlign = Align::Center}) {
           button({.style = ButtonStyle::Secondary})("Secondary");

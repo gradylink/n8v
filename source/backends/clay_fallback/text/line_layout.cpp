@@ -26,9 +26,6 @@ bool layoutLine(std::string_view utf8Text, FontFamily family, uint16_t pixelSize
 
   std::vector<uint32_t> codepoints = utf8::decode(utf8Text);
 
-  // Bake at exactly the requested size. UI text uses a handful of fixed sizes, so snapping
-  // to coarser buckets and resampling only costs sharpness - keep scale at 1.0 so glyphs
-  // land on the pixel grid stb_truetype already aligned them to.
   float requestedPixelSize = pixelSize > 0 ? (float)pixelSize : 16.0f;
   int bucket = std::clamp((int)std::lround(requestedPixelSize), 6, 256);
   FontGeneration &gen = atlas->ensureGeneration(bucket, codepoints);
@@ -39,12 +36,18 @@ bool layoutLine(std::string_view utf8Text, FontFamily family, uint16_t pixelSize
   out.scale = scale;
   out.quads.clear();
   out.quads.reserve(codepoints.size());
+  out.caretX.clear();
+  out.caretX.reserve(codepoints.size());
 
   float penX = 0, penY = 0;
-  for (uint32_t cp : codepoints) {
+  for (size_t idx = 0; idx < codepoints.size(); ++idx) {
     GlyphQuad q;
-    atlas->getGlyphQuad(gen, cp, penX, penY, q);
-    if (q.valid) out.quads.push_back(q);
+    atlas->getGlyphQuad(gen, codepoints[idx], penX, penY, q);
+    if (q.valid) {
+      q.codepointIndex = idx;
+      out.quads.push_back(q);
+    }
+    out.caretX.push_back(penX * scale);
   }
 
   out.width = penX * scale;

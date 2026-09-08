@@ -52,6 +52,9 @@ public:
     measureLink_ = gtk_link_button_new_with_label("about:blank", "");
     g_object_ref_sink(measureLink_);
 
+    measureEntry_ = gtk_entry_new();
+    g_object_ref_sink(measureEntry_);
+
     return true;
   }
 
@@ -76,6 +79,12 @@ public:
   }
 
   Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view text, uint16_t) const override {
+    if (kind == NativeWidgetKind::Entry) {
+      int minW = 0, natW = 0, minH = 0, natH = 0;
+      gtk_widget_measure(measureEntry_, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
+      gtk_widget_measure(measureEntry_, GTK_ORIENTATION_VERTICAL, -1, &minH, &natH, nullptr, nullptr);
+      return {0, (float)natH};
+    }
     GtkWidget *probe = kind == NativeWidgetKind::Button ? measureButton_ : measureLink_;
     gtk_button_set_label(GTK_BUTTON(probe), std::string(text).c_str());
     int minW = 0, natW = 0, minH = 0, natH = 0;
@@ -115,12 +124,10 @@ public:
         std::string text(command->renderData.text.stringContents.chars, (size_t)command->renderData.text.stringContents.length);
 
         if (flags && flags->ownedByWidget) {
-          if (pendingLabelTarget) {
-            if (pendingKind == NativeWidgetKind::Checkbox) {
-              gtk_check_button_set_label(GTK_CHECK_BUTTON(pendingLabelTarget), text.c_str());
-            } else {
-              gtk_button_set_label(GTK_BUTTON(pendingLabelTarget), text.c_str());
-            }
+          if (pendingLabelTarget && pendingKind == NativeWidgetKind::Checkbox) {
+            gtk_check_button_set_label(GTK_CHECK_BUTTON(pendingLabelTarget), text.c_str());
+          } else if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry) {
+            gtk_button_set_label(GTK_BUTTON(pendingLabelTarget), text.c_str());
           }
           pendingLabelTarget = nullptr;
           continue;
@@ -145,6 +152,7 @@ public:
         gtk_fixed_remove(GTK_FIXED(fixed_), it->second);
         buttonCallbacks_.erase(it->first.ordinal);
         checkboxStates_.erase(it->first.ordinal);
+        entryStates_.erase(it->first.ordinal);
         it = widgets_.erase(it);
       } else {
         ++it;
@@ -166,6 +174,10 @@ public:
     if (measureLink_) {
       g_object_unref(measureLink_);
       measureLink_ = nullptr;
+    }
+    if (measureEntry_) {
+      g_object_unref(measureEntry_);
+      measureEntry_ = nullptr;
     }
     if (window_) {
       gtk_window_destroy(GTK_WINDOW(window_));
@@ -199,6 +211,28 @@ private:
     if (state->onChange) state->onChange(newValue);
   }
 
+  struct EntryState {
+    std::string *value = nullptr;
+    std::function<void(std::string_view)> onChange;
+    std::string lastSynced;
+  };
+
+  static void syncEntry(GtkWidget *widget, const NativeWidgetMeta &meta, EntryState &state) {
+    if (!meta.entryValue) return;
+    state.value = meta.entryValue;
+    state.onChange = meta.onEntryChange ? *meta.onEntryChange : std::function<void(std::string_view)>{};
+
+    std::string widgetText = gtk_editable_get_text(GTK_EDITABLE(widget));
+    if (widgetText != state.lastSynced) {
+      *state.value = widgetText;
+      state.lastSynced = widgetText;
+      if (state.onChange) state.onChange(widgetText);
+    } else if (*state.value != state.lastSynced) {
+      gtk_editable_set_text(GTK_EDITABLE(widget), state.value->c_str());
+      state.lastSynced = *state.value;
+    }
+  }
+
   struct WidgetKey {
     int ordinal;
     int subIndex; // -1 for a button/link. 0, 1, 2... per wrapped line of standalone text
@@ -218,6 +252,10 @@ private:
         state.onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
         gboolean current = gtk_check_button_get_active(GTK_CHECK_BUTTON(it->second));
         if ((bool)current != *meta.checked) gtk_check_button_set_active(GTK_CHECK_BUTTON(it->second), *meta.checked);
+      } else if (meta.kind == NativeWidgetKind::Entry) {
+        gtk_entry_set_visibility(GTK_ENTRY(it->second), !meta.password);
+        gtk_entry_set_placeholder_text(GTK_ENTRY(it->second), meta.placeholder ? meta.placeholder->c_str() : "");
+        syncEntry(it->second, meta, entryStates_[meta.ordinal]);
       }
       return it->second;
     }
@@ -234,6 +272,11 @@ private:
       state.onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
       gtk_check_button_set_active(GTK_CHECK_BUTTON(widget), meta.checked && *meta.checked);
       g_signal_connect_data(widget, "toggled", G_CALLBACK(&Gtk4Backend::onCheckboxToggled), &checkboxStates_[meta.ordinal], nullptr, (GConnectFlags)0);
+    } else if (meta.kind == NativeWidgetKind::Entry) {
+      widget = gtk_entry_new();
+      gtk_entry_set_visibility(GTK_ENTRY(widget), !meta.password);
+      gtk_entry_set_placeholder_text(GTK_ENTRY(widget), meta.placeholder ? meta.placeholder->c_str() : "");
+      syncEntry(widget, meta, entryStates_[meta.ordinal]);
     } else {
       widget = gtk_link_button_new(meta.url ? meta.url->c_str() : "");
     }
@@ -267,11 +310,13 @@ private:
   GtkWidget *measureLabel_ = nullptr;
   GtkWidget *measureButton_ = nullptr;
   GtkWidget *measureLink_ = nullptr;
+  GtkWidget *measureEntry_ = nullptr;
   bool closeRequested_ = false;
 
   std::map<WidgetKey, GtkWidget *> widgets_;
   std::unordered_map<int, std::function<void()>> buttonCallbacks_;
   std::unordered_map<int, CheckboxState> checkboxStates_;
+  std::unordered_map<int, EntryState> entryStates_;
 };
 
 } // namespace

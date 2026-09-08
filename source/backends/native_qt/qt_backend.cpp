@@ -8,6 +8,7 @@
 #include <QCheckBox>
 #include <QFontMetrics>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QWidget>
@@ -93,6 +94,9 @@ public:
     measureCheckbox_ = new QCheckBox(window_);
     measureCheckbox_->setVisible(false);
 
+    measureEntry_ = new QLineEdit(window_);
+    measureEntry_->setVisible(false);
+
     return true;
   }
 
@@ -123,6 +127,10 @@ public:
       measureCheckbox_->setText(qtext);
       QSize hint = measureCheckbox_->sizeHint();
       return {(float)hint.width(), (float)hint.height()};
+    }
+    if (kind == NativeWidgetKind::Entry) {
+      QSize hint = measureEntry_->sizeHint();
+      return {0, (float)hint.height()};
     }
     measureLink_->setText(linkHtml(qtext, "about:blank"));
     QSize hint = measureLink_->sizeHint();
@@ -167,7 +175,7 @@ public:
             static_cast<N8VButton *>(pendingLabelTarget)->setText(qtext);
           } else if (pendingLabelTarget && pendingKind == NativeWidgetKind::Checkbox) {
             static_cast<N8VCheckBox *>(pendingLabelTarget)->setText(qtext);
-          } else if (pendingLabelTarget) {
+          } else if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry) {
             static_cast<N8VLinkLabel *>(pendingLabelTarget)->setText(linkHtml(qtext, QString::fromStdString(pendingLinkUrl)));
           }
           pendingLabelTarget = nullptr;
@@ -192,6 +200,7 @@ public:
       if (!seenKeys.count(it->first)) {
         delete it->second;
         callbacks_.erase(it->first.ordinal);
+        entryStates_.erase(it->first.ordinal);
         it = widgets_.erase(it);
       } else {
         ++it;
@@ -199,7 +208,12 @@ public:
     }
   }
 
-  void setCursor(CursorKind cursor) override { window_->setCursor(cursor == CursorKind::Pointer ? Qt::PointingHandCursor : Qt::ArrowCursor); }
+  void setCursor(CursorKind cursor) override {
+    Qt::CursorShape shape = Qt::ArrowCursor;
+    if (cursor == CursorKind::Pointer) shape = Qt::PointingHandCursor;
+    else if (cursor == CursorKind::Text) shape = Qt::IBeamCursor;
+    window_->setCursor(shape);
+  }
 
   void shutdown() override {
     if (window_) {
@@ -218,6 +232,28 @@ private:
 
   static QString linkHtml(const QString &text, const QString &url) { return QStringLiteral("<a href=\"%1\">%2</a>").arg(url, text.toHtmlEscaped()); }
 
+  struct EntryState {
+    std::string *value = nullptr;
+    std::function<void(std::string_view)> onChange;
+    std::string lastSynced;
+  };
+
+  void syncEntry(QLineEdit *widget, const NativeWidgetMeta &meta, EntryState &state) {
+    if (!meta.entryValue) return;
+    state.value = meta.entryValue;
+    state.onChange = meta.onEntryChange ? *meta.onEntryChange : std::function<void(std::string_view)>{};
+
+    std::string widgetText = widget->text().toStdString();
+    if (widgetText != state.lastSynced) {
+      *state.value = widgetText;
+      state.lastSynced = widgetText;
+      if (state.onChange) state.onChange(widgetText);
+    } else if (*state.value != state.lastSynced) {
+      widget->setText(QString::fromStdString(*state.value));
+      state.lastSynced = *state.value;
+    }
+  }
+
   QWidget *ensureWidget(const WidgetKey &key, const NativeWidgetMeta &meta) {
     auto it = widgets_.find(key);
     if (it != widgets_.end()) {
@@ -230,6 +266,11 @@ private:
         checkbox->checkedPtr = meta.checked;
         checkbox->onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
         checkbox->setChecked(*meta.checked);
+      } else if (meta.kind == NativeWidgetKind::Entry) {
+        auto *lineEdit = static_cast<QLineEdit *>(it->second);
+        lineEdit->setEchoMode(meta.password ? QLineEdit::Password : QLineEdit::Normal);
+        lineEdit->setPlaceholderText(meta.placeholder ? QString::fromStdString(*meta.placeholder) : QString());
+        syncEntry(lineEdit, meta, entryStates_[meta.ordinal]);
       }
       return it->second;
     }
@@ -246,6 +287,12 @@ private:
       checkbox->onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
       checkbox->setChecked(meta.checked && *meta.checked);
       widget = checkbox;
+    } else if (meta.kind == NativeWidgetKind::Entry) {
+      auto *lineEdit = new QLineEdit(window_);
+      lineEdit->setEchoMode(meta.password ? QLineEdit::Password : QLineEdit::Normal);
+      lineEdit->setPlaceholderText(meta.placeholder ? QString::fromStdString(*meta.placeholder) : QString());
+      syncEntry(lineEdit, meta, entryStates_[meta.ordinal]);
+      widget = lineEdit;
     } else {
       auto *label = new N8VLinkLabel(window_);
       label->setTextFormat(Qt::RichText);
@@ -277,9 +324,11 @@ private:
   QPushButton *measureButton_ = nullptr;
   QLabel *measureLink_ = nullptr;
   QCheckBox *measureCheckbox_ = nullptr;
+  QLineEdit *measureEntry_ = nullptr;
 
   std::map<WidgetKey, QWidget *> widgets_;
   std::unordered_map<int, std::function<void()>> callbacks_;
+  std::unordered_map<int, EntryState> entryStates_;
 };
 
 } // namespace

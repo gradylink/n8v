@@ -38,12 +38,14 @@ enum class FontFamily {
 enum class CursorKind {
   Default,
   Pointer,
+  Text,
 };
 
 enum class NativeWidgetKind {
   Button,
   Link,
   Checkbox,
+  Entry,
 };
 
 struct Color {
