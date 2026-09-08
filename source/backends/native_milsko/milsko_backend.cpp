@@ -28,6 +28,8 @@ struct ClickAction {
   int *radioSelected = nullptr;
   int radioValue = 0;
   std::function<void(int)> onRadioChange;
+  int *dropdownSelected = nullptr;
+  std::function<void(int)> onDropdownChange;
 };
 
 class MilskoBackend final : public Backend {
@@ -57,6 +59,13 @@ public:
   bool pointerDown() const override { return false; }
 
   Clay_Dimensions windowSize() const override { return {(float)MwGetInteger(window_, MwNwidth), (float)MwGetInteger(window_, MwNheight)}; }
+
+  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view, uint16_t) const override {
+    if (kind == NativeWidgetKind::Dropdown) {
+      return {0, (float)MwTextHeight(measureLabel_, nullptr, "Xg") + 14.0f};
+    }
+    return {0, 0};
+  }
 
   Clay_Dimensions measureText(std::string_view text, FontFamily, uint16_t, bool, bool) const override {
     std::string s(text);
@@ -146,7 +155,7 @@ public:
         }
 
         if (flags && flags->ownedByWidget) {
-          if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry) MwSetText(pendingLabelTarget, MwNtext, text.c_str());
+          if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry && pendingKind != NativeWidgetKind::Dropdown) MwSetText(pendingLabelTarget, MwNtext, text.c_str());
           pendingLabelTarget = nullptr;
           continue;
         }
@@ -214,6 +223,15 @@ private:
     if (action->onRadioChange) action->onRadioChange(action->radioValue);
   }
 
+  static void MWAPI onDropdownChanged(MwWidget handle, void *userData, void * /*callData*/) {
+    auto *action = static_cast<ClickAction *>(userData);
+    if (!action || !action->dropdownSelected) return;
+    int newValue = MwGetInteger(handle, MwNvalue);
+    if (newValue == *action->dropdownSelected) return;
+    *action->dropdownSelected = newValue;
+    if (action->onDropdownChange) action->onDropdownChange(newValue);
+  }
+
   struct EntryState {
     std::string *value = nullptr;
     std::function<void(std::string_view)> onChange;
@@ -261,6 +279,10 @@ private:
         action.radioValue = meta.radioValue;
         action.onRadioChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
         MwSetInteger(it->second, MwNchecked, *meta.radioSelected == meta.radioValue ? 1 : 0);
+      } else if (meta.kind == NativeWidgetKind::Dropdown && meta.dropdownSelected) {
+        action.dropdownSelected = meta.dropdownSelected;
+        action.onDropdownChange = meta.onDropdownChange ? *meta.onDropdownChange : std::function<void(int)>{};
+        if (*meta.dropdownSelected >= 0) MwSetInteger(it->second, MwNvalue, *meta.dropdownSelected);
       } else {
         action.url = meta.url ? *meta.url : std::string();
       }
@@ -288,6 +310,15 @@ private:
       widget = MwCreateWidget(MwCheckBoxClass, "n8v-radio", window_, 0, 0, 1, 1);
       MwSetInteger(widget, MwNchecked, meta.radioSelected && *meta.radioSelected == meta.radioValue ? 1 : 0);
       MwAddUserHandler(widget, MwNchangedHandler, onRadioChanged, &action);
+    } else if (meta.kind == NativeWidgetKind::Dropdown) {
+      action.dropdownSelected = meta.dropdownSelected;
+      action.onDropdownChange = meta.onDropdownChange ? *meta.onDropdownChange : std::function<void(int)>{};
+      widget = MwCreateWidget(MwComboBoxClass, "n8v-dropdown", window_, 0, 0, 1, 1);
+      if (meta.dropdownItems) {
+        for (const std::string &item : *meta.dropdownItems) MwComboBoxAdd(widget, -1, item.c_str());
+      }
+      if (meta.dropdownSelected && *meta.dropdownSelected >= 0) MwSetInteger(widget, MwNvalue, *meta.dropdownSelected);
+      MwAddUserHandler(widget, MwNcomboBoxChangedHandler, onDropdownChanged, &action);
     } else {
       if (action.isLink) {
         action.url = meta.url ? *meta.url : std::string();

@@ -5,6 +5,7 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace n8v {
 
@@ -50,6 +51,14 @@ struct EntryOptions {
   std::string_view placeholder = {};
   bool password = false;
   std::function<void(std::string_view)> onChange = nullptr;
+};
+
+struct DropdownOptions {
+  std::vector<std::string_view> items = {};
+  /** Index into `items`. Out of range (including untouched -1) shows `placeholder`. */
+  int *selected = nullptr;
+  std::string_view placeholder = {};
+  std::function<void(int)> onChange = nullptr;
 };
 
 } // namespace n8v

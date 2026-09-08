@@ -33,6 +33,17 @@ static std::deque<std::function<void(std::string_view)>> entryChangeCallbacks;
 static std::deque<std::function<void(int)>> radioChangeCallbacks;
 static std::deque<n8v::detail::TextStyleFlags> textStyleStorage;
 static std::deque<n8v::detail::NativeWidgetMeta> widgetMetaStorage;
+static std::deque<std::vector<std::string>> dropdownItemsStorage;
+static std::deque<std::function<void(int)>> dropdownChangeCallbacks;
+static std::deque<int> dropdownOrdinalStorage;
+
+struct DropdownItemClick {
+  n8v::detail::NativeWidgetMeta *meta;
+  int index;
+};
+static std::deque<DropdownItemClick> dropdownItemClickStorage;
+
+static std::unordered_map<int, bool> dropdownOpenState;
 
 static float currentDelta = 0.0f;
 static int widgetOrdinal = 0;
@@ -137,6 +148,30 @@ void dispatchRadioSelect(Clay_ElementId /*elementId*/, Clay_PointerData pointerD
   if (meta->onRadioChange && *meta->onRadioChange) (*meta->onRadioChange)(meta->radioValue);
 }
 
+void dispatchDropdownToggle(Clay_ElementId /*elementId*/, Clay_PointerData pointerData, void *userData) {
+  if (pointerData.state != CLAY_POINTER_DATA_PRESSED_THIS_FRAME) return;
+  auto *meta = static_cast<n8v::detail::NativeWidgetMeta *>(userData);
+  if (!meta) return;
+  bool &open = dropdownOpenState[meta->ordinal];
+  open = !open;
+}
+
+void dispatchDropdownClose(Clay_ElementId /*elementId*/, Clay_PointerData pointerData, void *userData) {
+  if (pointerData.state != CLAY_POINTER_DATA_PRESSED_THIS_FRAME) return;
+  auto *ordinal = static_cast<int *>(userData);
+  if (!ordinal) return;
+  dropdownOpenState[*ordinal] = false;
+}
+
+void dispatchDropdownSelect(Clay_ElementId /*elementId*/, Clay_PointerData pointerData, void *userData) {
+  if (pointerData.state != CLAY_POINTER_DATA_PRESSED_THIS_FRAME) return;
+  auto *click = static_cast<DropdownItemClick *>(userData);
+  if (!click || !click->meta) return;
+  if (click->meta->dropdownSelected) *click->meta->dropdownSelected = click->index;
+  if (click->meta->onDropdownChange && *click->meta->onDropdownChange) (*click->meta->onDropdownChange)(click->index);
+  dropdownOpenState[click->meta->ordinal] = false;
+}
+
 } // namespace
 
 namespace n8v::detail {
@@ -155,6 +190,10 @@ void beginFrame() {
   radioChangeCallbacks.clear();
   textStyleStorage.clear();
   widgetMetaStorage.clear();
+  dropdownItemsStorage.clear();
+  dropdownChangeCallbacks.clear();
+  dropdownOrdinalStorage.clear();
+  dropdownItemClickStorage.clear();
 
   Backend &backend = activeBackend();
   backend.beginFrame();
@@ -463,6 +502,118 @@ void RadioBuilder::operator()(std::string_view label) && {
   textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
   textConfig.userData = &textStyleStorage.back();
   CLAY_TEXT(internString(label), textConfig);
+
+  Clay__CloseElement();
+}
+
+void dropdown(const DropdownOptions &options) {
+  Clay__OpenElement();
+
+  const int ordinal = widgetOrdinal++;
+  const bool hovered = Clay_Hovered();
+  if (hovered) pendingCursor = CursorKind::Pointer;
+  const bool pressed = hovered && activeBackend().pointerDown();
+  const bool open = dropdownOpenState[ordinal];
+  const DropdownPaint paint = activePaint().dropdown(open, hovered, pressed);
+
+  const bool hasSelection = options.selected && *options.selected >= 0 && (size_t)*options.selected < options.items.size();
+  std::string_view displayText = hasSelection ? options.items[(size_t)*options.selected] : options.placeholder;
+
+  Clay_ElementDeclaration decl = {};
+  decl.layout.padding = toClay(paint.padding);
+  decl.layout.sizing.width = CLAY_SIZING_GROW(0);
+  decl.backgroundColor = toClay(paint.background);
+  decl.cornerRadius = {paint.cornerRadius.topLeft, paint.cornerRadius.topRight, paint.cornerRadius.bottomLeft, paint.cornerRadius.bottomRight};
+
+  Clay_Dimensions nativeSize = activeBackend().measureNativeChrome(NativeWidgetKind::Dropdown, displayText, paint.fontSize);
+  const bool hasNativeChrome = nativeSize.height > 0;
+  if (hasNativeChrome) {
+    decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
+  }
+
+  dropdownItemsStorage.push_back({});
+  std::vector<std::string> &itemsCopy = dropdownItemsStorage.back();
+  itemsCopy.reserve(options.items.size());
+  for (std::string_view item : options.items) itemsCopy.emplace_back(item);
+
+  const bool hasOnChange = static_cast<bool>(options.onChange);
+  if (hasOnChange) dropdownChangeCallbacks.push_back(options.onChange);
+
+  widgetMetaStorage.push_back(NativeWidgetMeta{});
+  NativeWidgetMeta &meta = widgetMetaStorage.back();
+  meta.kind = NativeWidgetKind::Dropdown;
+  meta.ordinal = ordinal;
+  meta.dropdownItems = &itemsCopy;
+  meta.dropdownSelected = options.selected;
+  meta.onDropdownChange = hasOnChange ? &dropdownChangeCallbacks.back() : nullptr;
+  decl.userData = &meta;
+
+  Clay__ConfigureOpenElement(decl);
+
+  if (!hasNativeChrome) {
+    Clay_OnHover(dispatchDropdownToggle, &meta);
+  }
+
+  textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
+  Clay_TextElementConfig textConfig = {};
+  textConfig.textColor = toClay(hasSelection ? paint.textColor : paint.placeholderColor);
+  textConfig.fontSize = paint.fontSize;
+  textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
+  textConfig.userData = &textStyleStorage.back();
+  CLAY_TEXT(internString(displayText), textConfig);
+
+  if (!hasNativeChrome && open && !itemsCopy.empty()) {
+    Clay__OpenElement();
+    dropdownOrdinalStorage.push_back(ordinal);
+    Clay_ElementDeclaration backdropDecl = {};
+    Clay_Dimensions winSize = activeBackend().windowSize();
+    backdropDecl.layout.sizing.width = CLAY_SIZING_FIXED(winSize.width);
+    backdropDecl.layout.sizing.height = CLAY_SIZING_FIXED(winSize.height);
+    backdropDecl.floating.attachTo = CLAY_ATTACH_TO_ROOT;
+    backdropDecl.floating.zIndex = 900;
+    Clay__ConfigureOpenElement(backdropDecl);
+    Clay_OnHover(dispatchDropdownClose, &dropdownOrdinalStorage.back());
+    Clay__CloseElement();
+
+    Clay__OpenElement();
+    Clay_ElementDeclaration popupDecl = {};
+    popupDecl.layout.layoutDirection = CLAY_TOP_TO_BOTTOM;
+    popupDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
+    popupDecl.backgroundColor = toClay(paint.popupBackground);
+    popupDecl.cornerRadius = decl.cornerRadius;
+    popupDecl.floating.attachTo = CLAY_ATTACH_TO_PARENT;
+    popupDecl.floating.attachPoints = {CLAY_ATTACH_POINT_LEFT_TOP, CLAY_ATTACH_POINT_LEFT_BOTTOM};
+    popupDecl.floating.zIndex = 1000;
+    Clay__ConfigureOpenElement(popupDecl);
+
+    for (size_t i = 0; i < itemsCopy.size(); ++i) {
+      Clay__OpenElement();
+
+      const bool itemHovered = Clay_Hovered();
+      if (itemHovered) pendingCursor = CursorKind::Pointer;
+
+      Clay_ElementDeclaration rowDecl = {};
+      rowDecl.layout.padding = toClay(paint.padding);
+      rowDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
+      rowDecl.backgroundColor = toClay(itemHovered ? paint.itemHoverBackground : paint.popupBackground);
+      Clay__ConfigureOpenElement(rowDecl);
+
+      dropdownItemClickStorage.push_back(DropdownItemClick{&meta, (int)i});
+      Clay_OnHover(dispatchDropdownSelect, &dropdownItemClickStorage.back());
+
+      textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
+      Clay_TextElementConfig itemTextConfig = {};
+      itemTextConfig.textColor = toClay(paint.textColor);
+      itemTextConfig.fontSize = paint.fontSize;
+      itemTextConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
+      itemTextConfig.userData = &textStyleStorage.back();
+      CLAY_TEXT(internString(itemsCopy[i]), itemTextConfig);
+
+      Clay__CloseElement();
+    }
+
+    Clay__CloseElement(); // popup
+  }
 
   Clay__CloseElement();
 }

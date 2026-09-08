@@ -63,6 +63,20 @@ public:
     paint.fontSize = 14;
     return paint;
   }
+
+  DropdownPaint dropdown(bool /*open*/, bool hovered, bool /*pressed*/) const override {
+    DropdownPaint paint{};
+    paint.background = hovered ? Color{245, 245, 245, 255} : Color{255, 255, 255, 255};
+    paint.textColor = {27, 27, 27, 255};
+    paint.placeholderColor = {150, 150, 150, 255};
+    paint.popupBackground = {245, 245, 245, 255};
+    paint.itemHoverBackground = {237, 237, 237, 255};
+    paint.cornerRadius = {4, 4, 4, 4};
+    paint.padding = {10, 10, 6, 6};
+    paint.font = FontFamily::Selawik;
+    paint.fontSize = 14;
+    return paint;
+  }
 };
 
 } // namespace

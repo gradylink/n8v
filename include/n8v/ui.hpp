@@ -17,6 +17,8 @@ void closeFlex();
 
 void entry(const EntryOptions &options);
 
+void dropdown(const DropdownOptions &options);
+
 struct LeafBuilder {
   bool isButton;
   ButtonOptions buttonOptions;
@@ -50,6 +52,8 @@ inline detail::CheckboxBuilder checkbox(CheckboxOptions options) { return detail
 inline detail::RadioBuilder radio(RadioOptions options) { return detail::RadioBuilder{std::move(options)}; }
 
 inline void entry(EntryOptions options) { detail::entry(options); }
+
+inline void dropdown(DropdownOptions options) { detail::dropdown(options); }
 
 } // namespace n8v
 

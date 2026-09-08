@@ -5,6 +5,7 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace n8v::detail {
 
@@ -24,6 +25,9 @@ struct NativeWidgetMeta {
   int *radioSelected = nullptr;                                  // Radio only
   int radioValue = 0;                                            // Radio only
   std::function<void(int)> *onRadioChange = nullptr;             // Radio only
+  std::vector<std::string> *dropdownItems = nullptr;             // Dropdown only
+  int *dropdownSelected = nullptr;                               // Dropdown only
+  std::function<void(int)> *onDropdownChange = nullptr;          // Dropdown only
 };
 
 } // namespace n8v::detail

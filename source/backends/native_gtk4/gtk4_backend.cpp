@@ -15,6 +15,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 extern "C" {
 gulong g_signal_connect_data(gpointer instance, const gchar *detailed_signal, GCallback c_handler, gpointer data, GClosureNotify destroy_data, GConnectFlags connect_flags);
@@ -71,6 +72,10 @@ public:
     measureRadio_ = gtk_check_button_new();
     g_object_ref_sink(measureRadio_);
 
+    const char *const emptyItems[] = {nullptr};
+    measureDropdown_ = gtk_drop_down_new_from_strings(emptyItems);
+    g_object_ref_sink(measureDropdown_);
+
     return true;
   }
 
@@ -107,6 +112,12 @@ public:
       gtk_widget_measure(measureLink_, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
       gtk_widget_measure(measureLink_, GTK_ORIENTATION_VERTICAL, -1, &minH, &natH, nullptr, nullptr);
       return {(float)natW, (float)natH};
+    }
+    if (kind == NativeWidgetKind::Dropdown) {
+      int minW = 0, natW = 0, minH = 0, natH = 0;
+      gtk_widget_measure(measureDropdown_, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
+      gtk_widget_measure(measureDropdown_, GTK_ORIENTATION_VERTICAL, -1, &minH, &natH, nullptr, nullptr);
+      return {0, (float)natH};
     }
     if (kind == NativeWidgetKind::Checkbox || kind == NativeWidgetKind::Radio) {
       GtkWidget *probe = kind == NativeWidgetKind::Radio ? measureRadio_ : measureCheckbox_;
@@ -160,7 +171,7 @@ public:
             gtk_check_button_set_label(GTK_CHECK_BUTTON(pendingLabelTarget), text.c_str());
           } else if (pendingLabelTarget && pendingKind == NativeWidgetKind::Link) {
             gtk_label_set_markup(GTK_LABEL(pendingLabelTarget), linkMarkup(text, pendingLinkUrl).c_str());
-          } else if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry) {
+          } else if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry && pendingKind != NativeWidgetKind::Dropdown) {
             gtk_button_set_label(GTK_BUTTON(pendingLabelTarget), text.c_str());
           }
           pendingLabelTarget = nullptr;
@@ -192,6 +203,7 @@ public:
           if (groupIt->second == it->second) groupIt = radioGroups_.erase(groupIt);
           else ++groupIt;
         }
+        dropdownStates_.erase(it->first.ordinal);
         it = widgets_.erase(it);
       } else {
         ++it;
@@ -225,6 +237,10 @@ public:
     if (measureRadio_) {
       g_object_unref(measureRadio_);
       measureRadio_ = nullptr;
+    }
+    if (measureDropdown_) {
+      g_object_unref(measureDropdown_);
+      measureDropdown_ = nullptr;
     }
     if (window_) {
       gtk_window_destroy(GTK_WINDOW(window_));
@@ -270,6 +286,20 @@ private:
     if (*state->selected == state->value) return;
     *state->selected = state->value;
     if (state->onChange) state->onChange(state->value);
+  }
+
+  struct DropdownState {
+    int *selected = nullptr;
+    std::function<void(int)> onChange;
+  };
+
+  static void onDropdownChanged(GObject *object, GParamSpec *, gpointer userData) {
+    auto *state = static_cast<DropdownState *>(userData);
+    if (!state || !state->selected) return;
+    int newValue = (int)gtk_drop_down_get_selected(GTK_DROP_DOWN(object));
+    if (newValue == *state->selected) return;
+    *state->selected = newValue;
+    if (state->onChange) state->onChange(newValue);
   }
 
   struct EntryState {
@@ -323,6 +353,13 @@ private:
         bool shouldBeActive = *meta.radioSelected == meta.radioValue;
         gboolean current = gtk_check_button_get_active(GTK_CHECK_BUTTON(it->second));
         if ((bool)current != shouldBeActive) gtk_check_button_set_active(GTK_CHECK_BUTTON(it->second), shouldBeActive);
+      } else if (meta.kind == NativeWidgetKind::Dropdown && meta.dropdownSelected) {
+        DropdownState &state = dropdownStates_[meta.ordinal];
+        state.selected = meta.dropdownSelected;
+        state.onChange = meta.onDropdownChange ? *meta.onDropdownChange : std::function<void(int)>{};
+        guint wantSelected = *meta.dropdownSelected >= 0 ? (guint)*meta.dropdownSelected : GTK_INVALID_LIST_POSITION;
+        guint current = gtk_drop_down_get_selected(GTK_DROP_DOWN(it->second));
+        if (current != wantSelected) gtk_drop_down_set_selected(GTK_DROP_DOWN(it->second), wantSelected);
       }
       return it->second;
     }
@@ -357,6 +394,20 @@ private:
         else leader = widget;
       }
       g_signal_connect_data(widget, "toggled", G_CALLBACK(&Gtk4Backend::onRadioToggled), &radioStates_[meta.ordinal], nullptr, (GConnectFlags)0);
+    } else if (meta.kind == NativeWidgetKind::Dropdown) {
+      std::vector<const char *> cstrs;
+      if (meta.dropdownItems) {
+        cstrs.reserve(meta.dropdownItems->size() + 1);
+        for (const std::string &item : *meta.dropdownItems) cstrs.push_back(item.c_str());
+      }
+      cstrs.push_back(nullptr);
+      widget = gtk_drop_down_new_from_strings(cstrs.data());
+      DropdownState &state = dropdownStates_[meta.ordinal];
+      state.selected = meta.dropdownSelected;
+      state.onChange = meta.onDropdownChange ? *meta.onDropdownChange : std::function<void(int)>{};
+      guint initialSelected = meta.dropdownSelected && *meta.dropdownSelected >= 0 ? (guint)*meta.dropdownSelected : GTK_INVALID_LIST_POSITION;
+      gtk_drop_down_set_selected(GTK_DROP_DOWN(widget), initialSelected);
+      g_signal_connect_data(widget, "notify::selected", G_CALLBACK(&Gtk4Backend::onDropdownChanged), &dropdownStates_[meta.ordinal], nullptr, (GConnectFlags)0);
     } else {
       widget = gtk_label_new("");
       gtk_label_set_use_markup(GTK_LABEL(widget), TRUE);
@@ -396,6 +447,7 @@ private:
   GtkWidget *measureEntry_ = nullptr;
   GtkWidget *measureCheckbox_ = nullptr;
   GtkWidget *measureRadio_ = nullptr;
+  GtkWidget *measureDropdown_ = nullptr;
   bool closeRequested_ = false;
 
   std::map<WidgetKey, GtkWidget *> widgets_;
@@ -404,6 +456,7 @@ private:
   std::unordered_map<int, EntryState> entryStates_;
   std::unordered_map<int, RadioState> radioStates_;
   std::unordered_map<int *, GtkWidget *> radioGroups_;
+  std::unordered_map<int, DropdownState> dropdownStates_;
 };
 
 } // namespace

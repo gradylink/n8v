@@ -17,6 +17,7 @@ int main() {
   bool passwordInput = false;
   std::string name;
   int favoriteColor = 0;
+  int favoriteFruit = -1;
 
   while (backend.pumpEvents()) {
     UI() {
@@ -37,6 +38,8 @@ int main() {
           radio({.selected = &favoriteColor, .value = 1})("Green");
           radio({.selected = &favoriteColor, .value = 2})("Blue");
         }
+
+        dropdown({.items = {"Apple", "Banana", "Cherry"}, .selected = &favoriteFruit, .placeholder = "Pick a fruit"});
 
         flex({.direction = Direction::Horizontal, .gap = 8, .hAlign = Align::Center, .vAlign = Align::Center, .width = Sizing::grow()}) {
           button({.style = ButtonStyle::Secondary})("Secondary");

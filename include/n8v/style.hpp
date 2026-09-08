@@ -51,6 +51,19 @@ struct EntryPaint {
   uint16_t fontSize = 16;
 };
 
+struct DropdownPaint {
+  Color background;
+  Color textColor;
+  Color placeholderColor;
+  Color popupBackground;
+  Color itemHoverBackground;
+  CornerRadius cornerRadius;
+  Padding padding;
+  FontFamily font = FontFamily::DejaVuSans;
+  uint16_t fontSize = 16;
+  float transitionSeconds = 0.0f;
+};
+
 struct Paint {
   virtual ~Paint() = default;
   virtual ButtonPaint button(ButtonStyle style, bool hovered, bool pressed) const = 0;
@@ -58,6 +71,7 @@ struct Paint {
   virtual CheckboxPaint checkbox(bool checked, bool hovered, bool pressed) const = 0;
   virtual RadioPaint radio(bool selected, bool hovered, bool pressed) const = 0;
   virtual EntryPaint entry() const = 0;
+  virtual DropdownPaint dropdown(bool open, bool hovered, bool pressed) const = 0;
 };
 
 const Paint &activePaint();

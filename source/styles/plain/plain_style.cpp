@@ -63,6 +63,20 @@ public:
     paint.fontSize = 15;
     return paint;
   }
+
+  DropdownPaint dropdown(bool /*open*/, bool hovered, bool /*pressed*/) const override {
+    DropdownPaint paint{};
+    paint.background = hovered ? Color{230, 230, 230, 255} : Color{240, 240, 240, 255};
+    paint.textColor = {20, 20, 20, 255};
+    paint.placeholderColor = {140, 140, 140, 255};
+    paint.popupBackground = {240, 240, 240, 255};
+    paint.itemHoverBackground = {225, 225, 225, 255};
+    paint.cornerRadius = {3, 3, 3, 3};
+    paint.padding = {10, 10, 7, 7};
+    paint.font = FontFamily::DejaVuSans;
+    paint.fontSize = 15;
+    return paint;
+  }
 };
 
 } // namespace

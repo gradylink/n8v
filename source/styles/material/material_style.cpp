@@ -67,6 +67,20 @@ public:
     return paint;
   }
 
+  DropdownPaint dropdown(bool /*open*/, bool hovered, bool /*pressed*/) const override {
+    DropdownPaint paint{};
+    paint.background = hovered ? Color{223, 211, 243, 255} : Color{231, 224, 236, 255};
+    paint.textColor = {29, 25, 43, 255};
+    paint.placeholderColor = {121, 116, 126, 255};
+    paint.popupBackground = {231, 224, 236, 255};
+    paint.itemHoverBackground = {232, 222, 248, 255};
+    paint.cornerRadius = {4, 4, 0, 0};
+    paint.padding = {12, 12, 10, 10};
+    paint.font = FontFamily::Roboto;
+    paint.fontSize = 16;
+    return paint;
+  }
+
 private:
   static constexpr float RoundRadius = 20.0f;
   static constexpr float PressedRadius = 8.0f;

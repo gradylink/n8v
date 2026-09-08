@@ -7,6 +7,7 @@
 #include <QApplication>
 #include <QButtonGroup>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QFontMetrics>
 #include <QLabel>
 #include <QLineEdit>
@@ -118,6 +119,9 @@ public:
     measureRadio_ = new QRadioButton(window_);
     measureRadio_->setVisible(false);
 
+    measureCombo_ = new QComboBox(window_);
+    measureCombo_->setVisible(false);
+
     return true;
   }
 
@@ -157,6 +161,10 @@ public:
       measureRadio_->setText(qtext);
       QSize hint = measureRadio_->sizeHint();
       return {(float)hint.width(), (float)hint.height()};
+    }
+    if (kind == NativeWidgetKind::Dropdown) {
+      QSize hint = measureCombo_->sizeHint();
+      return {0, (float)hint.height()};
     }
     measureLink_->setText(linkHtml(qtext, "about:blank"));
     QSize hint = measureLink_->sizeHint();
@@ -203,7 +211,7 @@ public:
             static_cast<N8VCheckBox *>(pendingLabelTarget)->setText(qtext);
           } else if (pendingLabelTarget && pendingKind == NativeWidgetKind::Radio) {
             static_cast<N8VRadioButton *>(pendingLabelTarget)->setText(qtext);
-          } else if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry) {
+          } else if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry && pendingKind != NativeWidgetKind::Dropdown) {
             static_cast<N8VLinkLabel *>(pendingLabelTarget)->setText(linkHtml(qtext, QString::fromStdString(pendingLinkUrl)));
           }
           pendingLabelTarget = nullptr;
@@ -229,6 +237,7 @@ public:
         delete it->second;
         callbacks_.erase(it->first.ordinal);
         entryStates_.erase(it->first.ordinal);
+        dropdownStates_.erase(it->first.ordinal);
         it = widgets_.erase(it);
       } else {
         ++it;
@@ -259,6 +268,28 @@ private:
   };
 
   static QString linkHtml(const QString &text, const QString &url) { return QStringLiteral("<a href=\"%1\">%2</a>").arg(url, text.toHtmlEscaped()); }
+
+  struct DropdownState {
+    int *selected = nullptr;
+    std::function<void(int)> onChange;
+    int lastSynced = -1;
+  };
+
+  void syncDropdown(QComboBox *combo, const NativeWidgetMeta &meta, DropdownState &state) {
+    if (!meta.dropdownSelected) return;
+    state.selected = meta.dropdownSelected;
+    state.onChange = meta.onDropdownChange ? *meta.onDropdownChange : std::function<void(int)>{};
+
+    int widgetIndex = combo->currentIndex();
+    if (widgetIndex != state.lastSynced) {
+      *state.selected = widgetIndex;
+      state.lastSynced = widgetIndex;
+      if (state.onChange) state.onChange(widgetIndex);
+    } else if (*state.selected != state.lastSynced) {
+      combo->setCurrentIndex(*state.selected);
+      state.lastSynced = *state.selected;
+    }
+  }
 
   struct EntryState {
     std::string *value = nullptr;
@@ -306,6 +337,8 @@ private:
         radio->onChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
         bool shouldBeChecked = *meta.radioSelected == meta.radioValue;
         if (radio->isChecked() != shouldBeChecked) radio->setChecked(shouldBeChecked);
+      } else if (meta.kind == NativeWidgetKind::Dropdown) {
+        syncDropdown(static_cast<QComboBox *>(it->second), meta, dropdownStates_[meta.ordinal]);
       }
       return it->second;
     }
@@ -341,6 +374,18 @@ private:
         group->addButton(radio);
       }
       widget = radio;
+    } else if (meta.kind == NativeWidgetKind::Dropdown) {
+      auto *combo = new QComboBox(window_);
+      if (meta.dropdownItems) {
+        for (const std::string &item : *meta.dropdownItems) combo->addItem(QString::fromStdString(item));
+      }
+      DropdownState &state = dropdownStates_[meta.ordinal];
+
+      int initialIndex = meta.dropdownSelected && *meta.dropdownSelected >= 0 ? *meta.dropdownSelected : -1;
+      combo->setCurrentIndex(initialIndex);
+      state.lastSynced = initialIndex;
+      syncDropdown(combo, meta, state);
+      widget = combo;
     } else {
       auto *label = new N8VLinkLabel(window_);
       label->setTextFormat(Qt::RichText);
@@ -374,11 +419,13 @@ private:
   QCheckBox *measureCheckbox_ = nullptr;
   QLineEdit *measureEntry_ = nullptr;
   QRadioButton *measureRadio_ = nullptr;
+  QComboBox *measureCombo_ = nullptr;
 
   std::map<WidgetKey, QWidget *> widgets_;
   std::unordered_map<int, std::function<void()>> callbacks_;
   std::unordered_map<int, EntryState> entryStates_;
   std::unordered_map<int *, QButtonGroup *> radioGroups_;
+  std::unordered_map<int, DropdownState> dropdownStates_;
 };
 
 } // namespace

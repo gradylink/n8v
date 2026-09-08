@@ -24,6 +24,7 @@ if(N8V_BACKEND_MILSKO)
         MwLabelClass MwClass
         MwCheckBoxClass MwClass
         MwEntryClass MwClass
+        MwComboBoxClass MwClass
     )
     target_include_directories(milsko_lazy PUBLIC "${_N8V_MILSKO_INCLUDE_DIR}")
   else()
