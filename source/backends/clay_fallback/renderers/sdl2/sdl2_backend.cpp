@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -168,6 +169,12 @@ public:
   }
 
   void beginFrame() override {
+    if (!debugModeChecked_) {
+      debugModeChecked_ = true;
+      const char *debug = std::getenv("N8V_DEBUG");
+      if (debug && std::string_view(debug) == "1") Clay_SetDebugModeEnabled(true);
+    }
+
     Clay_SetPointerState({pointerX_, pointerY_}, pointerDown_);
     SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
     SDL_RenderClear(renderer_);
@@ -710,6 +717,7 @@ private:
   Uint32 lastClickTicks_ = 0;
   int lastClickOrdinal_ = -1;
   int clickCount_ = 0;
+  bool debugModeChecked_ = false;
 };
 
 } // namespace
