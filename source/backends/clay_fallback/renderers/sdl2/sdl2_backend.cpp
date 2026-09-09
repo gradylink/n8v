@@ -147,13 +147,17 @@ public:
         if (event.button.button == SDL_BUTTON_LEFT) {
           pointerDown_ = false;
           mouseSelecting_ = false;
+          textMouseSelecting_ = false;
         }
         break;
       case SDL_TEXTINPUT:
         if (entry_.value) insertAtCursor(event.text.text);
         break;
       case SDL_KEYDOWN:
-        handleEntryKey(event.key.keysym);
+        if (entry_.value)
+          handleEntryKey(event.key.keysym);
+        else if (textSel_.active)
+          handleTextKey(event.key.keysym);
         break;
       default:
         break;
@@ -221,6 +225,7 @@ public:
           bool hit = Clay_PointerOver(Clay_ElementId{command->id});
           if (justClicked_ && hit) {
             pendingEntryClicked = true;
+            textSel_ = TextSelState{};
           } else if (justClicked_ && entry_.ordinal == meta->ordinal) {
             entry_ = EntryEditState{};
           } else if (mouseSelecting_ && entry_.ordinal == meta->ordinal) {
@@ -311,6 +316,45 @@ public:
           break;
         }
 
+        auto *flags = static_cast<TextStyleFlags *>(command->userData);
+        std::string_view text(command->renderData.text.stringContents.chars, (size_t)command->renderData.text.stringContents.length);
+        if (flags && !flags->ownedByWidget && !text.empty()) {
+          int ord = flags->ordinal;
+          uint16_t fontSize = command->renderData.text.fontSize;
+          FontFamily family = flags->font;
+          bool bold = flags->bold;
+          bool italic = flags->italic;
+          const Clay_BoundingBox &box = command->boundingBox;
+
+          bool hit = pointerX_ >= box.x && pointerX_ <= box.x + box.width &&
+                     pointerY_ >= box.y && pointerY_ <= box.y + box.height;
+
+          if (hit && currentCursorKind_ == CursorKind::Default) {
+            setCursor(CursorKind::Text);
+          }
+
+          if (justClicked_ && hit) {
+            float localX = pointerX_ - box.x;
+            size_t hitOffset = hitTestOffset(text, family, fontSize, localX, bold, italic);
+            handleTextClick(ord, text, hitOffset);
+          } else if (textMouseSelecting_ && textSel_.active && textSel_.ordinal == ord) {
+            float localX = pointerX_ - box.x;
+            textSel_.cursor = hitTestOffset(text, family, fontSize, localX, bold, italic);
+            lastActivityTicks_ = SDL_GetTicks();
+          }
+
+          if (textSel_.active && textSel_.ordinal == ord) {
+            textSel_.text = std::string(text);
+            if (textSel_.hasSelection()) {
+              drawSelectionHighlight(box, text, family, fontSize, textSel_.selStart(), textSel_.selEnd(), bold, italic);
+              drawText(*command, textSel_.selStart(), textSel_.selEnd());
+            } else {
+              drawText(*command);
+            }
+            break;
+          }
+        }
+
         drawText(*command);
         break;
       }
@@ -388,6 +432,17 @@ private:
     size_t selEnd() const { return std::max(cursor, anchor); }
   };
 
+  struct TextSelState {
+    int ordinal = -1;
+    std::string text;
+    size_t cursor = 0;
+    size_t anchor = 0;
+    bool active = false;
+    bool hasSelection() const { return active && anchor != cursor; }
+    size_t selStart() const { return std::min(cursor, anchor); }
+    size_t selEnd() const { return std::max(cursor, anchor); }
+  };
+
   bool blinkOn() const { return ((SDL_GetTicks() - lastActivityTicks_) / 500) % 2 == 0; }
 
   void fireEntryChange() {
@@ -405,6 +460,7 @@ private:
     lastClickOrdinal_ = meta->ordinal;
     lastActivityTicks_ = now;
 
+    textSel_ = TextSelState{};
     entry_.value = meta->entryValue;
     entry_.onChange = meta->onEntryChange ? *meta->onEntryChange : std::function<void(std::string_view)>{};
     entry_.ordinal = meta->ordinal;
@@ -426,6 +482,41 @@ private:
     } else {
       entry_.cursor = entry_.anchor = hitOffset;
       mouseSelecting_ = true;
+    }
+  }
+
+  void handleTextClick(int ordinal, std::string_view text, size_t hitOffset) {
+    Uint32 now = SDL_GetTicks();
+    if (ordinal == lastClickOrdinal_ && (now - lastClickTicks_) < 400) {
+      clickCount_ = (clickCount_ % 3) + 1;
+    } else {
+      clickCount_ = 1;
+    }
+    lastClickTicks_ = now;
+    lastClickOrdinal_ = ordinal;
+    lastActivityTicks_ = now;
+
+    entry_ = EntryEditState{};
+    textSel_.ordinal = ordinal;
+    textSel_.text = std::string(text);
+    textSel_.active = true;
+
+    if (clickCount_ == 2) {
+      size_t probe = hitOffset < text.size() ? hitOffset : prevCodepointStart(text, hitOffset);
+      if (probe < text.size() && isWordByte((unsigned char)text[probe])) {
+        textSel_.anchor = wordStartAt(text, hitOffset);
+        textSel_.cursor = wordEndAt(text, hitOffset);
+      } else {
+        textSel_.cursor = textSel_.anchor = hitOffset;
+      }
+      textMouseSelecting_ = false;
+    } else if (clickCount_ == 3) {
+      textSel_.anchor = 0;
+      textSel_.cursor = text.size();
+      textMouseSelecting_ = false;
+    } else {
+      textSel_.cursor = textSel_.anchor = hitOffset;
+      textMouseSelecting_ = true;
     }
   }
 
@@ -536,10 +627,56 @@ private:
     }
   }
 
-  size_t hitTestOffset(std::string_view text, FontFamily family, uint16_t fontSize, float localX) const {
+  void moveTextCursor(size_t newPos, bool extendSelection) {
+    textSel_.cursor = newPos;
+    if (!extendSelection) textSel_.anchor = newPos;
+  }
+
+  void handleTextKey(SDL_Keysym keysym) {
+    if (!textSel_.active) return;
+    lastActivityTicks_ = SDL_GetTicks();
+    const std::string &s = textSel_.text;
+    bool ctrl = (keysym.mod & KMOD_CTRL) != 0;
+    bool shift = (keysym.mod & KMOD_SHIFT) != 0;
+
+    switch (keysym.sym) {
+    case SDLK_LEFT: {
+      size_t target = (!shift && textSel_.hasSelection()) ? textSel_.selStart() : (ctrl ? wordLeft(s, textSel_.cursor) : prevCodepointStart(s, textSel_.cursor));
+      moveTextCursor(target, shift);
+      break;
+    }
+    case SDLK_RIGHT: {
+      size_t target = (!shift && textSel_.hasSelection()) ? textSel_.selEnd() : (ctrl ? wordRight(s, textSel_.cursor) : nextCodepointStart(s, textSel_.cursor));
+      moveTextCursor(target, shift);
+      break;
+    }
+    case SDLK_HOME:
+      moveTextCursor(0, shift);
+      break;
+    case SDLK_END:
+      moveTextCursor(s.size(), shift);
+      break;
+    case SDLK_a:
+      if (ctrl) {
+        textSel_.anchor = 0;
+        textSel_.cursor = s.size();
+      }
+      break;
+    case SDLK_c:
+      if (ctrl && textSel_.hasSelection()) {
+        std::string selected = s.substr(textSel_.selStart(), textSel_.selEnd() - textSel_.selStart());
+        SDL_SetClipboardText(selected.c_str());
+      }
+      break;
+    default:
+      break;
+    }
+  }
+
+  size_t hitTestOffset(std::string_view text, FontFamily family, uint16_t fontSize, float localX, bool bold = false, bool italic = false) const {
     if (text.empty()) return 0;
     LineLayoutResult layout;
-    if (!layoutLine(text, family, fontSize, false, false, layout)) return text.size();
+    if (!layoutLine(text, family, fontSize, bold, italic, layout)) return text.size();
     std::vector<size_t> offsets = codepointByteOffsets(text);
     size_t count = offsets.size() - 1;
     if (count == 0 || layout.caretX.size() != count) return text.size();
@@ -556,10 +693,10 @@ private:
     return offsets[bestIndex];
   }
 
-  float caretPixelX(std::string_view text, FontFamily family, uint16_t fontSize, size_t byteOffset) const {
+  float caretPixelX(std::string_view text, FontFamily family, uint16_t fontSize, size_t byteOffset, bool bold = false, bool italic = false) const {
     if (byteOffset == 0 || text.empty()) return 0.0f;
     LineLayoutResult layout;
-    if (!layoutLine(text, family, fontSize, false, false, layout)) return 0.0f;
+    if (!layoutLine(text, family, fontSize, bold, italic, layout)) return 0.0f;
     std::vector<size_t> offsets = codepointByteOffsets(text);
     for (size_t k = 0; k < offsets.size(); ++k) {
       if (offsets[k] == byteOffset) return k == 0 ? 0.0f : layout.caretX[k - 1];
@@ -567,16 +704,16 @@ private:
     return layout.width;
   }
 
-  void drawCursorCaret(const Clay_BoundingBox &textBox, std::string_view value, FontFamily family, uint16_t fontSize, size_t byteOffset) {
-    float x = std::round(textBox.x + caretPixelX(value, family, fontSize, byteOffset));
+  void drawCursorCaret(const Clay_BoundingBox &textBox, std::string_view value, FontFamily family, uint16_t fontSize, size_t byteOffset, bool bold = false, bool italic = false) {
+    float x = std::round(textBox.x + caretPixelX(value, family, fontSize, byteOffset, bold, italic));
     int y0 = (int)textBox.y, y1 = (int)(textBox.y + textBox.height);
     SDL_SetRenderDrawColor(renderer_, 20, 20, 20, 255);
     SDL_RenderDrawLine(renderer_, (int)x, y0, (int)x, y1);
   }
 
-  void drawSelectionHighlight(const Clay_BoundingBox &textBox, std::string_view value, FontFamily family, uint16_t fontSize, size_t selStart, size_t selEnd) {
-    float x0 = caretPixelX(value, family, fontSize, selStart);
-    float x1 = caretPixelX(value, family, fontSize, selEnd);
+  void drawSelectionHighlight(const Clay_BoundingBox &textBox, std::string_view value, FontFamily family, uint16_t fontSize, size_t selStart, size_t selEnd, bool bold = false, bool italic = false) {
+    float x0 = caretPixelX(value, family, fontSize, selStart, bold, italic);
+    float x1 = caretPixelX(value, family, fontSize, selEnd, bold, italic);
     Clay_BoundingBox box{textBox.x + x0, textBox.y, x1 - x0, textBox.height};
     drawFilledRect(box, Clay_Color{50, 100, 220, 255});
   }
@@ -847,7 +984,9 @@ private:
 
   bool justClicked_ = false;
   bool mouseSelecting_ = false;
+  bool textMouseSelecting_ = false;
   EntryEditState entry_;
+  TextSelState textSel_;
   Uint32 lastActivityTicks_ = 0;
   Uint32 lastClickTicks_ = 0;
   int lastClickOrdinal_ = -1;
