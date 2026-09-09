@@ -46,9 +46,6 @@ static std::deque<DropdownItemClick> dropdownItemClickStorage;
 
 static std::unordered_map<int, bool> dropdownOpenState;
 
-// The ordinal of the slider currently being dragged, or -1. Persists across frames so a drag
-// started on the slider keeps tracking the pointer even once it drifts outside the track's
-// bounds (Clay_OnHover alone can't do this - it only fires while actually hovering the element).
 static int draggingSliderOrdinal = -1;
 
 Clay_ElementId sliderTrackId(int ordinal) { return Clay__HashStringWithOffset(CLAY_STRING("n8v-slider-track"), (uint32_t)ordinal, 0); }
@@ -181,13 +178,6 @@ void dispatchDropdownSelect(Clay_ElementId /*elementId*/, Clay_PointerData point
 }
 
 void dispatchSliderDrag(Clay_ElementId elementId, Clay_PointerData pointerData, void *userData) {
-  // Only a fresh press (this frame) starts a drag here - continuing an already-started drag while
-  // the pointer stays over the slider is handled separately by the draggingSliderOrdinal check at
-  // the top of slider(), which only continues a drag that was genuinely initiated on this slider.
-  // Reacting to a plain (held-over) CLAY_POINTER_DATA_PRESSED here too meant that any mouse button
-  // already held down elsewhere - e.g. clicking a dropdown item, which closes the dropdown and
-  // reveals the slider underneath the still-held pointer - got misread as a continuing drag on this
-  // slider and jumped its value immediately, even though the press never actually started on it.
   if (pointerData.state != CLAY_POINTER_DATA_PRESSED_THIS_FRAME) return;
   auto *meta = static_cast<n8v::detail::NativeWidgetMeta *>(userData);
   if (!meta || !meta->sliderValue) return;
@@ -213,10 +203,6 @@ void beginFrame() {
   widgetOrdinal = 0;
   pendingCursor = CursorKind::Default;
 
-  // backend.beginFrame() calls Clay_SetPointerState(), which runs Clay's hit-test and fires any
-  // Clay_OnHover callbacks registered *last* frame - using the userData pointers and storage from
-  // last frame's declarations. It must run before that storage is cleared below, or those
-  // callbacks (link clicks, dropdown toggles, everything Clay_OnHover-driven) read freed memory.
   Backend &backend = activeBackend();
   backend.beginFrame();
 
@@ -271,8 +257,6 @@ void entry(const EntryOptions &options) {
   bool hasValue = options.value && !options.value->empty();
   const bool focused = activeBackend().isEntryFocused(ordinal);
   const EntryPaint paint = activePaint().entry(focused, hasValue);
-  // A style opts into the floating-label treatment by giving the label a visible color; styles
-  // that don't (Plain/Fluent/Cupertino) keep the legacy placeholder-inside-the-box look.
   const bool floatingLabelStyle = paint.labelColor.a > 0.0f;
   const bool labelFloated = floatingLabelStyle && (hasValue || focused);
 
@@ -290,21 +274,8 @@ void entry(const EntryOptions &options) {
   } else if (hasValue) {
     displayText = *options.value;
   } else if (!floatingLabelStyle) {
-    // Legacy behavior: the placeholder sits inline in the value slot when there's no separate
-    // floating label to carry it.
     displayText = options.placeholder;
   } else {
-    // The label is either floated above (focused) or centered inline as its own element below -
-    // either way the value slot itself has nothing to show while empty. A blank placeholder rather
-    // than a truly empty string: Clay skips emitting a render command entirely for a zero-length
-    // text line, which would leave the backend's "next TEXT command after this entry's rectangle"
-    // cursor/selection anchor dangling and pick up whatever unrelated text comes next in the
-    // stream. It must be U+00A0 (non-breaking space), not a literal ASCII space: Clay's internal
-    // word-splitter special-cases the raw byte 0x20 as a delimiter and, when the whole string is
-    // just that one delimiter, never actually measures it - the text element's height collapses to
-    // 0, which made the caret render as a 1px sliver instead of a proper full-height cursor line.
-    // U+00A0 isn't byte 0x20 in UTF-8, so it takes the normal measurement path (still blank ink)
-    // and gets the font's real line height.
     displayText = " ";
   }
 
@@ -320,8 +291,6 @@ void entry(const EntryOptions &options) {
   }
 
   Clay_Dimensions nativeSize = activeBackend().measureNativeChrome(NativeWidgetKind::Entry, options.placeholder, paint.fontSize);
-  // The value slot can be empty (label floated above it, or label rendered as its own inline
-  // element instead) - fix the field's height explicitly so it doesn't collapse when that happens.
   float fieldHeight = (float)paint.padding.top + (float)paint.fontSize * 1.2f + (float)paint.padding.bottom;
   if (nativeSize.height > 0) {
     decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
@@ -347,12 +316,6 @@ void entry(const EntryOptions &options) {
 
   Clay__ConfigureOpenElement(decl);
 
-  // Always emit the value-slot text element, even when displayText is empty (an empty CLAY_TEXT
-  // still gets a correctly-positioned, correctly-sized render command) - the SDL2 backend anchors
-  // cursor/selection/click-hit-testing to whichever TEXT command immediately follows the entry's
-  // own rectangle command, so skipping this when there's nothing to show would let that lookup fall
-  // through to an unrelated later command (e.g. the floating label, or worse, the next widget's
-  // text entirely, since Clay sorts floating elements out of normal stream order).
   {
     textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
     Clay_TextElementConfig textConfig = {};
@@ -363,10 +326,6 @@ void entry(const EntryOptions &options) {
     CLAY_TEXT(internString(displayText), textConfig);
   }
 
-  // The floating label: centered inline (same size as the value text) when empty and unfocused, or
-  // shifted up to straddle the top border when focused or populated. It's a floating element with
-  // its own background-colored backdrop so it visually notches/interrupts the border stroke beneath
-  // it, matching Flutter's OutlineInputBorder gap technique rather than actually clipping the border.
   if (floatingLabelStyle && !options.placeholder.empty()) {
     Clay__OpenElement();
     Clay_ElementDeclaration labelDecl = {};
@@ -766,9 +725,11 @@ void dropdown(const DropdownOptions &options) {
     popupDecl.layout.layoutDirection = CLAY_TOP_TO_BOTTOM;
     popupDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
     popupDecl.backgroundColor = toClay(paint.popupBackground);
-    popupDecl.cornerRadius = floatingLabelStyle ? Clay_CornerRadius{0, 0, paint.cornerRadius.topLeft, paint.cornerRadius.topRight} : decl.cornerRadius;
+    Clay_CornerRadius popupRadius = floatingLabelStyle ? Clay_CornerRadius{0, 0, paint.cornerRadius.topLeft, paint.cornerRadius.topRight} : decl.cornerRadius;
+    popupDecl.cornerRadius = popupRadius;
     popupDecl.floating.attachTo = CLAY_ATTACH_TO_PARENT;
     popupDecl.floating.attachPoints = {CLAY_ATTACH_POINT_LEFT_TOP, CLAY_ATTACH_POINT_LEFT_BOTTOM};
+    if (!floatingLabelStyle) popupDecl.floating.offset.y = 6.0f;
     popupDecl.floating.zIndex = 1000;
     Clay__ConfigureOpenElement(popupDecl);
 
@@ -784,6 +745,13 @@ void dropdown(const DropdownOptions &options) {
       rowDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
       Color rowBg = itemHovered ? paint.itemHoverBackground : (itemSelected && paint.itemSelectedBackground.a > 0.0f ? paint.itemSelectedBackground : paint.popupBackground);
       rowDecl.backgroundColor = toClay(rowBg);
+      bool isFirstRow = i == 0, isLastRow = i == itemsCopy.size() - 1;
+      rowDecl.cornerRadius = {
+        isFirstRow ? popupRadius.topLeft : 0.0f,
+        isFirstRow ? popupRadius.topRight : 0.0f,
+        isLastRow ? popupRadius.bottomLeft : 0.0f,
+        isLastRow ? popupRadius.bottomRight : 0.0f
+      };
       Clay__ConfigureOpenElement(rowDecl);
 
       dropdownItemClickStorage.push_back(DropdownItemClick{&meta, (int)i});
