@@ -120,6 +120,12 @@ add_library(n8v
   source/core/clay_impl.cpp
   source/core/open_url.cpp
   source/core/ui_core.cpp
+  source/core/widgets/leaf.cpp
+  source/core/widgets/checkbox.cpp
+  source/core/widgets/radio.cpp
+  source/core/widgets/entry.cpp
+  source/core/widgets/dropdown.cpp
+  source/core/widgets/slider.cpp
   source/styles/style_registry.cpp
   source/styles/plain/plain_style.cpp
   source/styles/material/material_style.cpp
@@ -130,6 +136,10 @@ add_library(n8v
   source/backends/clay_fallback/text/font_atlas.cpp
   source/backends/clay_fallback/text/line_layout.cpp
   source/backends/clay_fallback/renderers/sdl2/sdl2_backend.cpp
+  source/backends/clay_fallback/renderers/sdl2/entry_field.cpp
+  source/backends/clay_fallback/renderers/sdl2/text_selection.cpp
+  source/backends/clay_fallback/renderers/sdl2/indicators.cpp
+  source/backends/clay_fallback/renderers/sdl2/draw_primitives.cpp
 )
 target_include_directories(n8v PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(n8v PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/source)
