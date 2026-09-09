@@ -381,7 +381,7 @@ void LeafBuilder::operator()(std::string_view label) && {
 
     const int ordinal = widgetOrdinal++;
     const bool hovered = Clay_Hovered();
-    if (hovered) pendingCursor = CursorKind::Pointer;
+    // if (hovered) pendingCursor = CursorKind::Pointer;
     const bool pressed = hovered && activeBackend().pointerDown();
     const ButtonPaint paint = activePaint().button(buttonOptions.style, hovered, pressed);
 
@@ -478,7 +478,7 @@ void CheckboxBuilder::operator()(std::string_view label) && {
 
   const int ordinal = widgetOrdinal++;
   const bool hovered = Clay_Hovered();
-  if (hovered) pendingCursor = CursorKind::Pointer;
+  // if (hovered) pendingCursor = CursorKind::Pointer;
   const bool pressed = hovered && activeBackend().pointerDown();
   const bool checkedValue = options.checked && *options.checked;
   const CheckboxPaint paint = activePaint().checkbox(checkedValue, hovered, pressed);
@@ -541,7 +541,7 @@ void RadioBuilder::operator()(std::string_view label) && {
 
   const int ordinal = widgetOrdinal++;
   const bool hovered = Clay_Hovered();
-  if (hovered) pendingCursor = CursorKind::Pointer;
+  // if (hovered) pendingCursor = CursorKind::Pointer;
   const bool pressed = hovered && activeBackend().pointerDown();
   const bool selectedValue = options.selected && *options.selected == options.value;
   const RadioPaint paint = activePaint().radio(selectedValue, hovered, pressed);
@@ -603,7 +603,7 @@ void dropdown(const DropdownOptions &options) {
 
   const int ordinal = widgetOrdinal++;
   const bool hovered = Clay_Hovered();
-  if (hovered) pendingCursor = CursorKind::Pointer;
+  // if (hovered) pendingCursor = CursorKind::Pointer;
   const bool pressed = hovered && activeBackend().pointerDown();
   const bool open = dropdownOpenState[ordinal];
   const bool hasSelection = options.selected && *options.selected >= 0 && (size_t)*options.selected < options.items.size();
@@ -767,7 +767,7 @@ void dropdown(const DropdownOptions &options) {
       Clay__OpenElement();
 
       const bool itemHovered = Clay_Hovered();
-      if (itemHovered) pendingCursor = CursorKind::Pointer;
+      // if (itemHovered) pendingCursor = CursorKind::Pointer;
       const bool itemSelected = hasSelection && (size_t)*options.selected == i;
 
       Clay_ElementDeclaration rowDecl = {};
@@ -829,7 +829,7 @@ void slider(const SliderOptions &options) {
   Clay__OpenElementWithId(sliderTrackId(ordinal));
 
   const bool hovered = Clay_Hovered();
-  if (hovered) pendingCursor = CursorKind::Pointer;
+  // if (hovered) pendingCursor = CursorKind::Pointer;
   const bool pressed = hovered && activeBackend().pointerDown();
   const SliderPaint paint = activePaint().slider(hovered, pressed);
 
