@@ -80,7 +80,7 @@ public:
   static void cleanup();
 
 private:
-  static std::unordered_map<std::string, std::weak_ptr<FontAtlas>> cache;
+  static std::unordered_map<std::string, std::shared_ptr<FontAtlas>> cache;
 };
 
 } // namespace n8v::detail

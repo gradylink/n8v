@@ -168,14 +168,11 @@ void FontAtlas::tickEviction() {
   }
 }
 
-std::unordered_map<std::string, std::weak_ptr<FontAtlas>> FontManager::cache;
+std::unordered_map<std::string, std::shared_ptr<FontAtlas>> FontManager::cache;
 
 std::shared_ptr<FontAtlas> FontManager::acquire(const std::string &resolvedPath) {
   auto it = cache.find(resolvedPath);
-  if (it != cache.end()) {
-    if (auto atlas = it->second.lock()) return atlas;
-    cache.erase(it);
-  }
+  if (it != cache.end()) return it->second;
 
   auto atlas = std::make_shared<FontAtlas>();
   cache[resolvedPath] = atlas;
@@ -183,14 +180,7 @@ std::shared_ptr<FontAtlas> FontManager::acquire(const std::string &resolvedPath)
 }
 
 void FontManager::tick() {
-  for (auto it = cache.begin(); it != cache.end();) {
-    if (auto atlas = it->second.lock()) {
-      atlas->tickEviction();
-      ++it;
-    } else {
-      it = cache.erase(it);
-    }
-  }
+  for (auto &[key, atlas] : cache) atlas->tickEviction();
 }
 
 void FontManager::cleanup() { cache.clear(); }
