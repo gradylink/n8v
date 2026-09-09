@@ -55,6 +55,7 @@ struct EntryPaint {
   bool outlined = false;
   Color labelColor = {0, 0, 0, 0};
   uint16_t labelFontSize = 12;
+  float transitionSeconds = 0.0f;
   CornerRadius cornerRadius;
   Padding padding;
   FontFamily font = FontFamily::DejaVuSans;

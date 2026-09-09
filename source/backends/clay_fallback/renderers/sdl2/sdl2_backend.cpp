@@ -192,7 +192,6 @@ public:
     bool pendingIsCheckbox = false;
     bool pendingIsRadio = false;
     NativeWidgetMeta *pendingIndicatorMeta = nullptr;
-    bool pendingChecked = false;
 
     NativeWidgetMeta *pendingEntryMeta = nullptr;
     bool pendingEntryClicked = false;
@@ -207,7 +206,6 @@ public:
         pendingIsRadio = meta && meta->kind == NativeWidgetKind::Radio;
         if (pendingIsCheckbox || pendingIsRadio) {
           pendingIndicatorMeta = meta;
-          pendingChecked = pendingIsRadio ? (meta->radioSelected && *meta->radioSelected == meta->radioValue) : (meta->checked && *meta->checked);
           break;
         }
         if (meta && meta->kind == NativeWidgetKind::DropdownChevron) {
@@ -255,8 +253,8 @@ public:
           }
           Clay_Color glyph{m.indicatorGlyphColor.r, m.indicatorGlyphColor.g, m.indicatorGlyphColor.b, m.indicatorGlyphColor.a};
           if (pendingIsRadio) {
-            if (pendingChecked) drawRadioDot(squareBox, glyph);
-          } else if (pendingChecked) {
+            if (m.indicatorGlyphScale > 0.01f) drawRadioDot(squareBox, glyph, m.indicatorGlyphScale);
+          } else if (glyph.a > 0.5f) {
             drawCheckmark(squareBox, glyph);
           }
           pendingIsCheckbox = false;
@@ -704,8 +702,8 @@ private:
     drawStrokeCap(x1, y1, thickness, color);
   }
 
-  void drawRadioDot(const Clay_BoundingBox &box, const Clay_Color &color) {
-    float dotSize = box.width * 0.5625f; // 9dp dot / 16dp ring, per Material's radio button.
+  void drawRadioDot(const Clay_BoundingBox &box, const Clay_Color &color, float scale) {
+    float dotSize = box.width * 0.5625f * std::clamp(scale, 0.0f, 1.0f);
     Clay_BoundingBox dotBox{box.x + (box.width - dotSize) * 0.5f, box.y + (box.height - dotSize) * 0.5f, dotSize, dotSize};
     drawRoundedRect(dotBox, color, {dotSize * 0.5f, dotSize * 0.5f, dotSize * 0.5f, dotSize * 0.5f});
   }

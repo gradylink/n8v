@@ -39,6 +39,7 @@ struct NativeWidgetMeta {
   n8v::Color indicatorGlyphColor{};                               // Checkbox (check) / Radio (dot) only
   float indicatorCornerRadius = 0.0f;                             // Checkbox only
   float indicatorSize = 0.0f;                                     // Checkbox/Radio only
+  float indicatorGlyphScale = 1.0f;                               // Radio only - eases 0->1 so the inner dot grows in rather than popping to full size
   n8v::Color chevronColor{};                                      // DropdownChevron only
   bool chevronPointsUp = false;                                   // DropdownChevron only
 };

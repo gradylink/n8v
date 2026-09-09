@@ -54,16 +54,18 @@ static float currentDelta = 0.0f;
 static int widgetOrdinal = 0;
 static n8v::CursorKind pendingCursor = n8v::CursorKind::Default;
 
-struct RadiusAnimation {
+struct ValueAnimation {
   float start = 0.0f;
   float current = 0.0f;
   float target = 0.0f;
   float elapsed = 0.0f;
 };
-static std::unordered_map<int, RadiusAnimation> radiusAnimations;
+static std::unordered_map<int, ValueAnimation> valueAnimations;
 
-float easeRadius(int key, float target, float duration) {
-  RadiusAnimation &anim = radiusAnimations[key];
+int animKey(int ordinal, int slot) { return ordinal * 64 + slot; }
+
+float easeValue(int key, float target, float duration) {
+  ValueAnimation &anim = valueAnimations[key];
   if (anim.target != target) {
     anim.start = anim.current;
     anim.target = target;
@@ -80,6 +82,15 @@ float easeRadius(int key, float target, float duration) {
   float lerp = 1.0f - inverse * inverse * inverse;
   anim.current = anim.start + (anim.target - anim.start) * lerp;
   return anim.current;
+}
+
+n8v::Color easeColor(int ordinal, int slotBase, n8v::Color target, float duration) {
+  return {
+    easeValue(animKey(ordinal, slotBase + 0), target.r, duration),
+    easeValue(animKey(ordinal, slotBase + 1), target.g, duration),
+    easeValue(animKey(ordinal, slotBase + 2), target.b, duration),
+    easeValue(animKey(ordinal, slotBase + 3), target.a, duration),
+  };
 }
 
 Clay_Dimensions measureText(Clay_StringSlice text, Clay_TextElementConfig *config, void * /*userData*/) {
@@ -333,9 +344,16 @@ void entry(const EntryOptions &options) {
     labelDecl.floating.attachPoints = {CLAY_ATTACH_POINT_LEFT_TOP, CLAY_ATTACH_POINT_LEFT_TOP};
     labelDecl.floating.pointerCaptureMode = CLAY_POINTER_CAPTURE_MODE_PASSTHROUGH;
     labelDecl.floating.zIndex = 10;
-    uint16_t labelFontSize = labelFloated ? paint.labelFontSize : paint.fontSize;
+    if (paint.transitionSeconds > 0.0f) {
+      labelDecl.transition.handler = Clay_EaseOut;
+      labelDecl.transition.duration = paint.transitionSeconds;
+      labelDecl.transition.properties = (Clay_TransitionProperty)(CLAY_TRANSITION_PROPERTY_BOUNDING_BOX | CLAY_TRANSITION_PROPERTY_BACKGROUND_COLOR);
+    }
+    uint16_t labelFontSize = (uint16_t)easeValue(animKey(ordinal, 32), labelFloated ? paint.labelFontSize : paint.fontSize, paint.transitionSeconds);
+    Clay_Color labelBackdrop = toClay(paint.background);
+    labelBackdrop.a = labelFloated ? labelBackdrop.a : 0.0f;
+    labelDecl.backgroundColor = labelBackdrop;
     if (labelFloated) {
-      labelDecl.backgroundColor = toClay(paint.background);
       labelDecl.layout.padding = {4, 4, 0, 0};
       labelDecl.floating.offset = {(float)paint.padding.left - 4.0f, -(float)labelFontSize * 0.6f};
     } else {
@@ -371,7 +389,7 @@ void LeafBuilder::operator()(std::string_view label) && {
     decl.layout.padding = toClay(paint.padding);
     decl.backgroundColor = toClay(paint.background);
 
-    float radius = easeRadius(ordinal, paint.cornerRadius.topLeft, paint.transitionSeconds);
+    float radius = easeValue(animKey(ordinal, 0), paint.cornerRadius.topLeft, paint.transitionSeconds);
     decl.cornerRadius = {radius, radius, radius, radius};
     if (paint.transitionSeconds > 0.0f) {
       decl.transition.handler = Clay_EaseOut;
@@ -476,7 +494,7 @@ void CheckboxBuilder::operator()(std::string_view label) && {
   decl.layout.padding = toClay(pad);
   decl.backgroundColor = {0, 0, 0, 1};
 
-  float radius = easeRadius(ordinal, paint.cornerRadius.topLeft, paint.transitionSeconds);
+  float radius = easeValue(animKey(ordinal, 0), paint.cornerRadius.topLeft, paint.transitionSeconds);
 
   Clay_Dimensions nativeSize = activeBackend().measureNativeChrome(NativeWidgetKind::Checkbox, label, labelPaint.fontSize);
   if (nativeSize.width > 0 && nativeSize.height > 0) {
@@ -493,10 +511,10 @@ void CheckboxBuilder::operator()(std::string_view label) && {
   meta.ordinal = ordinal;
   meta.checked = options.checked;
   meta.onChange = hasOnChange ? &changeCallbacks.back() : nullptr;
-  meta.indicatorFillColor = paint.background;
-  meta.indicatorBorderColor = paint.borderColor;
-  meta.indicatorBorderWidth = paint.borderWidth;
-  meta.indicatorGlyphColor = paint.checkColor;
+  meta.indicatorFillColor = easeColor(ordinal, 4, paint.background, paint.transitionSeconds);
+  meta.indicatorBorderColor = easeColor(ordinal, 8, paint.borderColor, paint.transitionSeconds);
+  meta.indicatorBorderWidth = easeValue(animKey(ordinal, 12), paint.borderWidth, paint.transitionSeconds);
+  meta.indicatorGlyphColor = easeColor(ordinal, 16, paint.checkColor, paint.transitionSeconds);
   meta.indicatorCornerRadius = radius;
   meta.indicatorSize = indicatorSize;
   decl.userData = &meta;
@@ -555,10 +573,11 @@ void RadioBuilder::operator()(std::string_view label) && {
     radioChangeCallbacks.push_back(std::move(options.onChange));
     meta.onRadioChange = &radioChangeCallbacks.back();
   }
-  meta.indicatorFillColor = paint.background;
-  meta.indicatorBorderColor = paint.borderColor;
-  meta.indicatorBorderWidth = paint.borderWidth;
-  meta.indicatorGlyphColor = paint.dotColor;
+  meta.indicatorFillColor = easeColor(ordinal, 4, paint.background, paint.transitionSeconds);
+  meta.indicatorBorderColor = easeColor(ordinal, 8, paint.borderColor, paint.transitionSeconds);
+  meta.indicatorBorderWidth = easeValue(animKey(ordinal, 12), paint.borderWidth, paint.transitionSeconds);
+  meta.indicatorGlyphColor = easeColor(ordinal, 16, paint.dotColor, paint.transitionSeconds);
+  meta.indicatorGlyphScale = easeValue(animKey(ordinal, 20), selectedValue ? 1.0f : 0.0f, paint.transitionSeconds);
   meta.indicatorSize = indicatorSize;
   decl.userData = &meta;
 
@@ -603,10 +622,10 @@ void dropdown(const DropdownOptions &options) {
 
   Clay_Dimensions nativeSize = activeBackend().measureNativeChrome(NativeWidgetKind::Dropdown, hasSelection ? selectedText : options.placeholder, paint.fontSize);
   const bool hasNativeChrome = nativeSize.height > 0;
+  float contentHeight = (float)paint.padding.top + (float)paint.labelFontSize * 1.2f + (float)paint.fontSize * 1.2f + (float)paint.padding.bottom;
   if (hasNativeChrome) {
     decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
   } else if (floatingLabelStyle) {
-    float contentHeight = (float)paint.padding.top + (float)paint.labelFontSize * 1.2f + (float)paint.fontSize * 1.2f + (float)paint.padding.bottom;
     decl.layout.sizing.height = CLAY_SIZING_FIXED(contentHeight + paint.indicatorWidth);
   }
 
@@ -639,37 +658,17 @@ void dropdown(const DropdownOptions &options) {
     contentRowDecl.layout.padding = toClay(paint.padding);
     contentRowDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
     contentRowDecl.layout.sizing.height = CLAY_SIZING_GROW(0);
-    contentRowDecl.layout.childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER};
+    contentRowDecl.layout.childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_BOTTOM};
     Clay__ConfigureOpenElement(contentRowDecl);
 
-    Clay__OpenElement();
-    Clay_ElementDeclaration textColDecl = {};
-    textColDecl.layout.layoutDirection = CLAY_TOP_TO_BOTTOM;
-    textColDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
-    textColDecl.layout.sizing.height = CLAY_SIZING_GROW(0);
-    textColDecl.layout.childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER};
-    Clay__ConfigureOpenElement(textColDecl);
-
-    if (labelFloated) {
-      textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
-      Clay_TextElementConfig labelTextConfig = {};
-      labelTextConfig.textColor = toClay(paint.labelColor);
-      labelTextConfig.fontSize = paint.labelFontSize;
-      labelTextConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
-      labelTextConfig.userData = &textStyleStorage.back();
-      CLAY_TEXT(internString(options.placeholder), labelTextConfig);
-    }
-
-    std::string_view lineText = hasSelection ? selectedText : (labelFloated ? std::string_view{"\xC2\xA0"} : options.placeholder);
+    std::string_view lineText = hasSelection ? selectedText : std::string_view{"\xC2\xA0"};
     textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
     Clay_TextElementConfig valueTextConfig = {};
-    valueTextConfig.textColor = toClay(hasSelection ? paint.textColor : paint.labelColor);
+    valueTextConfig.textColor = toClay(paint.textColor);
     valueTextConfig.fontSize = paint.fontSize;
     valueTextConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
     valueTextConfig.userData = &textStyleStorage.back();
     CLAY_TEXT(internString(lineText), valueTextConfig);
-
-    Clay__CloseElement();
 
     Clay__OpenElement();
     Clay_ElementDeclaration chevronDecl = {};
@@ -686,7 +685,38 @@ void dropdown(const DropdownOptions &options) {
     Clay__ConfigureOpenElement(chevronDecl);
     Clay__CloseElement();
 
-    Clay__CloseElement();
+    Clay__CloseElement(); // contentRow
+
+    if (!options.placeholder.empty()) {
+      Clay__OpenElement();
+      Clay_ElementDeclaration labelDecl = {};
+      labelDecl.floating.attachTo = CLAY_ATTACH_TO_PARENT;
+      labelDecl.floating.attachPoints = {CLAY_ATTACH_POINT_LEFT_TOP, CLAY_ATTACH_POINT_LEFT_TOP};
+      labelDecl.floating.pointerCaptureMode = CLAY_POINTER_CAPTURE_MODE_PASSTHROUGH;
+      labelDecl.floating.zIndex = 10;
+      if (paint.transitionSeconds > 0.0f) {
+        labelDecl.transition.handler = Clay_EaseOut;
+        labelDecl.transition.duration = paint.transitionSeconds;
+        labelDecl.transition.properties = CLAY_TRANSITION_PROPERTY_BOUNDING_BOX;
+      }
+      uint16_t labelFontSize = (uint16_t)easeValue(animKey(ordinal, 32), labelFloated ? paint.labelFontSize : paint.fontSize, paint.transitionSeconds);
+      if (labelFloated) {
+        labelDecl.floating.offset = {(float)paint.padding.left, (float)paint.padding.top};
+      } else {
+        labelDecl.floating.offset = {(float)paint.padding.left, (contentHeight - (float)labelFontSize) / 2.0f};
+      }
+      Clay__ConfigureOpenElement(labelDecl);
+
+      textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
+      Clay_TextElementConfig labelTextConfig = {};
+      labelTextConfig.textColor = toClay(paint.labelColor);
+      labelTextConfig.fontSize = labelFontSize;
+      labelTextConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
+      labelTextConfig.userData = &textStyleStorage.back();
+      CLAY_TEXT(internString(options.placeholder), labelTextConfig);
+
+      Clay__CloseElement();
+    }
 
     if (paint.indicatorWidth > 0.0f) {
       Clay__OpenElement();

@@ -46,6 +46,7 @@ public:
     paint.padding = {16, 16, 10, 10};
     paint.font = FontFamily::Roboto;
     paint.fontSize = 14;
+    paint.transitionSeconds = 0.15f;
     return paint;
   }
 
@@ -62,6 +63,7 @@ public:
     paint.padding = {16, 16, 10, 10};
     paint.font = FontFamily::Roboto;
     paint.fontSize = 14;
+    paint.transitionSeconds = 0.15f;
     return paint;
   }
 
@@ -75,6 +77,7 @@ public:
     paint.borderWidth = focused ? 2.0f : 1.0f;
     paint.labelColor = focused ? Color{103, 80, 164, 255} : Color{121, 116, 126, 255};
     paint.labelFontSize = 12;
+    paint.transitionSeconds = 0.15f;
     paint.cornerRadius = {4, 4, 4, 4};
     paint.padding = {12, 12, 20, 12};
     paint.font = FontFamily::Roboto;
@@ -96,6 +99,7 @@ public:
     paint.fontSize = 16;
     paint.labelColor = (open || hasSelection) ? Color{103, 80, 164, 255} : Color{121, 116, 126, 255}; // primary / onSurfaceVariant
     paint.labelFontSize = 12;
+    paint.transitionSeconds = 0.15f;
     paint.indicatorColor = open ? Color{103, 80, 164, 255} : Color{73, 69, 79, 255}; // primary / onSurfaceVariant
     paint.indicatorWidth = open ? 2.0f : 1.0f;
     return paint;
