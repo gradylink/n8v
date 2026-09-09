@@ -9,6 +9,7 @@
 #include "milsko_lazy_vars.h"
 
 #include <cmath>
+#include <cstdlib>
 #include <functional>
 #include <map>
 #include <memory>
@@ -55,6 +56,11 @@ public:
     std::string titleStr(title);
     window_ = MwVaCreateWidget(MwWindowClass, "n8v", nullptr, MwDEFAULT, MwDEFAULT, (unsigned int)width, (unsigned int)height, MwNtitle, titleStr.c_str(), NULL);
     if (!window_) return false;
+
+    const char *style = std::getenv("N8V_STYLE");
+    if (style && strcmp(style, "classic") == 0) {
+      MwVaApply(window_, MwNmodernLook, 0, NULL);
+    }
 
     measureLabel_ = MwCreateWidget(MwLabelClass, "n8v-measure", window_, 0, 0, 1, 1);
     MwShow(measureLabel_, 0);
