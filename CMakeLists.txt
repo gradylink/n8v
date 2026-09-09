@@ -37,6 +37,7 @@ lzy_add_wrapper(sdl2_lazy
     SDL_DestroyRenderer
     SDL_GL_SetAttribute
     SDL_SetRenderDrawColor
+    SDL_SetRenderDrawBlendMode
     SDL_RenderClear
     SDL_RenderFillRect
     SDL_RenderPresent

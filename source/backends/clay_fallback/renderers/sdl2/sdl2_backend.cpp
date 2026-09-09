@@ -120,6 +120,8 @@ public:
       return false;
     }
 
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+
     SDL_StartTextInput();
 
     return true;
