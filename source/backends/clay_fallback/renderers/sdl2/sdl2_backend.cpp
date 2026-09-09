@@ -300,7 +300,7 @@ public:
           } else {
             drawText(*command);
           }
-          if (isFocused && blinkOn()) {
+          if (isFocused && !hasSel && blinkOn()) {
             size_t displayCursor = realOffsetToDisplayOffset(value, entry_.cursor, isPassword);
             drawCursorCaret(command->boundingBox, displayText, family, fontSize, displayCursor);
           }
@@ -504,6 +504,10 @@ private:
     case SDLK_BACKSPACE:
       if (entry_.hasSelection()) {
         eraseEntrySelection();
+      } else if (ctrl) {
+        size_t start = wordLeft(s, entry_.cursor);
+        s.erase(start, entry_.cursor - start);
+        entry_.cursor = entry_.anchor = start;
       } else if (entry_.cursor > 0) {
         size_t start = prevCodepointStart(s, entry_.cursor);
         s.erase(start, entry_.cursor - start);
@@ -516,6 +520,9 @@ private:
     case SDLK_DELETE:
       if (entry_.hasSelection()) {
         eraseEntrySelection();
+      } else if (ctrl) {
+        size_t end = wordRight(s, entry_.cursor);
+        s.erase(entry_.cursor, end - entry_.cursor);
       } else if (entry_.cursor < s.size()) {
         size_t end = nextCodepointStart(s, entry_.cursor);
         s.erase(entry_.cursor, end - entry_.cursor);
