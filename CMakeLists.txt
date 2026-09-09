@@ -4,8 +4,6 @@ project(n8v VERSION 0.1.0 LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5) # Fixes CMakeRC
-
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/cl-bootstrap.cmake)
 cl_repo()
 cl_repo("${CMAKE_CURRENT_SOURCE_DIR}/cmake/recipes")
@@ -64,7 +62,8 @@ target_include_directories(sdl2_lazy PUBLIC ${_N8V_SDL2_INCLUDE_DIRS})
 cl_import_source(
   NAME cmrc
   DOWNLOAD_ONLY
-  URL https://github.com/vector-of-bool/cmrc/archive/refs/tags/2.0.1.tar.gz
+  REPO https://github.com/vector-of-bool/cmrc.git
+  REF 952ffddba731fc110bd50409e8d2b8a06abbd237
 )
 include("${CL_SOURCE_DIR}/CMakeRC.cmake")
 
