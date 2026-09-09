@@ -6,6 +6,7 @@
 
 #include <SDL2/SDL.h>
 
+#include <SDL2/SDL_video.h>
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -104,7 +105,10 @@ public:
       return false;
     }
 
-    window_ = SDL_CreateWindow(std::string(title).c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
+    window_ =
+      SDL_CreateWindow(std::string(title).c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
     if (!window_) {
       std::fprintf(stderr, "[n8v] SDL_CreateWindow failed: %s\n", SDL_GetError());
       return false;
@@ -158,6 +162,8 @@ public:
 
   bool pointerDown() const override { return pointerDown_; }
 
+  bool isEntryFocused(int ordinal) const override { return entry_.ordinal == ordinal; }
+
   Clay_Dimensions windowSize() const override {
     int width = 0, height = 0;
     SDL_GetWindowSize(window_, &width, &height);
@@ -183,8 +189,7 @@ public:
   void present(Clay_RenderCommandArray commands) override {
     bool pendingIsCheckbox = false;
     bool pendingIsRadio = false;
-    Clay_Color pendingCheckboxColor{};
-    Clay_CornerRadius pendingCheckboxRadius{};
+    NativeWidgetMeta *pendingIndicatorMeta = nullptr;
     bool pendingChecked = false;
 
     NativeWidgetMeta *pendingEntryMeta = nullptr;
@@ -199,9 +204,12 @@ public:
         pendingIsCheckbox = meta && meta->kind == NativeWidgetKind::Checkbox;
         pendingIsRadio = meta && meta->kind == NativeWidgetKind::Radio;
         if (pendingIsCheckbox || pendingIsRadio) {
-          pendingCheckboxColor = command->renderData.rectangle.backgroundColor;
-          pendingCheckboxRadius = command->renderData.rectangle.cornerRadius;
+          pendingIndicatorMeta = meta;
           pendingChecked = pendingIsRadio ? (meta->radioSelected && *meta->radioSelected == meta->radioValue) : (meta->checked && *meta->checked);
+          break;
+        }
+        if (meta && meta->kind == NativeWidgetKind::DropdownChevron) {
+          drawDropdownChevron(command->boundingBox, Clay_Color{meta->chevronColor.r, meta->chevronColor.g, meta->chevronColor.b, meta->chevronColor.a}, meta->chevronPointsUp);
           break;
         }
 
@@ -210,8 +218,7 @@ public:
         pendingEntryDragging = false;
         if (meta && meta->kind == NativeWidgetKind::Entry) {
           pendingEntryMeta = meta;
-          const Clay_BoundingBox &box = command->boundingBox;
-          bool hit = pointerX_ >= box.x && pointerX_ <= box.x + box.width && pointerY_ >= box.y && pointerY_ <= box.y + box.height;
+          bool hit = Clay_PointerOver(Clay_ElementId{command->id});
           if (justClicked_ && hit) {
             pendingEntryClicked = true;
           } else if (justClicked_ && entry_.ordinal == meta->ordinal) {
@@ -224,24 +231,35 @@ public:
         const Clay_Color &color = command->renderData.rectangle.backgroundColor;
         if (color.a > 0.0f) drawRoundedRect(command->boundingBox, color, command->renderData.rectangle.cornerRadius);
 
-        if (meta && meta->kind == NativeWidgetKind::Entry && meta->ordinal == entry_.ordinal) {
-          drawFocusRing(command->boundingBox);
+        if (meta && meta->kind == NativeWidgetKind::Entry && meta->ordinal == entry_.ordinal && !meta->entryHasCustomBorder) {
+          drawFocusRing(command->boundingBox, command->renderData.rectangle.cornerRadius);
         }
         break;
       }
       case CLAY_RENDER_COMMAND_TYPE_TEXT: {
-        if (pendingIsCheckbox || pendingIsRadio) {
-          float squareSize = command->boundingBox.height;
+        if ((pendingIsCheckbox || pendingIsRadio) && pendingIndicatorMeta) {
+          NativeWidgetMeta &m = *pendingIndicatorMeta;
+          float squareSize = m.indicatorSize > 0.0f ? m.indicatorSize : command->boundingBox.height;
           float gap = squareSize * 0.4f;
           Clay_BoundingBox squareBox{command->boundingBox.x - squareSize - gap, command->boundingBox.y, squareSize, squareSize};
-          drawRoundedRect(squareBox, pendingCheckboxColor, pendingCheckboxRadius);
+          Clay_CornerRadius indicatorRadius = pendingIsRadio
+                                                ? Clay_CornerRadius{squareSize / 2, squareSize / 2, squareSize / 2, squareSize / 2}
+                                                : Clay_CornerRadius{m.indicatorCornerRadius, m.indicatorCornerRadius, m.indicatorCornerRadius, m.indicatorCornerRadius};
+          Clay_Color fill{m.indicatorFillColor.r, m.indicatorFillColor.g, m.indicatorFillColor.b, m.indicatorFillColor.a};
+          if (fill.a > 0.0f) drawRoundedRect(squareBox, fill, indicatorRadius);
+          if (m.indicatorBorderWidth > 0.0f) {
+            Clay_Color border{m.indicatorBorderColor.r, m.indicatorBorderColor.g, m.indicatorBorderColor.b, m.indicatorBorderColor.a};
+            drawRoundedRectBorder(squareBox, border, indicatorRadius, m.indicatorBorderWidth);
+          }
+          Clay_Color glyph{m.indicatorGlyphColor.r, m.indicatorGlyphColor.g, m.indicatorGlyphColor.b, m.indicatorGlyphColor.a};
           if (pendingIsRadio) {
-            if (pendingChecked) drawRadioDot(squareBox);
+            if (pendingChecked) drawRadioDot(squareBox, glyph);
           } else if (pendingChecked) {
-            drawCheckmark(squareBox);
+            drawCheckmark(squareBox, glyph);
           }
           pendingIsCheckbox = false;
           pendingIsRadio = false;
+          pendingIndicatorMeta = nullptr;
         }
 
         if (pendingEntryMeta) {
@@ -294,6 +312,14 @@ public:
         }
 
         drawText(*command);
+        break;
+      }
+      case CLAY_RENDER_COMMAND_TYPE_BORDER: {
+        const Clay_BorderRenderData &border = command->renderData.border;
+        float width = (float)border.width.left;
+        if (width > 0.0f && border.color.a > 0.0f) {
+          drawRoundedRectBorder(command->boundingBox, border.color, border.cornerRadius, width);
+        }
         break;
       }
       default:
@@ -641,29 +667,57 @@ private:
     }
   }
 
-  void drawFocusRing(const Clay_BoundingBox &box) {
-    SDL_SetRenderDrawColor(renderer_, 60, 110, 220, 255);
-    int x0 = (int)box.x, y0 = (int)box.y, x1 = (int)(box.x + box.width) - 1, y1 = (int)(box.y + box.height) - 1;
-    SDL_RenderDrawLine(renderer_, x0, y0, x1, y0);
-    SDL_RenderDrawLine(renderer_, x1, y0, x1, y1);
-    SDL_RenderDrawLine(renderer_, x1, y1, x0, y1);
-    SDL_RenderDrawLine(renderer_, x0, y1, x0, y0);
+  void drawFocusRing(const Clay_BoundingBox &box, const Clay_CornerRadius &cornerRadius) { drawRoundedRectBorder(box, Clay_Color{60, 110, 220, 255}, cornerRadius, 2.0f); }
+
+  void drawThickLine(float x0, float y0, float x1, float y1, float thickness, const Clay_Color &color) {
+    float dx = x1 - x0, dy = y1 - y0;
+    float len = std::sqrt(dx * dx + dy * dy);
+    if (len < 0.0001f) return;
+    float nx = -dy / len * thickness * 0.5f, ny = dx / len * thickness * 0.5f;
+    SDL_Color tint{(Uint8)color.r, (Uint8)color.g, (Uint8)color.b, (Uint8)color.a};
+    SDL_Vertex vertices[4] = {
+      {{x0 + nx, y0 + ny}, tint, {0, 0}},
+      {{x1 + nx, y1 + ny}, tint, {0, 0}},
+      {{x1 - nx, y1 - ny}, tint, {0, 0}},
+      {{x0 - nx, y0 - ny}, tint, {0, 0}},
+    };
+    int indices[6] = {0, 1, 2, 0, 2, 3};
+    SDL_RenderGeometry(renderer_, nullptr, vertices, 4, indices, 6);
   }
 
-  void drawCheckmark(const Clay_BoundingBox &box) {
-    SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
-    float pad = box.width * 0.22f;
-    float x0 = box.x + pad, y0 = box.y + box.height * 0.55f;
-    float xm = box.x + box.width * 0.42f, ym = box.y + box.height - pad;
-    float x1 = box.x + box.width - pad, y1 = box.y + pad * 0.7f;
-    SDL_RenderDrawLine(renderer_, (int)x0, (int)y0, (int)xm, (int)ym);
-    SDL_RenderDrawLine(renderer_, (int)xm, (int)ym, (int)x1, (int)y1);
+  void drawStrokeCap(float cx, float cy, float thickness, const Clay_Color &color) {
+    float r = thickness * 0.5f;
+    drawRoundedRect({cx - r, cy - r, thickness, thickness}, color, {r, r, r, r});
   }
 
-  void drawRadioDot(const Clay_BoundingBox &box) {
-    float dotSize = box.width * 0.44f;
+  void drawCheckmark(const Clay_BoundingBox &box, const Clay_Color &color) {
+    float thickness = std::max(box.width * 0.12f, 1.5f);
+    float x0 = box.x + box.width * 0.15f, y0 = box.y + box.height * 0.45f;
+    float xm = box.x + box.width * 0.4f, ym = box.y + box.height * 0.7f;
+    float x1 = box.x + box.width * 0.85f, y1 = box.y + box.height * 0.25f;
+    drawThickLine(x0, y0, xm, ym, thickness, color);
+    drawThickLine(xm, ym, x1, y1, thickness, color);
+    drawStrokeCap(x0, y0, thickness, color);
+    drawStrokeCap(xm, ym, thickness, color);
+    drawStrokeCap(x1, y1, thickness, color);
+  }
+
+  void drawRadioDot(const Clay_BoundingBox &box, const Clay_Color &color) {
+    float dotSize = box.width * 0.5625f; // 9dp dot / 16dp ring, per Material's radio button.
     Clay_BoundingBox dotBox{box.x + (box.width - dotSize) * 0.5f, box.y + (box.height - dotSize) * 0.5f, dotSize, dotSize};
-    drawRoundedRect(dotBox, Clay_Color{255, 255, 255, 255}, {dotSize * 0.5f, dotSize * 0.5f, dotSize * 0.5f, dotSize * 0.5f});
+    drawRoundedRect(dotBox, color, {dotSize * 0.5f, dotSize * 0.5f, dotSize * 0.5f, dotSize * 0.5f});
+  }
+
+  void drawDropdownChevron(const Clay_BoundingBox &box, const Clay_Color &color, bool pointsUp) {
+    SDL_Color tint{(Uint8)color.r, (Uint8)color.g, (Uint8)color.b, (Uint8)color.a};
+    float cx = box.x + box.width * 0.5f;
+    float halfW = box.width * 0.3f;
+    float top = box.y + box.height * 0.35f, bottom = box.y + box.height * 0.65f;
+    SDL_FPoint apex{cx, pointsUp ? top : bottom};
+    SDL_FPoint left{cx - halfW, pointsUp ? bottom : top};
+    SDL_FPoint right{cx + halfW, pointsUp ? bottom : top};
+    SDL_Vertex verts[3] = {{apex, tint, {0, 0}}, {left, tint, {0, 0}}, {right, tint, {0, 0}}};
+    SDL_RenderGeometry(renderer_, nullptr, verts, 3, nullptr, 0);
   }
 
   void drawFilledRect(const Clay_BoundingBox &box, const Clay_Color &color) {
@@ -678,6 +732,66 @@ private:
       float angle = startAngle + (endAngle - startAngle) * ((float)i / (float)segments);
       vertices.push_back({{cx + std::cos(angle) * radius, cy + std::sin(angle) * radius}, tint, {0, 0}});
     }
+  }
+
+  static void appendArcN(std::vector<SDL_FPoint> &points, float cx, float cy, float radius, float startAngle, float endAngle, int segments) {
+    for (int i = 0; i <= segments; ++i) {
+      float angle = startAngle + (endAngle - startAngle) * ((float)i / (float)segments);
+      points.push_back({cx + std::cos(angle) * radius, cy + std::sin(angle) * radius});
+    }
+  }
+
+  void drawRoundedRectBorder(const Clay_BoundingBox &box, const Clay_Color &color, const Clay_CornerRadius &corner, float strokeWidth) {
+    if (strokeWidth <= 0.0f || box.width <= 0.0f || box.height <= 0.0f) return;
+    float limit = std::min(box.width, box.height) * 0.5f;
+    float sw = std::min(strokeWidth, limit);
+    float tl = std::clamp(corner.topLeft, 0.0f, limit);
+    float tr = std::clamp(corner.topRight, 0.0f, limit);
+    float br = std::clamp(corner.bottomRight, 0.0f, limit);
+    float bl = std::clamp(corner.bottomLeft, 0.0f, limit);
+    float itl = std::max(tl - sw, 0.0f), itr = std::max(tr - sw, 0.0f);
+    float ibr = std::max(br - sw, 0.0f), ibl = std::max(bl - sw, 0.0f);
+
+    const float pi = 3.14159265358979323846f;
+    int segTl = std::clamp((int)(tl * 0.6f) + 2, 3, 20);
+    int segTr = std::clamp((int)(tr * 0.6f) + 2, 3, 20);
+    int segBr = std::clamp((int)(br * 0.6f) + 2, 3, 20);
+    int segBl = std::clamp((int)(bl * 0.6f) + 2, 3, 20);
+
+    std::vector<SDL_FPoint> outer, inner;
+    appendArcN(outer, box.x + tl, box.y + tl, tl, pi, pi * 1.5f, segTl);
+    appendArcN(outer, box.x + box.width - tr, box.y + tr, tr, pi * 1.5f, pi * 2.0f, segTr);
+    appendArcN(outer, box.x + box.width - br, box.y + box.height - br, br, 0.0f, pi * 0.5f, segBr);
+    appendArcN(outer, box.x + bl, box.y + box.height - bl, bl, pi * 0.5f, pi, segBl);
+
+    appendArcN(inner, box.x + sw + itl, box.y + sw + itl, itl, pi, pi * 1.5f, segTl);
+    appendArcN(inner, box.x + box.width - sw - itr, box.y + sw + itr, itr, pi * 1.5f, pi * 2.0f, segTr);
+    appendArcN(inner, box.x + box.width - sw - ibr, box.y + box.height - sw - ibr, ibr, 0.0f, pi * 0.5f, segBr);
+    appendArcN(inner, box.x + sw + ibl, box.y + box.height - sw - ibl, ibl, pi * 0.5f, pi, segBl);
+
+    size_t n = outer.size();
+    if (n != inner.size() || n < 2) return;
+
+    SDL_Color tint{(Uint8)color.r, (Uint8)color.g, (Uint8)color.b, (Uint8)color.a};
+    std::vector<SDL_Vertex> vertices;
+    vertices.reserve(n * 2);
+    for (size_t i = 0; i < n; ++i) vertices.push_back({outer[i], tint, {0, 0}});
+    for (size_t i = 0; i < n; ++i) vertices.push_back({inner[i], tint, {0, 0}});
+
+    std::vector<int> indices;
+    indices.reserve(n * 6);
+    for (size_t i = 0; i < n; ++i) {
+      size_t j = (i + 1) % n;
+      int o0 = (int)i, o1 = (int)j, i0 = (int)(n + i), i1 = (int)(n + j);
+      indices.push_back(o0);
+      indices.push_back(o1);
+      indices.push_back(i0);
+      indices.push_back(i0);
+      indices.push_back(o1);
+      indices.push_back(i1);
+    }
+
+    SDL_RenderGeometry(renderer_, nullptr, vertices.data(), (int)vertices.size(), indices.data(), (int)indices.size());
   }
 
   void drawRoundedRect(const Clay_BoundingBox &box, const Clay_Color &color, const Clay_CornerRadius &corner) {

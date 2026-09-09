@@ -34,12 +34,14 @@ public:
     CheckboxPaint paint{};
     if (checked) {
       paint.background = pressed ? Color{0, 78, 143, 255} : hovered ? Color{0, 90, 168, 255} : Color{0, 103, 192, 255};
-      paint.textColor = {255, 255, 255, 255};
+      paint.checkColor = {255, 255, 255, 255};
     } else {
       paint.background = pressed ? Color{237, 237, 237, 255} : hovered ? Color{245, 245, 245, 255} : Color{251, 251, 253, 255};
-      paint.textColor = {27, 27, 27, 255};
+      paint.borderColor = {96, 94, 92, 255};
+      paint.borderWidth = 1.0f;
     }
     paint.cornerRadius = {4, 4, 4, 4};
+    paint.indicatorSize = 18.0f;
     paint.padding = {14, 14, 6, 6};
     paint.font = FontFamily::Selawik;
     paint.fontSize = 14;
@@ -48,11 +50,24 @@ public:
   }
 
   RadioPaint radio(bool selected, bool hovered, bool pressed) const override {
-    CheckboxPaint cb = checkbox(selected, hovered, pressed);
-    return RadioPaint{cb.background, cb.textColor, cb.cornerRadius, cb.padding, cb.font, cb.fontSize, cb.transitionSeconds};
+    RadioPaint paint{};
+    if (selected) {
+      paint.background = pressed ? Color{0, 78, 143, 255} : hovered ? Color{0, 90, 168, 255} : Color{0, 103, 192, 255};
+      paint.dotColor = {255, 255, 255, 255};
+    } else {
+      paint.background = pressed ? Color{237, 237, 237, 255} : hovered ? Color{245, 245, 245, 255} : Color{251, 251, 253, 255};
+      paint.borderColor = {96, 94, 92, 255};
+      paint.borderWidth = 1.0f;
+    }
+    paint.indicatorSize = 18.0f;
+    paint.padding = {14, 14, 6, 6};
+    paint.font = FontFamily::Selawik;
+    paint.fontSize = 14;
+    paint.transitionSeconds = 0.1f;
+    return paint;
   }
 
-  EntryPaint entry() const override {
+  EntryPaint entry(bool /*focused*/, bool /*hasValue*/) const override {
     EntryPaint paint{};
     paint.background = {255, 255, 255, 255};
     paint.textColor = {27, 27, 27, 255};
@@ -64,7 +79,7 @@ public:
     return paint;
   }
 
-  DropdownPaint dropdown(bool /*open*/, bool hovered, bool /*pressed*/) const override {
+  DropdownPaint dropdown(bool /*open*/, bool /*hasSelection*/, bool hovered, bool /*pressed*/) const override {
     DropdownPaint paint{};
     paint.background = hovered ? Color{245, 245, 245, 255} : Color{255, 255, 255, 255};
     paint.textColor = {27, 27, 27, 255};
@@ -75,6 +90,19 @@ public:
     paint.padding = {10, 10, 6, 6};
     paint.font = FontFamily::Selawik;
     paint.fontSize = 14;
+    return paint;
+  }
+
+  SliderPaint slider(bool /*hovered*/, bool /*pressed*/) const override {
+    SliderPaint paint{};
+    paint.trackColor = {237, 237, 237, 255};
+    paint.fillColor = {0, 103, 192, 255};
+    paint.thumbColor = {255, 255, 255, 255};
+    paint.trackHeight = 4.0f;
+    paint.thumbWidth = 20.0f;
+    paint.thumbHeight = 20.0f;
+    paint.thumbBorderColor = {0, 103, 192, 255};
+    paint.thumbBorderWidth = 4.0f;
     return paint;
   }
 };

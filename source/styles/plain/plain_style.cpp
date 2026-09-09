@@ -34,12 +34,12 @@ public:
     CheckboxPaint paint{};
     if (checked) {
       paint.background = pressed ? Color{30, 72, 160, 255} : hovered ? Color{60, 110, 220, 255} : Color{40, 90, 200, 255};
-      paint.textColor = {255, 255, 255, 255};
+      paint.checkColor = {255, 255, 255, 255};
     } else {
       paint.background = pressed ? Color{195, 195, 195, 255} : hovered ? Color{210, 210, 210, 255} : Color{225, 225, 225, 255};
-      paint.textColor = {20, 20, 20, 255};
     }
     paint.cornerRadius = {3, 3, 3, 3};
+    paint.indicatorSize = 18.0f;
     paint.padding = {12, 12, 7, 7};
     paint.font = FontFamily::DejaVuSans;
     paint.fontSize = 15;
@@ -48,11 +48,22 @@ public:
   }
 
   RadioPaint radio(bool selected, bool hovered, bool pressed) const override {
-    CheckboxPaint cb = checkbox(selected, hovered, pressed);
-    return RadioPaint{cb.background, cb.textColor, cb.cornerRadius, cb.padding, cb.font, cb.fontSize, cb.transitionSeconds};
+    RadioPaint paint{};
+    if (selected) {
+      paint.background = pressed ? Color{30, 72, 160, 255} : hovered ? Color{60, 110, 220, 255} : Color{40, 90, 200, 255};
+      paint.dotColor = {255, 255, 255, 255};
+    } else {
+      paint.background = pressed ? Color{195, 195, 195, 255} : hovered ? Color{210, 210, 210, 255} : Color{225, 225, 225, 255};
+    }
+    paint.indicatorSize = 18.0f;
+    paint.padding = {12, 12, 7, 7};
+    paint.font = FontFamily::DejaVuSans;
+    paint.fontSize = 15;
+    paint.transitionSeconds = 0.1f;
+    return paint;
   }
 
-  EntryPaint entry() const override {
+  EntryPaint entry(bool /*focused*/, bool /*hasValue*/) const override {
     EntryPaint paint{};
     paint.background = {240, 240, 240, 255};
     paint.textColor = {20, 20, 20, 255};
@@ -64,7 +75,7 @@ public:
     return paint;
   }
 
-  DropdownPaint dropdown(bool /*open*/, bool hovered, bool /*pressed*/) const override {
+  DropdownPaint dropdown(bool /*open*/, bool /*hasSelection*/, bool hovered, bool /*pressed*/) const override {
     DropdownPaint paint{};
     paint.background = hovered ? Color{230, 230, 230, 255} : Color{240, 240, 240, 255};
     paint.textColor = {20, 20, 20, 255};
@@ -75,6 +86,17 @@ public:
     paint.padding = {10, 10, 7, 7};
     paint.font = FontFamily::DejaVuSans;
     paint.fontSize = 15;
+    return paint;
+  }
+
+  SliderPaint slider(bool /*hovered*/, bool /*pressed*/) const override {
+    SliderPaint paint{};
+    paint.trackColor = {225, 225, 225, 255};
+    paint.fillColor = {40, 90, 200, 255};
+    paint.thumbColor = {30, 72, 160, 255};
+    paint.trackHeight = 6.0f;
+    paint.thumbWidth = 18.0f;
+    paint.thumbHeight = 18.0f;
     return paint;
   }
 };

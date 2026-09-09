@@ -12,10 +12,12 @@ cl_repo("${CMAKE_CURRENT_SOURCE_DIR}/cmake/recipes")
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/lzy-bootstrap.cmake)
 
-cl_add_dep(SDL2)
-get_target_property(_N8V_SDL2_INCLUDE_DIRS deps::SDL2 INTERFACE_INCLUDE_DIRECTORIES)
-if(NOT _N8V_SDL2_INCLUDE_DIRS)
-  set(_N8V_SDL2_INCLUDE_DIRS "")
+if(NOT DEFINED _N8V_SDL2_INCLUDE_DIRS)
+  cl_add_dep(SDL2)
+  get_target_property(_N8V_SDL2_INCLUDE_DIRS deps::SDL2 INTERFACE_INCLUDE_DIRECTORIES)
+  if(NOT _N8V_SDL2_INCLUDE_DIRS)
+    set(_N8V_SDL2_INCLUDE_DIRS "")
+  endif()
 endif()
 
 lzy_add_wrapper(sdl2_lazy
@@ -33,6 +35,7 @@ lzy_add_wrapper(sdl2_lazy
     SDL_DestroyWindow
     SDL_CreateRenderer
     SDL_DestroyRenderer
+    SDL_GL_SetAttribute
     SDL_SetRenderDrawColor
     SDL_RenderClear
     SDL_RenderFillRect

@@ -55,6 +55,7 @@ if(N8V_BACKEND_GTK4)
         g_main_context_pending
         g_markup_escape_text
         g_free
+        g_free_sized
     )
     target_include_directories(glib_lazy PUBLIC ${_N8V_GTK4_INCLUDE_DIRS})
   else()

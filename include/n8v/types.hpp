@@ -48,6 +48,8 @@ enum class NativeWidgetKind {
   Entry,
   Radio,
   Dropdown,
+  Slider,
+  DropdownChevron,
 };
 
 enum class SizingMode {

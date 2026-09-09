@@ -34,6 +34,8 @@ struct Backend {
 
   virtual Clay_Dimensions measureNativeChrome(NativeWidgetKind, std::string_view, uint16_t) const { return {0, 0}; }
 
+  virtual bool isEntryFocused(int) const { return false; }
+
   virtual void beginFrame() = 0;
   virtual void present(Clay_RenderCommandArray commands) = 0;
   virtual void setCursor(CursorKind cursor) = 0;

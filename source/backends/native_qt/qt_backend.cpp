@@ -14,6 +14,7 @@
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QSlider>
 #include <QWidget>
 
 #include <functional>
@@ -122,6 +123,9 @@ public:
     measureCombo_ = new QComboBox(window_);
     measureCombo_->setVisible(false);
 
+    measureSlider_ = new QSlider(Qt::Horizontal, window_);
+    measureSlider_->setVisible(false);
+
     return true;
   }
 
@@ -164,6 +168,10 @@ public:
     }
     if (kind == NativeWidgetKind::Dropdown) {
       QSize hint = measureCombo_->sizeHint();
+      return {0, (float)hint.height()};
+    }
+    if (kind == NativeWidgetKind::Slider) {
+      QSize hint = measureSlider_->sizeHint();
       return {0, (float)hint.height()};
     }
     measureLink_->setText(linkHtml(qtext, "about:blank"));
@@ -238,6 +246,7 @@ public:
         callbacks_.erase(it->first.ordinal);
         entryStates_.erase(it->first.ordinal);
         dropdownStates_.erase(it->first.ordinal);
+        sliderStates_.erase(it->first.ordinal);
         it = widgets_.erase(it);
       } else {
         ++it;
@@ -291,6 +300,46 @@ private:
     }
   }
 
+  static constexpr int sliderSteps = 10000;
+
+  struct SliderState {
+    float *value = nullptr;
+    std::function<void(float)> onChange;
+    float min = 0.0f;
+    float max = 1.0f;
+    int lastSynced = -1;
+  };
+
+  static int sliderPositionFor(float value, float min, float max) {
+    float range = max - min;
+    if (range <= 0.0f) return 0;
+    float clamped = value < min ? min : value > max ? max : value;
+    return (int)((clamped - min) / range * sliderSteps + 0.5f);
+  }
+
+  void syncSlider(QSlider *slider, const NativeWidgetMeta &meta, SliderState &state) {
+    if (!meta.sliderValue) return;
+    state.value = meta.sliderValue;
+    state.onChange = meta.onSliderChange ? *meta.onSliderChange : std::function<void(float)>{};
+    state.min = meta.sliderMin;
+    state.max = meta.sliderMax;
+
+    int widgetPos = slider->value();
+    if (widgetPos != state.lastSynced) {
+      float range = state.max - state.min;
+      float newValue = range > 0.0f ? state.min + (widgetPos / (float)sliderSteps) * range : state.min;
+      *state.value = newValue;
+      state.lastSynced = widgetPos;
+      if (state.onChange) state.onChange(newValue);
+    } else {
+      int wantPos = sliderPositionFor(*state.value, state.min, state.max);
+      if (wantPos != state.lastSynced) {
+        slider->setValue(wantPos);
+        state.lastSynced = wantPos;
+      }
+    }
+  }
+
   struct EntryState {
     std::string *value = nullptr;
     std::function<void(std::string_view)> onChange;
@@ -339,6 +388,8 @@ private:
         if (radio->isChecked() != shouldBeChecked) radio->setChecked(shouldBeChecked);
       } else if (meta.kind == NativeWidgetKind::Dropdown) {
         syncDropdown(static_cast<QComboBox *>(it->second), meta, dropdownStates_[meta.ordinal]);
+      } else if (meta.kind == NativeWidgetKind::Slider) {
+        syncSlider(static_cast<QSlider *>(it->second), meta, sliderStates_[meta.ordinal]);
       }
       return it->second;
     }
@@ -386,6 +437,15 @@ private:
       state.lastSynced = initialIndex;
       syncDropdown(combo, meta, state);
       widget = combo;
+    } else if (meta.kind == NativeWidgetKind::Slider) {
+      auto *sliderWidget = new QSlider(Qt::Horizontal, window_);
+      sliderWidget->setRange(0, sliderSteps);
+      SliderState &state = sliderStates_[meta.ordinal];
+      int initialPos = meta.sliderValue ? sliderPositionFor(*meta.sliderValue, meta.sliderMin, meta.sliderMax) : 0;
+      sliderWidget->setValue(initialPos);
+      state.lastSynced = initialPos;
+      syncSlider(sliderWidget, meta, state);
+      widget = sliderWidget;
     } else {
       auto *label = new N8VLinkLabel(window_);
       label->setTextFormat(Qt::RichText);
@@ -420,12 +480,14 @@ private:
   QLineEdit *measureEntry_ = nullptr;
   QRadioButton *measureRadio_ = nullptr;
   QComboBox *measureCombo_ = nullptr;
+  QSlider *measureSlider_ = nullptr;
 
   std::map<WidgetKey, QWidget *> widgets_;
   std::unordered_map<int, std::function<void()>> callbacks_;
   std::unordered_map<int, EntryState> entryStates_;
   std::unordered_map<int *, QButtonGroup *> radioGroups_;
   std::unordered_map<int, DropdownState> dropdownStates_;
+  std::unordered_map<int, SliderState> sliderStates_;
 };
 
 } // namespace

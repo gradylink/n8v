@@ -30,7 +30,20 @@ struct ClickAction {
   std::function<void(int)> onRadioChange;
   int *dropdownSelected = nullptr;
   std::function<void(int)> onDropdownChange;
+  float *sliderValue = nullptr;
+  float sliderMin = 0.0f;
+  float sliderMax = 1.0f;
+  std::function<void(float)> onSliderChange;
 };
+
+constexpr int sliderSteps = 10000;
+
+int sliderPositionFor(float value, float min, float max) {
+  float range = max - min;
+  if (range <= 0.0f) return 0;
+  float clamped = value < min ? min : value > max ? max : value;
+  return (int)((clamped - min) / range * sliderSteps + 0.5f);
+}
 
 class MilskoBackend final : public Backend {
 public:
@@ -63,6 +76,9 @@ public:
   Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view, uint16_t) const override {
     if (kind == NativeWidgetKind::Dropdown) {
       return {0, (float)MwTextHeight(measureLabel_, nullptr, "Xg") + 14.0f};
+    }
+    if (kind == NativeWidgetKind::Slider) {
+      return {0, 20.0f};
     }
     return {0, 0};
   }
@@ -232,6 +248,17 @@ private:
     if (action->onDropdownChange) action->onDropdownChange(newValue);
   }
 
+  static void MWAPI onSliderChanged(MwWidget handle, void *userData, void * /*callData*/) {
+    auto *action = static_cast<ClickAction *>(userData);
+    if (!action || !action->sliderValue) return;
+    int position = MwGetInteger(handle, MwNvalue);
+    float range = action->sliderMax - action->sliderMin;
+    float newValue = range > 0.0f ? action->sliderMin + (position / (float)sliderSteps) * range : action->sliderMin;
+    if (newValue == *action->sliderValue) return;
+    *action->sliderValue = newValue;
+    if (action->onSliderChange) action->onSliderChange(newValue);
+  }
+
   struct EntryState {
     std::string *value = nullptr;
     std::function<void(std::string_view)> onChange;
@@ -283,6 +310,12 @@ private:
         action.dropdownSelected = meta.dropdownSelected;
         action.onDropdownChange = meta.onDropdownChange ? *meta.onDropdownChange : std::function<void(int)>{};
         if (*meta.dropdownSelected >= 0) MwSetInteger(it->second, MwNvalue, *meta.dropdownSelected);
+      } else if (meta.kind == NativeWidgetKind::Slider && meta.sliderValue) {
+        action.sliderValue = meta.sliderValue;
+        action.sliderMin = meta.sliderMin;
+        action.sliderMax = meta.sliderMax;
+        action.onSliderChange = meta.onSliderChange ? *meta.onSliderChange : std::function<void(float)>{};
+        MwSetInteger(it->second, MwNvalue, sliderPositionFor(*meta.sliderValue, meta.sliderMin, meta.sliderMax));
       } else {
         action.url = meta.url ? *meta.url : std::string();
       }
@@ -319,6 +352,15 @@ private:
       }
       if (meta.dropdownSelected && *meta.dropdownSelected >= 0) MwSetInteger(widget, MwNvalue, *meta.dropdownSelected);
       MwAddUserHandler(widget, MwNcomboBoxChangedHandler, onDropdownChanged, &action);
+    } else if (meta.kind == NativeWidgetKind::Slider) {
+      action.sliderValue = meta.sliderValue;
+      action.sliderMin = meta.sliderMin;
+      action.sliderMax = meta.sliderMax;
+      action.onSliderChange = meta.onSliderChange ? *meta.onSliderChange : std::function<void(float)>{};
+      widget = MwCreateWidget(MwScrollBarClass, "n8v-slider", window_, 0, 0, 1, 1);
+      MwVaApply(widget, MwNorientation, MwHORIZONTAL, MwNminValue, 0, MwNmaxValue, sliderSteps, MwNareaShown, sliderSteps / 30, NULL);
+      if (meta.sliderValue) MwSetInteger(widget, MwNvalue, sliderPositionFor(*meta.sliderValue, meta.sliderMin, meta.sliderMax));
+      MwAddUserHandler(widget, MwNchangedHandler, onSliderChanged, &action);
     } else {
       if (action.isLink) {
         action.url = meta.url ? *meta.url : std::string();

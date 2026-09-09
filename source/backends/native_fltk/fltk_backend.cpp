@@ -14,6 +14,7 @@
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Double_Window.H>
+#include <FL/Fl_Hor_Slider.H>
 #include <FL/Fl_Input.H>
 #include <FL/Fl_Round_Button.H>
 #include <FL/fl_draw.H>
@@ -53,6 +54,9 @@ struct WidgetAction {
 
   int *dropdownSelected = nullptr;
   std::function<void(int)> onDropdownChange;
+
+  float *sliderValue = nullptr;
+  std::function<void(float)> onSliderChange;
 };
 
 class FltkBackend final : public Backend {
@@ -91,6 +95,9 @@ public:
     if (kind == NativeWidgetKind::Dropdown) {
       fl_font(FL_HELVETICA, fontSize);
       return {0, (float)fl_height() + 14.0f};
+    }
+    if (kind == NativeWidgetKind::Slider) {
+      return {0, 20.0f};
     }
     return {0, 0};
   }
@@ -215,6 +222,15 @@ private:
     if (action->onDropdownChange) action->onDropdownChange(newValue);
   }
 
+  static void onSliderChanged(Fl_Widget *widget, void *userData) {
+    auto *action = static_cast<WidgetAction *>(userData);
+    if (!action || !action->sliderValue) return;
+    float newValue = (float)static_cast<Fl_Slider *>(widget)->value();
+    if (newValue == *action->sliderValue) return;
+    *action->sliderValue = newValue;
+    if (action->onSliderChange) action->onSliderChange(newValue);
+  }
+
   struct EntryState {
     std::string *value = nullptr;
     std::function<void(std::string_view)> onChange;
@@ -274,6 +290,12 @@ private:
           auto *choice = static_cast<Fl_Choice *>(it->second);
           if (choice->value() != *meta.dropdownSelected) choice->value(*meta.dropdownSelected);
         }
+      } else if (meta.kind == NativeWidgetKind::Slider && meta.sliderValue) {
+        action.sliderValue = meta.sliderValue;
+        action.onSliderChange = meta.onSliderChange ? *meta.onSliderChange : std::function<void(float)>{};
+        auto *sliderWidget = static_cast<Fl_Slider *>(it->second);
+        sliderWidget->bounds(meta.sliderMin, meta.sliderMax);
+        if (sliderWidget->value() != *meta.sliderValue) sliderWidget->value(*meta.sliderValue);
       }
       return it->second;
     }
@@ -317,6 +339,15 @@ private:
       if (meta.dropdownSelected && *meta.dropdownSelected >= 0) choice->value(*meta.dropdownSelected);
       choice->callback(&FltkBackend::onDropdownChanged, &action);
       widget = choice;
+    } else if (meta.kind == NativeWidgetKind::Slider) {
+      auto *sliderWidget = new Fl_Hor_Slider(0, 0, 1, 1);
+      sliderWidget->bounds(meta.sliderMin, meta.sliderMax);
+      action.sliderValue = meta.sliderValue;
+      action.onSliderChange = meta.onSliderChange ? *meta.onSliderChange : std::function<void(float)>{};
+      if (meta.sliderValue) sliderWidget->value(*meta.sliderValue);
+      sliderWidget->when(FL_WHEN_CHANGED);
+      sliderWidget->callback(&FltkBackend::onSliderChanged, &action);
+      widget = sliderWidget;
     } else {
       auto *button = new Fl_Button(0, 0, 1, 1);
       action.isLink = true;

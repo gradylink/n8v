@@ -61,4 +61,11 @@ struct DropdownOptions {
   std::function<void(int)> onChange = nullptr;
 };
 
+struct SliderOptions {
+  float *value = nullptr;
+  float min = 0.0f;
+  float max = 1.0f;
+  std::function<void(float)> onChange = nullptr;
+};
+
 } // namespace n8v

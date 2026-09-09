@@ -22,12 +22,25 @@ struct NativeWidgetMeta {
   std::string *placeholder = nullptr;                            // Entry only
   bool password = false;                                         // Entry only
   std::function<void(std::string_view)> *onEntryChange = nullptr; // Entry only
+  bool entryHasCustomBorder = false;                              // Entry only - skip the generic focus ring; the style's own border already changes color/width on focus
   int *radioSelected = nullptr;                                  // Radio only
   int radioValue = 0;                                            // Radio only
   std::function<void(int)> *onRadioChange = nullptr;             // Radio only
   std::vector<std::string> *dropdownItems = nullptr;             // Dropdown only
   int *dropdownSelected = nullptr;                               // Dropdown only
   std::function<void(int)> *onDropdownChange = nullptr;          // Dropdown only
+  float *sliderValue = nullptr;                                  // Slider only
+  float sliderMin = 0.0f;                                        // Slider only
+  float sliderMax = 1.0f;                                        // Slider only
+  std::function<void(float)> *onSliderChange = nullptr;          // Slider only
+  n8v::Color indicatorFillColor{};                               // Checkbox/Radio only
+  n8v::Color indicatorBorderColor{};                              // Checkbox/Radio only
+  float indicatorBorderWidth = 0.0f;                              // Checkbox/Radio only
+  n8v::Color indicatorGlyphColor{};                               // Checkbox (check) / Radio (dot) only
+  float indicatorCornerRadius = 0.0f;                             // Checkbox only
+  float indicatorSize = 0.0f;                                     // Checkbox/Radio only
+  n8v::Color chevronColor{};                                      // DropdownChevron only
+  bool chevronPointsUp = false;                                   // DropdownChevron only
 };
 
 } // namespace n8v::detail

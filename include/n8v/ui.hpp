@@ -19,6 +19,8 @@ void entry(const EntryOptions &options);
 
 void dropdown(const DropdownOptions &options);
 
+void slider(const SliderOptions &options);
+
 struct LeafBuilder {
   bool isButton;
   ButtonOptions buttonOptions;
@@ -54,6 +56,8 @@ inline detail::RadioBuilder radio(RadioOptions options) { return detail::RadioBu
 inline void entry(EntryOptions options) { detail::entry(options); }
 
 inline void dropdown(DropdownOptions options) { detail::dropdown(options); }
+
+inline void slider(SliderOptions options) { detail::slider(options); }
 
 } // namespace n8v
 

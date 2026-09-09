@@ -76,6 +76,9 @@ public:
     measureDropdown_ = gtk_drop_down_new_from_strings(emptyItems);
     g_object_ref_sink(measureDropdown_);
 
+    measureSlider_ = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0.0, 1.0, 0.01);
+    g_object_ref_sink(measureSlider_);
+
     return true;
   }
 
@@ -117,6 +120,12 @@ public:
       int minW = 0, natW = 0, minH = 0, natH = 0;
       gtk_widget_measure(measureDropdown_, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
       gtk_widget_measure(measureDropdown_, GTK_ORIENTATION_VERTICAL, -1, &minH, &natH, nullptr, nullptr);
+      return {0, (float)natH};
+    }
+    if (kind == NativeWidgetKind::Slider) {
+      int minW = 0, natW = 0, minH = 0, natH = 0;
+      gtk_widget_measure(measureSlider_, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
+      gtk_widget_measure(measureSlider_, GTK_ORIENTATION_VERTICAL, -1, &minH, &natH, nullptr, nullptr);
       return {0, (float)natH};
     }
     if (kind == NativeWidgetKind::Checkbox || kind == NativeWidgetKind::Radio) {
@@ -204,6 +213,7 @@ public:
           else ++groupIt;
         }
         dropdownStates_.erase(it->first.ordinal);
+        sliderStates_.erase(it->first.ordinal);
         it = widgets_.erase(it);
       } else {
         ++it;
@@ -241,6 +251,10 @@ public:
     if (measureDropdown_) {
       g_object_unref(measureDropdown_);
       measureDropdown_ = nullptr;
+    }
+    if (measureSlider_) {
+      g_object_unref(measureSlider_);
+      measureSlider_ = nullptr;
     }
     if (window_) {
       gtk_window_destroy(GTK_WINDOW(window_));
@@ -302,6 +316,20 @@ private:
     if (state->onChange) state->onChange(newValue);
   }
 
+  struct SliderState {
+    float *value = nullptr;
+    std::function<void(float)> onChange;
+  };
+
+  static void onSliderChanged(GtkRange *range, gpointer userData) {
+    auto *state = static_cast<SliderState *>(userData);
+    if (!state || !state->value) return;
+    float newValue = (float)gtk_range_get_value(range);
+    if (newValue == *state->value) return;
+    *state->value = newValue;
+    if (state->onChange) state->onChange(newValue);
+  }
+
   struct EntryState {
     std::string *value = nullptr;
     std::function<void(std::string_view)> onChange;
@@ -360,6 +388,12 @@ private:
         guint wantSelected = *meta.dropdownSelected >= 0 ? (guint)*meta.dropdownSelected : GTK_INVALID_LIST_POSITION;
         guint current = gtk_drop_down_get_selected(GTK_DROP_DOWN(it->second));
         if (current != wantSelected) gtk_drop_down_set_selected(GTK_DROP_DOWN(it->second), wantSelected);
+      } else if (meta.kind == NativeWidgetKind::Slider && meta.sliderValue) {
+        SliderState &state = sliderStates_[meta.ordinal];
+        state.value = meta.sliderValue;
+        state.onChange = meta.onSliderChange ? *meta.onSliderChange : std::function<void(float)>{};
+        gtk_range_set_range(GTK_RANGE(it->second), meta.sliderMin, meta.sliderMax);
+        if (gtk_range_get_value(GTK_RANGE(it->second)) != *meta.sliderValue) gtk_range_set_value(GTK_RANGE(it->second), *meta.sliderValue);
       }
       return it->second;
     }
@@ -408,6 +442,14 @@ private:
       guint initialSelected = meta.dropdownSelected && *meta.dropdownSelected >= 0 ? (guint)*meta.dropdownSelected : GTK_INVALID_LIST_POSITION;
       gtk_drop_down_set_selected(GTK_DROP_DOWN(widget), initialSelected);
       g_signal_connect_data(widget, "notify::selected", G_CALLBACK(&Gtk4Backend::onDropdownChanged), &dropdownStates_[meta.ordinal], nullptr, (GConnectFlags)0);
+    } else if (meta.kind == NativeWidgetKind::Slider) {
+      widget = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, meta.sliderMin, meta.sliderMax, (meta.sliderMax - meta.sliderMin) / 1000.0);
+      gtk_scale_set_draw_value(GTK_SCALE(widget), FALSE);
+      SliderState &state = sliderStates_[meta.ordinal];
+      state.value = meta.sliderValue;
+      state.onChange = meta.onSliderChange ? *meta.onSliderChange : std::function<void(float)>{};
+      if (meta.sliderValue) gtk_range_set_value(GTK_RANGE(widget), *meta.sliderValue);
+      g_signal_connect_data(widget, "value-changed", G_CALLBACK(&Gtk4Backend::onSliderChanged), &sliderStates_[meta.ordinal], nullptr, (GConnectFlags)0);
     } else {
       widget = gtk_label_new("");
       gtk_label_set_use_markup(GTK_LABEL(widget), TRUE);
@@ -448,6 +490,7 @@ private:
   GtkWidget *measureCheckbox_ = nullptr;
   GtkWidget *measureRadio_ = nullptr;
   GtkWidget *measureDropdown_ = nullptr;
+  GtkWidget *measureSlider_ = nullptr;
   bool closeRequested_ = false;
 
   std::map<WidgetKey, GtkWidget *> widgets_;
@@ -457,6 +500,7 @@ private:
   std::unordered_map<int, RadioState> radioStates_;
   std::unordered_map<int *, GtkWidget *> radioGroups_;
   std::unordered_map<int, DropdownState> dropdownStates_;
+  std::unordered_map<int, SliderState> sliderStates_;
 };
 
 } // namespace
