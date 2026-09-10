@@ -1,0 +1,3 @@
+add_executable(n8v-basic-c-example main.c)
+target_link_libraries(n8v-basic-c-example PRIVATE n8v)
+set_target_properties(n8v-basic-c-example PROPERTIES LINKER_LANGUAGE CXX)

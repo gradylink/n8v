@@ -4,6 +4,11 @@ project(n8v VERSION 0.1.0 LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# n8v builds both a static and a shared library from the same sources and
+# dependencies (see the n8v/n8v_shared targets below); everything needs to
+# be position-independent for the shared one to link.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/cl-bootstrap.cmake)
 cl_repo()
 cl_repo("${CMAKE_CURRENT_SOURCE_DIR}/cmake/recipes")
@@ -116,10 +121,11 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/backends/qt.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/backends/milsko.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/backends/fltk.cmake")
 
-add_library(n8v
+set(N8V_SOURCES
   source/core/clay_impl.cpp
   source/core/open_url.cpp
   source/core/ui_core.cpp
+  source/core/ui_core_c_api.cpp
   source/core/widgets/leaf.cpp
   source/core/widgets/checkbox.cpp
   source/core/widgets/radio.cpp
@@ -141,37 +147,64 @@ add_library(n8v
   source/backends/clay_fallback/renderers/sdl2/indicators.cpp
   source/backends/clay_fallback/renderers/sdl2/draw_primitives.cpp
 )
-target_include_directories(n8v PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_include_directories(n8v PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/source)
-target_link_libraries(n8v PRIVATE sdl2_lazy n8v_fonts)
-cl_add_dep(n8v clay PUBLIC)
-cl_add_dep(n8v stb_truetype PRIVATE)
 
-if(N8V_HAVE_GTK4)
-  target_sources(n8v PRIVATE source/backends/native_gtk4/gtk4_backend.cpp)
-  target_compile_definitions(n8v PRIVATE N8V_HAS_GTK4_BACKEND)
-  target_link_libraries(n8v PRIVATE gtk4_lazy gobject_lazy glib_lazy)
+# Build both a static (n8v) and a shared (n8v_shared, output "libn8v.so") lib
+# from the same sources - the shared one matters most for the C ABI in
+# n8v_c.h, since a static archive can't be dlopen()'d or linked from most
+# non-C++-toolchain FFI consumers.
+#
+# This needed a PIC fix upstream in lzy.cmake first: the *_lazy wrapper
+# libraries (sdl2_lazy, gtk4_lazy, etc.) use hand-written,
+# architecture-specific assembly trampolines that weren't
+# position-independent. Fixed and verified at runtime on x86_64/i386/
+# aarch64/riscv64; armv7/ppc32/ppc64 got a best-effort fix too but are
+# unverified (no compatible toolchain was available to test them) - see
+# lzy.cmake's own commit history for details if this option misbehaves on
+# one of those three.
+option(N8V_BUILD_SHARED "Also build a shared libn8v.so." ON)
+
+set(_n8v_targets n8v)
+add_library(n8v STATIC ${N8V_SOURCES})
+if(N8V_BUILD_SHARED)
+  add_library(n8v_shared SHARED ${N8V_SOURCES})
+  set_target_properties(n8v_shared PROPERTIES OUTPUT_NAME n8v)
+  list(APPEND _n8v_targets n8v_shared)
 endif()
 
-if(N8V_HAVE_QT)
-  target_sources(n8v PRIVATE source/backends/native_qt/qt_backend.cpp)
-  target_compile_definitions(n8v PRIVATE N8V_HAS_QT_BACKEND)
-  target_link_libraries(n8v PRIVATE qt6widgets_lazy qt6gui_lazy qt6core_lazy)
-endif()
+foreach(_n8v_target ${_n8v_targets})
+  target_include_directories(${_n8v_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_include_directories(${_n8v_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/source)
+  target_link_libraries(${_n8v_target} PRIVATE sdl2_lazy n8v_fonts)
+  cl_add_dep(${_n8v_target} clay PUBLIC)
+  cl_add_dep(${_n8v_target} stb_truetype PRIVATE)
 
-if(N8V_HAVE_MILSKO)
-  target_sources(n8v PRIVATE source/backends/native_milsko/milsko_backend.cpp)
-  target_compile_definitions(n8v PRIVATE N8V_HAS_MILSKO_BACKEND)
-  target_link_libraries(n8v PRIVATE milsko_lazy)
-endif()
+  if(N8V_HAVE_GTK4)
+    target_sources(${_n8v_target} PRIVATE source/backends/native_gtk4/gtk4_backend.cpp)
+    target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_GTK4_BACKEND)
+    target_link_libraries(${_n8v_target} PRIVATE gtk4_lazy gobject_lazy glib_lazy)
+  endif()
 
-if(N8V_HAVE_FLTK)
-  target_sources(n8v PRIVATE source/backends/native_fltk/fltk_backend.cpp)
-  target_compile_definitions(n8v PRIVATE N8V_HAS_FLTK_BACKEND)
-  target_link_libraries(n8v PRIVATE fltk_lazy)
-endif()
+  if(N8V_HAVE_QT)
+    target_sources(${_n8v_target} PRIVATE source/backends/native_qt/qt_backend.cpp)
+    target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_QT_BACKEND)
+    target_link_libraries(${_n8v_target} PRIVATE qt6widgets_lazy qt6gui_lazy qt6core_lazy)
+  endif()
+
+  if(N8V_HAVE_MILSKO)
+    target_sources(${_n8v_target} PRIVATE source/backends/native_milsko/milsko_backend.cpp)
+    target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_MILSKO_BACKEND)
+    target_link_libraries(${_n8v_target} PRIVATE milsko_lazy)
+  endif()
+
+  if(N8V_HAVE_FLTK)
+    target_sources(${_n8v_target} PRIVATE source/backends/native_fltk/fltk_backend.cpp)
+    target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_FLTK_BACKEND)
+    target_link_libraries(${_n8v_target} PRIVATE fltk_lazy)
+  endif()
+endforeach()
 
 option(N8V_EXAMPLES "Build the n8v example apps." ${PROJECT_IS_TOP_LEVEL})
 if(N8V_EXAMPLES)
   add_subdirectory(examples/basic)
+  add_subdirectory(examples/basic_c)
 endif()

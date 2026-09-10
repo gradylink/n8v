@@ -7,7 +7,7 @@ cl_import_source(
   NAME lzy_cmake
   DOWNLOAD_ONLY
   REPO https://github.com/gradylink/lzy.cmake.git
-  REF 50a19e6c9bb146f080d3add8fded5b69929be24c
+  REF e0c9599ca5860c8bf17313b99e3d6d3e6408d706
 )
 
 include("${CL_SOURCE_DIR}/cmake/lzy.cmake")
