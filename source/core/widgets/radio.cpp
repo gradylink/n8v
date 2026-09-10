@@ -1,6 +1,7 @@
-#include <n8v/backend.hpp>
-#include <n8v/style.hpp>
-#include <n8v/ui.hpp>
+#include <n8v/n8v_c.h>
+
+#include "core/backend.hpp"
+#include "core/style.hpp"
 
 #include "core/clay_convert.hpp"
 #include "core/native_widget_meta.hpp"
@@ -9,71 +10,69 @@
 
 #include <clay.h>
 
-#include <deque>
-#include <functional>
-#include <string_view>
-
 namespace {
 
 using namespace n8v::detail::ui_internal;
 
-std::deque<std::function<void(int)>> radioChangeCallbacks;
+n8v_radio_options pendingRadioOpts;
 
 void dispatchRadioSelect(Clay_ElementId /*elementId*/, Clay_PointerData pointerData, void *userData) {
   if (pointerData.state != CLAY_POINTER_DATA_PRESSED_THIS_FRAME) return;
   auto *meta = static_cast<n8v::detail::NativeWidgetMeta *>(userData);
   if (!meta || !meta->radioSelected || *meta->radioSelected == meta->radioValue) return;
   *meta->radioSelected = meta->radioValue;
-  if (meta->onRadioChange && *meta->onRadioChange) (*meta->onRadioChange)(meta->radioValue);
+  if (meta->onRadioChange) meta->onRadioChange(meta->radioValue, meta->onRadioChangeUserdata);
 }
 
 } // namespace
 
 namespace n8v::detail::ui_internal {
 
-void resetRadioFrameState() { radioChangeCallbacks.clear(); }
+void resetRadioFrameState() {}
 
 } // namespace n8v::detail::ui_internal
 
-namespace n8v::detail {
+extern "C" {
 
-void RadioBuilder::operator()(std::string_view label) && {
+void _n8v_set_radio_opts(n8v_radio_options opts) { pendingRadioOpts = opts; }
+
+void _n8v_radio_commit(const char *label) {
+  n8v_radio_options opts = pendingRadioOpts;
+  std::string_view labelView = toView(label);
+
   Clay__OpenElement();
 
   const int ordinal = widgetOrdinal++;
   const bool hovered = Clay_Hovered();
-  // if (hovered) pendingCursor = CursorKind::Pointer;
-  const bool pressed = hovered && activeBackend().pointerDown();
-  const bool selectedValue = options.selected && *options.selected == options.value;
-  const RadioPaint paint = activePaint().radio(selectedValue, hovered, pressed);
-  const TextPaint labelPaint = activePaint().text({});
+  const bool pressed = hovered && n8v::activeBackend().pointerDown();
+  const bool selectedValue = opts.selected && *opts.selected == opts.value;
+  const n8v::RadioPaint paint = n8v::activePaint().radio(selectedValue, hovered, pressed);
+  const n8v::TextPaint labelPaint = n8v::activePaint().text({});
 
-  Clay_Dimensions labelDims = activeBackend().measureText(label, labelPaint.font, labelPaint.fontSize, false, false);
+  Clay_Dimensions labelDims = n8v::activeBackend().measureText(labelView, labelPaint.font, labelPaint.fontSize, false, false);
   float indicatorSize = paint.indicatorSize > 0.0f ? paint.indicatorSize : labelDims.height;
   float indicatorGap = indicatorSize * 0.4f;
 
   Clay_ElementDeclaration decl = {};
-  Padding pad = paint.padding;
+  n8v::Padding pad = paint.padding;
   pad.left = (uint16_t)(indicatorSize + indicatorGap);
-  decl.layout.padding = toClay(pad);
+  decl.layout.padding = n8v::detail::toClay(pad);
   decl.backgroundColor = {0, 0, 0, 1};
 
-  Clay_Dimensions nativeSize = activeBackend().measureNativeChrome(NativeWidgetKind::Radio, label, labelPaint.fontSize);
+  Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Radio, labelView, labelPaint.fontSize);
   if (nativeSize.width > 0 && nativeSize.height > 0) {
     decl.layout.sizing.width = CLAY_SIZING_FIXED(nativeSize.width);
     decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
   }
 
-  widgetMetaStorage.push_back(NativeWidgetMeta{});
-  NativeWidgetMeta &meta = widgetMetaStorage.back();
-  meta.kind = NativeWidgetKind::Radio;
+  widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
+  n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
+  meta.kind = n8v::NativeWidgetKind::Radio;
   meta.ordinal = ordinal;
-  meta.radioSelected = options.selected;
-  meta.radioValue = options.value;
-  if (options.onChange) {
-    radioChangeCallbacks.push_back(std::move(options.onChange));
-    meta.onRadioChange = &radioChangeCallbacks.back();
-  }
+  meta.radioSelected = opts.selected;
+  meta.radioValue = opts.value;
+  meta.onRadioChange = opts.on_change;
+  meta.onRadioChangeUserdata = opts.on_change_userdata;
   meta.indicatorFillColor = easeColor(ordinal, 4, paint.background, paint.transitionSeconds);
   meta.indicatorBorderColor = easeColor(ordinal, 8, paint.borderColor, paint.transitionSeconds);
   meta.indicatorBorderWidth = easeValue(animKey(ordinal, 12), paint.borderWidth, paint.transitionSeconds);
@@ -84,19 +83,19 @@ void RadioBuilder::operator()(std::string_view label) && {
 
   Clay__ConfigureOpenElement(decl);
 
-  if (options.selected) {
+  if (opts.selected) {
     Clay_OnHover(dispatchRadioSelect, &meta);
   }
 
   textStyleStorage.push_back(n8v::detail::TextStyleFlags{labelPaint.font, false, false, false, true, ordinal});
   Clay_TextElementConfig textConfig = {};
-  textConfig.textColor = toClay(labelPaint.color);
+  textConfig.textColor = n8v::detail::toClay(labelPaint.color);
   textConfig.fontSize = labelPaint.fontSize;
   textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
   textConfig.userData = &textStyleStorage.back();
-  CLAY_TEXT(internString(label), textConfig);
+  CLAY_TEXT(internString(labelView), textConfig);
 
   Clay__CloseElement();
 }
 
-} // namespace n8v::detail
+} // extern "C"

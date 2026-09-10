@@ -1,6 +1,7 @@
-#include <n8v/backend.hpp>
-#include <n8v/style.hpp>
-#include <n8v/ui.hpp>
+#include <n8v/n8v_c.h>
+
+#include "core/backend.hpp"
+#include "core/style.hpp"
 
 #include "core/clay_convert.hpp"
 #include "core/native_widget_meta.hpp"
@@ -8,14 +9,10 @@
 
 #include <clay.h>
 
-#include <deque>
-#include <functional>
-
 namespace {
 
 using namespace n8v::detail::ui_internal;
 
-std::deque<std::function<void(float)>> sliderChangeCallbacks;
 int draggingSliderOrdinal = -1;
 
 Clay_ElementId sliderTrackId(int ordinal) { return Clay__HashStringWithOffset(CLAY_STRING("n8v-slider-track"), (uint32_t)ordinal, 0); }
@@ -33,20 +30,20 @@ void dispatchSliderDrag(Clay_ElementId elementId, Clay_PointerData pointerData, 
   float newValue = meta->sliderMin + fraction * (meta->sliderMax - meta->sliderMin);
   if (newValue == *meta->sliderValue) return;
   *meta->sliderValue = newValue;
-  if (meta->onSliderChange && *meta->onSliderChange) (*meta->onSliderChange)(newValue);
+  if (meta->onSliderChange) meta->onSliderChange(newValue, meta->onSliderChangeUserdata);
 }
 
 } // namespace
 
 namespace n8v::detail::ui_internal {
 
-void resetSliderFrameState() { sliderChangeCallbacks.clear(); }
+void resetSliderFrameState() {}
 
 } // namespace n8v::detail::ui_internal
 
-namespace n8v::detail {
+extern "C" {
 
-void slider(const SliderOptions &options) {
+void n8v_slider(n8v_slider_options options) {
   const int ordinal = widgetOrdinal++;
 
   if (draggingSliderOrdinal == ordinal && options.value) {
@@ -60,7 +57,7 @@ void slider(const SliderOptions &options) {
         float newValue = options.min + dragFraction * (options.max - options.min);
         if (newValue != *options.value) {
           *options.value = newValue;
-          if (options.onChange) options.onChange(newValue);
+          if (options.on_change) options.on_change(newValue, options.on_change_userdata);
         }
       }
     } else {
@@ -71,11 +68,10 @@ void slider(const SliderOptions &options) {
   Clay__OpenElementWithId(sliderTrackId(ordinal));
 
   const bool hovered = Clay_Hovered();
-  // if (hovered) pendingCursor = CursorKind::Pointer;
-  const bool pressed = hovered && activeBackend().pointerDown();
-  const SliderPaint paint = activePaint().slider(hovered, pressed);
+  const bool pressed = hovered && n8v::activeBackend().pointerDown();
+  const n8v::SliderPaint paint = n8v::activePaint().slider(hovered, pressed);
 
-  Clay_Dimensions nativeSize = activeBackend().measureNativeChrome(NativeWidgetKind::Slider, {}, 0);
+  Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Slider, {}, 0);
   const bool hasNativeChrome = nativeSize.height > 0;
 
   float outerHeight = hasNativeChrome ? nativeSize.height : (paint.trackHeight > paint.thumbHeight ? paint.trackHeight : paint.thumbHeight);
@@ -92,17 +88,15 @@ void slider(const SliderOptions &options) {
   decl.layout.childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER};
   decl.backgroundColor = {0, 0, 0, 1};
 
-  const bool hasOnChange = static_cast<bool>(options.onChange);
-  if (hasOnChange) sliderChangeCallbacks.push_back(options.onChange);
-
-  widgetMetaStorage.push_back(NativeWidgetMeta{});
-  NativeWidgetMeta &meta = widgetMetaStorage.back();
-  meta.kind = NativeWidgetKind::Slider;
+  widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
+  n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
+  meta.kind = n8v::NativeWidgetKind::Slider;
   meta.ordinal = ordinal;
   meta.sliderValue = options.value;
   meta.sliderMin = options.min;
   meta.sliderMax = options.max;
-  meta.onSliderChange = hasOnChange ? &sliderChangeCallbacks.back() : nullptr;
+  meta.onSliderChange = options.on_change;
+  meta.onSliderChangeUserdata = options.on_change_userdata;
   decl.userData = &meta;
 
   Clay__ConfigureOpenElement(decl);
@@ -120,7 +114,7 @@ void slider(const SliderOptions &options) {
       Clay_ElementDeclaration fillDecl = {};
       fillDecl.layout.sizing.width = CLAY_SIZING_PERCENT(fraction);
       fillDecl.layout.sizing.height = CLAY_SIZING_FIXED(paint.trackHeight);
-      fillDecl.backgroundColor = toClay(paint.fillColor);
+      fillDecl.backgroundColor = n8v::detail::toClay(paint.fillColor);
       fillDecl.cornerRadius = {trackRadius, 2.0f, trackRadius, 2.0f};
       Clay__ConfigureOpenElement(fillDecl);
       Clay__CloseElement();
@@ -136,10 +130,10 @@ void slider(const SliderOptions &options) {
       Clay_ElementDeclaration thumbDecl = {};
       thumbDecl.layout.sizing.width = CLAY_SIZING_FIXED(paint.thumbWidth);
       thumbDecl.layout.sizing.height = CLAY_SIZING_FIXED(paint.thumbHeight);
-      thumbDecl.backgroundColor = toClay(paint.thumbColor);
+      thumbDecl.backgroundColor = n8v::detail::toClay(paint.thumbColor);
       thumbDecl.cornerRadius = {thumbRadius, thumbRadius, thumbRadius, thumbRadius};
       if (paint.thumbBorderWidth > 0.0f) {
-        thumbDecl.border.color = toClay(paint.thumbBorderColor);
+        thumbDecl.border.color = n8v::detail::toClay(paint.thumbBorderColor);
         uint16_t thumbBw = (uint16_t)paint.thumbBorderWidth;
         thumbDecl.border.width = {thumbBw, thumbBw, thumbBw, thumbBw, 0};
       }
@@ -152,7 +146,7 @@ void slider(const SliderOptions &options) {
       Clay_ElementDeclaration trackDecl = {};
       trackDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
       trackDecl.layout.sizing.height = CLAY_SIZING_FIXED(paint.trackHeight);
-      trackDecl.backgroundColor = toClay(paint.trackColor);
+      trackDecl.backgroundColor = n8v::detail::toClay(paint.trackColor);
       trackDecl.cornerRadius = {2.0f, trackRadius, 2.0f, trackRadius};
       Clay__ConfigureOpenElement(trackDecl);
       Clay__CloseElement();
@@ -168,7 +162,7 @@ void slider(const SliderOptions &options) {
       Clay_ElementDeclaration fillDecl = {};
       fillDecl.layout.sizing.width = CLAY_SIZING_PERCENT(fraction);
       fillDecl.layout.sizing.height = CLAY_SIZING_GROW(0);
-      fillDecl.backgroundColor = toClay(paint.fillColor);
+      fillDecl.backgroundColor = n8v::detail::toClay(paint.fillColor);
       fillDecl.cornerRadius = {trackRadius, trackRadius, trackRadius, trackRadius};
       Clay__ConfigureOpenElement(fillDecl);
       Clay__CloseElement();
@@ -177,7 +171,7 @@ void slider(const SliderOptions &options) {
       Clay_ElementDeclaration trackDecl = {};
       trackDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
       trackDecl.layout.sizing.height = CLAY_SIZING_GROW(0);
-      trackDecl.backgroundColor = toClay(paint.trackColor);
+      trackDecl.backgroundColor = n8v::detail::toClay(paint.trackColor);
       trackDecl.cornerRadius = {trackRadius, trackRadius, trackRadius, trackRadius};
       Clay__ConfigureOpenElement(trackDecl);
       Clay__CloseElement();
@@ -200,10 +194,10 @@ void slider(const SliderOptions &options) {
       Clay_ElementDeclaration thumbDecl = {};
       thumbDecl.layout.sizing.width = CLAY_SIZING_FIXED(paint.thumbWidth);
       thumbDecl.layout.sizing.height = CLAY_SIZING_FIXED(paint.thumbHeight);
-      thumbDecl.backgroundColor = toClay(paint.thumbColor);
+      thumbDecl.backgroundColor = n8v::detail::toClay(paint.thumbColor);
       thumbDecl.cornerRadius = {thumbRadius, thumbRadius, thumbRadius, thumbRadius};
       if (paint.thumbBorderWidth > 0.0f) {
-        thumbDecl.border.color = toClay(paint.thumbBorderColor);
+        thumbDecl.border.color = n8v::detail::toClay(paint.thumbBorderColor);
         uint16_t thumbBw = (uint16_t)paint.thumbBorderWidth;
         thumbDecl.border.width = {thumbBw, thumbBw, thumbBw, thumbBw, 0};
       }
@@ -217,4 +211,4 @@ void slider(const SliderOptions &options) {
   Clay__CloseElement(); // outer
 }
 
-} // namespace n8v::detail
+} // extern "C"

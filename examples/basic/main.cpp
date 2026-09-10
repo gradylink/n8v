@@ -1,6 +1,5 @@
 #include "n8v/types.hpp"
 #include <iostream>
-#include <n8v/backend.hpp>
 #include <n8v/ui.hpp>
 #include <ostream>
 #include <string>
@@ -8,8 +7,7 @@
 using namespace n8v;
 
 int main() {
-  Backend &backend = activeBackend();
-  if (!backend.initialize(800, 600, "n8v basic example")) {
+  if (!initialize(800, 600, "n8v basic example")) {
     return 1;
   }
 
@@ -20,7 +18,7 @@ int main() {
   int favoriteFruit = -1;
   float volume = 0.5f;
 
-  while (backend.pumpEvents()) {
+  while (pumpEvents()) {
     UI() {
       flex({.direction = Direction::Vertical, .gap = 12, .padding = {20, 20, 20, 20}, .width = Sizing::grow()}) {
         text({.bold = true})("n8v basic example");
@@ -54,6 +52,6 @@ int main() {
     }
   }
 
-  backend.shutdown();
+  shutdown();
   return 0;
 }

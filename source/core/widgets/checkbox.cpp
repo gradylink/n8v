@@ -1,6 +1,7 @@
-#include <n8v/backend.hpp>
-#include <n8v/style.hpp>
-#include <n8v/ui.hpp>
+#include <n8v/n8v_c.h>
+
+#include "core/backend.hpp"
+#include "core/style.hpp"
 
 #include "core/clay_convert.hpp"
 #include "core/native_widget_meta.hpp"
@@ -9,72 +10,70 @@
 
 #include <clay.h>
 
-#include <deque>
-#include <functional>
-#include <string_view>
-
 namespace {
 
 using namespace n8v::detail::ui_internal;
 
-std::deque<std::function<void(bool)>> changeCallbacks;
+n8v_checkbox_options pendingCheckboxOpts;
 
 void dispatchCheckboxToggle(Clay_ElementId /*elementId*/, Clay_PointerData pointerData, void *userData) {
   if (pointerData.state != CLAY_POINTER_DATA_PRESSED_THIS_FRAME) return;
   auto *meta = static_cast<n8v::detail::NativeWidgetMeta *>(userData);
   if (!meta || !meta->checked) return;
   *meta->checked = !*meta->checked;
-  if (meta->onChange && *meta->onChange) (*meta->onChange)(*meta->checked);
+  if (meta->onChange) meta->onChange(*meta->checked, meta->onChangeUserdata);
 }
 
 } // namespace
 
 namespace n8v::detail::ui_internal {
 
-void resetCheckboxFrameState() { changeCallbacks.clear(); }
+void resetCheckboxFrameState() {}
 
 } // namespace n8v::detail::ui_internal
 
-namespace n8v::detail {
+extern "C" {
 
-void CheckboxBuilder::operator()(std::string_view label) && {
+void _n8v_set_checkbox_opts(n8v_checkbox_options opts) { pendingCheckboxOpts = opts; }
+
+void _n8v_checkbox_commit(const char *label) {
+  n8v_checkbox_options opts = pendingCheckboxOpts;
+  std::string_view labelView = toView(label);
+
   Clay__OpenElement();
 
   const int ordinal = widgetOrdinal++;
   const bool hovered = Clay_Hovered();
-  // if (hovered) pendingCursor = CursorKind::Pointer;
-  const bool pressed = hovered && activeBackend().pointerDown();
-  const bool checkedValue = options.checked && *options.checked;
-  const CheckboxPaint paint = activePaint().checkbox(checkedValue, hovered, pressed);
-  const TextPaint labelPaint = activePaint().text({});
+  const bool pressed = hovered && n8v::activeBackend().pointerDown();
+  const bool checkedValue = opts.checked && *opts.checked;
+  const n8v::CheckboxPaint paint = n8v::activePaint().checkbox(checkedValue, hovered, pressed);
+  const n8v::TextPaint labelPaint = n8v::activePaint().text({});
 
-  Clay_Dimensions labelDims = activeBackend().measureText(label, labelPaint.font, labelPaint.fontSize, false, false);
+  Clay_Dimensions labelDims = n8v::activeBackend().measureText(labelView, labelPaint.font, labelPaint.fontSize, false, false);
   float indicatorSize = paint.indicatorSize > 0.0f ? paint.indicatorSize : labelDims.height;
   float indicatorGap = indicatorSize * 0.4f;
 
   Clay_ElementDeclaration decl = {};
-  Padding pad = paint.padding;
+  n8v::Padding pad = paint.padding;
   pad.left = (uint16_t)(indicatorSize + indicatorGap);
-  decl.layout.padding = toClay(pad);
+  decl.layout.padding = n8v::detail::toClay(pad);
   decl.backgroundColor = {0, 0, 0, 1};
 
   float radius = easeValue(animKey(ordinal, 0), paint.cornerRadius.topLeft, paint.transitionSeconds);
 
-  Clay_Dimensions nativeSize = activeBackend().measureNativeChrome(NativeWidgetKind::Checkbox, label, labelPaint.fontSize);
+  Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Checkbox, labelView, labelPaint.fontSize);
   if (nativeSize.width > 0 && nativeSize.height > 0) {
     decl.layout.sizing.width = CLAY_SIZING_FIXED(nativeSize.width);
     decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
   }
 
-  const bool hasOnChange = static_cast<bool>(options.onChange);
-  if (hasOnChange) changeCallbacks.push_back(std::move(options.onChange));
-
-  widgetMetaStorage.push_back(NativeWidgetMeta{});
-  NativeWidgetMeta &meta = widgetMetaStorage.back();
-  meta.kind = NativeWidgetKind::Checkbox;
+  widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
+  n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
+  meta.kind = n8v::NativeWidgetKind::Checkbox;
   meta.ordinal = ordinal;
-  meta.checked = options.checked;
-  meta.onChange = hasOnChange ? &changeCallbacks.back() : nullptr;
+  meta.checked = opts.checked;
+  meta.onChange = opts.on_change;
+  meta.onChangeUserdata = opts.on_change_userdata;
   meta.indicatorFillColor = easeColor(ordinal, 4, paint.background, paint.transitionSeconds);
   meta.indicatorBorderColor = easeColor(ordinal, 8, paint.borderColor, paint.transitionSeconds);
   meta.indicatorBorderWidth = easeValue(animKey(ordinal, 12), paint.borderWidth, paint.transitionSeconds);
@@ -85,19 +84,19 @@ void CheckboxBuilder::operator()(std::string_view label) && {
 
   Clay__ConfigureOpenElement(decl);
 
-  if (options.checked) {
+  if (opts.checked) {
     Clay_OnHover(dispatchCheckboxToggle, &widgetMetaStorage.back());
   }
 
   textStyleStorage.push_back(n8v::detail::TextStyleFlags{labelPaint.font, false, false, false, true, ordinal});
   Clay_TextElementConfig textConfig = {};
-  textConfig.textColor = toClay(labelPaint.color);
+  textConfig.textColor = n8v::detail::toClay(labelPaint.color);
   textConfig.fontSize = labelPaint.fontSize;
   textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
   textConfig.userData = &textStyleStorage.back();
-  CLAY_TEXT(internString(label), textConfig);
+  CLAY_TEXT(internString(labelView), textConfig);
 
   Clay__CloseElement();
 }
 
-} // namespace n8v::detail
+} // extern "C"

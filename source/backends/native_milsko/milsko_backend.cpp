@@ -274,7 +274,7 @@ private:
   static void syncEntry(MwWidget widget, const NativeWidgetMeta &meta, EntryState &state) {
     if (!meta.entryValue) return;
     state.value = meta.entryValue;
-    state.onChange = meta.onEntryChange ? *meta.onEntryChange : std::function<void(std::string_view)>{};
+    state.onChange = toStdFunction(meta.onEntryChange, meta.onEntryChangeUserdata);
 
     const char *raw = MwGetText(widget, MwNtext);
     std::string widgetText = raw ? raw : "";
@@ -299,10 +299,10 @@ private:
     if (it != widgets_.end()) {
       ClickAction &action = actions_[meta.ordinal];
       if (meta.kind == NativeWidgetKind::Button) {
-        action.callback = meta.onClick ? *meta.onClick : std::function<void()>{};
+        action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
       } else if (meta.kind == NativeWidgetKind::Checkbox && meta.checked) {
         action.checked = meta.checked;
-        action.onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
+        action.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
         MwSetInteger(it->second, MwNchecked, *meta.checked ? 1 : 0);
       } else if (meta.kind == NativeWidgetKind::Entry) {
         MwSetInteger(it->second, MwNhideInput, meta.password ? 1 : 0);
@@ -310,17 +310,17 @@ private:
       } else if (meta.kind == NativeWidgetKind::Radio && meta.radioSelected) {
         action.radioSelected = meta.radioSelected;
         action.radioValue = meta.radioValue;
-        action.onRadioChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
+        action.onRadioChange = toStdFunction(meta.onRadioChange, meta.onRadioChangeUserdata);
         MwSetInteger(it->second, MwNchecked, *meta.radioSelected == meta.radioValue ? 1 : 0);
       } else if (meta.kind == NativeWidgetKind::Dropdown && meta.dropdownSelected) {
         action.dropdownSelected = meta.dropdownSelected;
-        action.onDropdownChange = meta.onDropdownChange ? *meta.onDropdownChange : std::function<void(int)>{};
+        action.onDropdownChange = toStdFunction(meta.onDropdownChange, meta.onDropdownChangeUserdata);
         if (*meta.dropdownSelected >= 0) MwSetInteger(it->second, MwNvalue, *meta.dropdownSelected);
       } else if (meta.kind == NativeWidgetKind::Slider && meta.sliderValue) {
         action.sliderValue = meta.sliderValue;
         action.sliderMin = meta.sliderMin;
         action.sliderMax = meta.sliderMax;
-        action.onSliderChange = meta.onSliderChange ? *meta.onSliderChange : std::function<void(float)>{};
+        action.onSliderChange = toStdFunction(meta.onSliderChange, meta.onSliderChangeUserdata);
         MwSetInteger(it->second, MwNvalue, sliderPositionFor(*meta.sliderValue, meta.sliderMin, meta.sliderMax));
       } else {
         action.url = meta.url ? *meta.url : std::string();
@@ -334,7 +334,7 @@ private:
     MwWidget widget = nullptr;
     if (meta.kind == NativeWidgetKind::Checkbox) {
       action.checked = meta.checked;
-      action.onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
+      action.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
       widget = MwCreateWidget(MwCheckBoxClass, "n8v-checkbox", window_, 0, 0, 1, 1);
       MwSetInteger(widget, MwNchecked, meta.checked && *meta.checked ? 1 : 0);
       MwAddUserHandler(widget, MwNchangedHandler, onCheckboxChanged, &action);
@@ -345,13 +345,13 @@ private:
     } else if (meta.kind == NativeWidgetKind::Radio) {
       action.radioSelected = meta.radioSelected;
       action.radioValue = meta.radioValue;
-      action.onRadioChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
+      action.onRadioChange = toStdFunction(meta.onRadioChange, meta.onRadioChangeUserdata);
       widget = MwCreateWidget(MwCheckBoxClass, "n8v-radio", window_, 0, 0, 1, 1);
       MwSetInteger(widget, MwNchecked, meta.radioSelected && *meta.radioSelected == meta.radioValue ? 1 : 0);
       MwAddUserHandler(widget, MwNchangedHandler, onRadioChanged, &action);
     } else if (meta.kind == NativeWidgetKind::Dropdown) {
       action.dropdownSelected = meta.dropdownSelected;
-      action.onDropdownChange = meta.onDropdownChange ? *meta.onDropdownChange : std::function<void(int)>{};
+      action.onDropdownChange = toStdFunction(meta.onDropdownChange, meta.onDropdownChangeUserdata);
       widget = MwCreateWidget(MwComboBoxClass, "n8v-dropdown", window_, 0, 0, 1, 1);
       if (meta.dropdownItems) {
         for (const std::string &item : *meta.dropdownItems) MwComboBoxAdd(widget, -1, item.c_str());
@@ -362,7 +362,7 @@ private:
       action.sliderValue = meta.sliderValue;
       action.sliderMin = meta.sliderMin;
       action.sliderMax = meta.sliderMax;
-      action.onSliderChange = meta.onSliderChange ? *meta.onSliderChange : std::function<void(float)>{};
+      action.onSliderChange = toStdFunction(meta.onSliderChange, meta.onSliderChangeUserdata);
       widget = MwCreateWidget(MwScrollBarClass, "n8v-slider", window_, 0, 0, 1, 1);
       MwVaApply(widget, MwNorientation, MwHORIZONTAL, MwNminValue, 0, MwNmaxValue, sliderSteps, MwNareaShown, sliderSteps / 30, NULL);
       if (meta.sliderValue) MwSetInteger(widget, MwNvalue, sliderPositionFor(*meta.sliderValue, meta.sliderMin, meta.sliderMax));
@@ -371,7 +371,7 @@ private:
       if (action.isLink) {
         action.url = meta.url ? *meta.url : std::string();
       } else {
-        action.callback = meta.onClick ? *meta.onClick : std::function<void()>{};
+        action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
       }
 
       widget = MwCreateWidget(MwButtonClass, "n8v-widget", window_, 0, 0, 1, 1);

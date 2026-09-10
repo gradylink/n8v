@@ -3,6 +3,7 @@
 
 #include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
+#include "core/ui_core_internal.hpp"
 
 #include <SDL2/SDL.h>
 
@@ -12,7 +13,9 @@
 namespace n8v::detail {
 
 void Sdl2Backend::fireEntryChange() {
-  if (entry_.value && entry_.onChange) entry_.onChange(*entry_.value);
+  if (!entry_.value) return;
+  if (entry_.buf) ui_internal::writeToStringBuf(*entry_.value, *entry_.buf);
+  if (entry_.onChange) entry_.onChange(entry_.buf ? entry_.buf->data : entry_.value->c_str(), entry_.buf ? entry_.buf->length : entry_.value->size(), entry_.onChangeUserdata);
 }
 
 void Sdl2Backend::handleEntryClick(NativeWidgetMeta *meta, size_t hitOffset) {
@@ -28,7 +31,9 @@ void Sdl2Backend::handleEntryClick(NativeWidgetMeta *meta, size_t hitOffset) {
 
   textSel_ = TextSelState{};
   entry_.value = meta->entryValue;
-  entry_.onChange = meta->onEntryChange ? *meta->onEntryChange : std::function<void(std::string_view)>{};
+  entry_.buf = meta->entryBuf;
+  entry_.onChange = meta->onEntryChange;
+  entry_.onChangeUserdata = meta->onEntryChangeUserdata;
   entry_.ordinal = meta->ordinal;
 
   const std::string &value = *meta->entryValue;

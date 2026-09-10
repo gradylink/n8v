@@ -1,6 +1,6 @@
-#include <n8v/backend.hpp>
-#include <n8v/style.hpp>
-#include <n8v/ui.hpp>
+#include <n8v/n8v_c.h>
+
+#include "core/backend.hpp"
 
 #include "core/clay_convert.hpp"
 #include "core/text_style_flags.hpp"
@@ -60,52 +60,52 @@ float frameDelta() {
 
 } // namespace
 
-namespace n8v::detail {
+extern "C" {
 
-void beginFrame() {
+void n8v_begin_frame(void) {
   ensureInitialized();
   currentDelta = frameDelta();
   widgetOrdinal = 0;
-  pendingCursor = CursorKind::Default;
+  pendingCursor = n8v::CursorKind::Default;
 
-  Backend &backend = activeBackend();
+  n8v::Backend &backend = n8v::activeBackend();
   backend.beginFrame();
 
   textStorage.clear();
   textStyleStorage.clear();
   widgetMetaStorage.clear();
-  ui_internal::resetLeafFrameState();
-  ui_internal::resetCheckboxFrameState();
-  ui_internal::resetRadioFrameState();
-  ui_internal::resetEntryFrameState();
-  ui_internal::resetDropdownFrameState();
-  ui_internal::resetSliderFrameState();
+  resetLeafFrameState();
+  resetCheckboxFrameState();
+  resetRadioFrameState();
+  resetEntryFrameState();
+  resetDropdownFrameState();
+  resetSliderFrameState();
 
   Clay_SetLayoutDimensions(backend.windowSize());
   Clay_BeginLayout();
 }
 
-void endFrame() {
+void n8v_end_frame(void) {
   Clay_RenderCommandArray commands = Clay_EndLayout(currentDelta);
-  Backend &backend = activeBackend();
+  n8v::Backend &backend = n8v::activeBackend();
   backend.present(commands);
   backend.setCursor(pendingCursor);
 }
 
-void openFlex(const FlexOptions &options) {
+void n8v_open_flex(n8v_flex_options options) {
   Clay__OpenElement();
 
   Clay_ElementDeclaration decl = {};
-  decl.layout.layoutDirection = options.direction == Direction::Horizontal ? CLAY_LEFT_TO_RIGHT : CLAY_TOP_TO_BOTTOM;
+  decl.layout.layoutDirection = options.direction == N8V_DIRECTION_HORIZONTAL ? CLAY_LEFT_TO_RIGHT : CLAY_TOP_TO_BOTTOM;
   decl.layout.childGap = options.gap;
-  decl.layout.padding = toClay(options.padding);
-  decl.layout.childAlignment = {toClayX(options.hAlign), toClayY(options.vAlign)};
-  decl.layout.sizing.width = toClay(options.width);
-  decl.layout.sizing.height = toClay(options.height);
+  decl.layout.padding = n8v::detail::toClay(toPadding(options.padding));
+  decl.layout.childAlignment = {n8v::detail::toClayX(toAlign(options.h_align)), n8v::detail::toClayY(toAlign(options.v_align))};
+  decl.layout.sizing.width = n8v::detail::toClay(toSizing(options.width));
+  decl.layout.sizing.height = n8v::detail::toClay(toSizing(options.height));
 
   Clay__ConfigureOpenElement(decl);
 }
 
-void closeFlex() { Clay__CloseElement(); }
+void n8v_close_flex(void) { Clay__CloseElement(); }
 
-} // namespace n8v::detail
+} // extern "C"

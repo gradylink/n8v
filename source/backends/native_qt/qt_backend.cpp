@@ -287,7 +287,7 @@ private:
   void syncDropdown(QComboBox *combo, const NativeWidgetMeta &meta, DropdownState &state) {
     if (!meta.dropdownSelected) return;
     state.selected = meta.dropdownSelected;
-    state.onChange = meta.onDropdownChange ? *meta.onDropdownChange : std::function<void(int)>{};
+    state.onChange = toStdFunction(meta.onDropdownChange, meta.onDropdownChangeUserdata);
 
     int widgetIndex = combo->currentIndex();
     if (widgetIndex != state.lastSynced) {
@@ -320,7 +320,7 @@ private:
   void syncSlider(QSlider *slider, const NativeWidgetMeta &meta, SliderState &state) {
     if (!meta.sliderValue) return;
     state.value = meta.sliderValue;
-    state.onChange = meta.onSliderChange ? *meta.onSliderChange : std::function<void(float)>{};
+    state.onChange = toStdFunction(meta.onSliderChange, meta.onSliderChangeUserdata);
     state.min = meta.sliderMin;
     state.max = meta.sliderMax;
 
@@ -349,7 +349,7 @@ private:
   void syncEntry(QLineEdit *widget, const NativeWidgetMeta &meta, EntryState &state) {
     if (!meta.entryValue) return;
     state.value = meta.entryValue;
-    state.onChange = meta.onEntryChange ? *meta.onEntryChange : std::function<void(std::string_view)>{};
+    state.onChange = toStdFunction(meta.onEntryChange, meta.onEntryChangeUserdata);
 
     std::string widgetText = widget->text().toStdString();
     if (widgetText != state.lastSynced) {
@@ -366,13 +366,13 @@ private:
     auto it = widgets_.find(key);
     if (it != widgets_.end()) {
       if (meta.kind == NativeWidgetKind::Button) {
-        callbacks_[meta.ordinal] = meta.onClick ? *meta.onClick : std::function<void()>{};
+        callbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
       } else if (meta.kind == NativeWidgetKind::Link) {
         static_cast<N8VLinkLabel *>(it->second)->url = meta.url ? *meta.url : std::string();
       } else if (meta.kind == NativeWidgetKind::Checkbox && meta.checked) {
         auto *checkbox = static_cast<N8VCheckBox *>(it->second);
         checkbox->checkedPtr = meta.checked;
-        checkbox->onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
+        checkbox->onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
         checkbox->setChecked(*meta.checked);
       } else if (meta.kind == NativeWidgetKind::Entry) {
         auto *lineEdit = static_cast<QLineEdit *>(it->second);
@@ -383,7 +383,7 @@ private:
         auto *radio = static_cast<N8VRadioButton *>(it->second);
         radio->selectedPtr = meta.radioSelected;
         radio->value = meta.radioValue;
-        radio->onChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
+        radio->onChange = toStdFunction(meta.onRadioChange, meta.onRadioChangeUserdata);
         bool shouldBeChecked = *meta.radioSelected == meta.radioValue;
         if (radio->isChecked() != shouldBeChecked) radio->setChecked(shouldBeChecked);
       } else if (meta.kind == NativeWidgetKind::Dropdown) {
@@ -397,13 +397,13 @@ private:
     QWidget *widget = nullptr;
     if (meta.kind == NativeWidgetKind::Button) {
       auto *button = new N8VButton(window_);
-      callbacks_[meta.ordinal] = meta.onClick ? *meta.onClick : std::function<void()>{};
+      callbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
       button->callback = &callbacks_[meta.ordinal];
       widget = button;
     } else if (meta.kind == NativeWidgetKind::Checkbox) {
       auto *checkbox = new N8VCheckBox(window_);
       checkbox->checkedPtr = meta.checked;
-      checkbox->onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
+      checkbox->onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
       checkbox->setChecked(meta.checked && *meta.checked);
       widget = checkbox;
     } else if (meta.kind == NativeWidgetKind::Entry) {
@@ -417,7 +417,7 @@ private:
       radio->setAutoExclusive(false);
       radio->selectedPtr = meta.radioSelected;
       radio->value = meta.radioValue;
-      radio->onChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
+      radio->onChange = toStdFunction(meta.onRadioChange, meta.onRadioChangeUserdata);
       radio->setChecked(meta.radioSelected && *meta.radioSelected == meta.radioValue);
       if (meta.radioSelected) {
         QButtonGroup *&group = radioGroups_[meta.radioSelected];

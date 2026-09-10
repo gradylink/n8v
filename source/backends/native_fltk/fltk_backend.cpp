@@ -240,7 +240,7 @@ private:
   static void syncEntry(Fl_Input *widget, const NativeWidgetMeta &meta, EntryState &state) {
     if (!meta.entryValue) return;
     state.value = meta.entryValue;
-    state.onChange = meta.onEntryChange ? *meta.onEntryChange : std::function<void(std::string_view)>{};
+    state.onChange = toStdFunction(meta.onEntryChange, meta.onEntryChangeUserdata);
 
     std::string widgetText = widget->value() ? widget->value() : "";
     if (widgetText != state.lastSynced) {
@@ -264,12 +264,12 @@ private:
     if (it != widgets_.end()) {
       WidgetAction &action = actions_[meta.ordinal];
       if (meta.kind == NativeWidgetKind::Button) {
-        action.callback = meta.onClick ? *meta.onClick : std::function<void()>{};
+        action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
       } else if (meta.kind == NativeWidgetKind::Link) {
         action.url = meta.url ? *meta.url : std::string();
       } else if (meta.kind == NativeWidgetKind::Checkbox && meta.checked) {
         action.checked = meta.checked;
-        action.onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
+        action.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
         auto *button = static_cast<Fl_Button *>(it->second);
         if ((button->value() != 0) != *meta.checked) button->value(*meta.checked);
       } else if (meta.kind == NativeWidgetKind::Entry) {
@@ -279,20 +279,20 @@ private:
       } else if (meta.kind == NativeWidgetKind::Radio && meta.radioSelected) {
         action.radioSelected = meta.radioSelected;
         action.radioValue = meta.radioValue;
-        action.onRadioChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
+        action.onRadioChange = toStdFunction(meta.onRadioChange, meta.onRadioChangeUserdata);
         bool shouldBeActive = *meta.radioSelected == meta.radioValue;
         auto *button = static_cast<Fl_Button *>(it->second);
         if ((button->value() != 0) != shouldBeActive) button->value(shouldBeActive);
       } else if (meta.kind == NativeWidgetKind::Dropdown && meta.dropdownSelected) {
         action.dropdownSelected = meta.dropdownSelected;
-        action.onDropdownChange = meta.onDropdownChange ? *meta.onDropdownChange : std::function<void(int)>{};
+        action.onDropdownChange = toStdFunction(meta.onDropdownChange, meta.onDropdownChangeUserdata);
         if (*meta.dropdownSelected >= 0) {
           auto *choice = static_cast<Fl_Choice *>(it->second);
           if (choice->value() != *meta.dropdownSelected) choice->value(*meta.dropdownSelected);
         }
       } else if (meta.kind == NativeWidgetKind::Slider && meta.sliderValue) {
         action.sliderValue = meta.sliderValue;
-        action.onSliderChange = meta.onSliderChange ? *meta.onSliderChange : std::function<void(float)>{};
+        action.onSliderChange = toStdFunction(meta.onSliderChange, meta.onSliderChangeUserdata);
         auto *sliderWidget = static_cast<Fl_Slider *>(it->second);
         sliderWidget->bounds(meta.sliderMin, meta.sliderMax);
         if (sliderWidget->value() != *meta.sliderValue) sliderWidget->value(*meta.sliderValue);
@@ -304,13 +304,13 @@ private:
     WidgetAction &action = actions_[meta.ordinal];
     if (meta.kind == NativeWidgetKind::Button) {
       auto *button = new Fl_Button(0, 0, 1, 1);
-      action.callback = meta.onClick ? *meta.onClick : std::function<void()>{};
+      action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
       button->callback(&FltkBackend::onButtonClicked, &action);
       widget = button;
     } else if (meta.kind == NativeWidgetKind::Checkbox) {
       auto *button = new Fl_Check_Button(0, 0, 1, 1);
       action.checked = meta.checked;
-      action.onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
+      action.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
       button->value(meta.checked && *meta.checked);
       button->when(FL_WHEN_CHANGED);
       button->callback(&FltkBackend::onCheckboxChanged, &action);
@@ -324,7 +324,7 @@ private:
       auto *button = new Fl_Round_Button(0, 0, 1, 1);
       action.radioSelected = meta.radioSelected;
       action.radioValue = meta.radioValue;
-      action.onRadioChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
+      action.onRadioChange = toStdFunction(meta.onRadioChange, meta.onRadioChangeUserdata);
       button->value(meta.radioSelected && *meta.radioSelected == meta.radioValue);
       button->when(FL_WHEN_CHANGED);
       button->callback(&FltkBackend::onRadioChanged, &action);
@@ -335,7 +335,7 @@ private:
         for (const std::string &item : *meta.dropdownItems) choice->add(escapeMenuText(item).c_str());
       }
       action.dropdownSelected = meta.dropdownSelected;
-      action.onDropdownChange = meta.onDropdownChange ? *meta.onDropdownChange : std::function<void(int)>{};
+      action.onDropdownChange = toStdFunction(meta.onDropdownChange, meta.onDropdownChangeUserdata);
       if (meta.dropdownSelected && *meta.dropdownSelected >= 0) choice->value(*meta.dropdownSelected);
       choice->callback(&FltkBackend::onDropdownChanged, &action);
       widget = choice;
@@ -343,7 +343,7 @@ private:
       auto *sliderWidget = new Fl_Hor_Slider(0, 0, 1, 1);
       sliderWidget->bounds(meta.sliderMin, meta.sliderMax);
       action.sliderValue = meta.sliderValue;
-      action.onSliderChange = meta.onSliderChange ? *meta.onSliderChange : std::function<void(float)>{};
+      action.onSliderChange = toStdFunction(meta.onSliderChange, meta.onSliderChangeUserdata);
       if (meta.sliderValue) sliderWidget->value(*meta.sliderValue);
       sliderWidget->when(FL_WHEN_CHANGED);
       sliderWidget->callback(&FltkBackend::onSliderChanged, &action);

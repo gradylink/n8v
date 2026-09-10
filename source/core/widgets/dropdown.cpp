@@ -1,6 +1,7 @@
-#include <n8v/backend.hpp>
-#include <n8v/style.hpp>
-#include <n8v/ui.hpp>
+#include <n8v/n8v_c.h>
+
+#include "core/backend.hpp"
+#include "core/style.hpp"
 
 #include "core/clay_convert.hpp"
 #include "core/native_widget_meta.hpp"
@@ -10,7 +11,6 @@
 #include <clay.h>
 
 #include <deque>
-#include <functional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -26,7 +26,6 @@ struct DropdownItemClick {
 };
 
 std::deque<std::vector<std::string>> dropdownItemsStorage;
-std::deque<std::function<void(int)>> dropdownChangeCallbacks;
 std::deque<int> dropdownOrdinalStorage;
 std::deque<DropdownItemClick> dropdownItemClickStorage;
 std::unordered_map<int, bool> dropdownOpenState;
@@ -51,7 +50,7 @@ void dispatchDropdownSelect(Clay_ElementId /*elementId*/, Clay_PointerData point
   auto *click = static_cast<DropdownItemClick *>(userData);
   if (!click || !click->meta) return;
   if (click->meta->dropdownSelected) *click->meta->dropdownSelected = click->index;
-  if (click->meta->onDropdownChange && *click->meta->onDropdownChange) (*click->meta->onDropdownChange)(click->index);
+  if (click->meta->onDropdownChange) click->meta->onDropdownChange(click->index, click->meta->onDropdownChangeUserdata);
   dropdownOpenState[click->meta->ordinal] = false;
 }
 
@@ -61,38 +60,37 @@ namespace n8v::detail::ui_internal {
 
 void resetDropdownFrameState() {
   dropdownItemsStorage.clear();
-  dropdownChangeCallbacks.clear();
   dropdownOrdinalStorage.clear();
   dropdownItemClickStorage.clear();
 }
 
 } // namespace n8v::detail::ui_internal
 
-namespace n8v::detail {
+extern "C" {
 
-void dropdown(const DropdownOptions &options) {
+void n8v_dropdown(n8v_dropdown_options options) {
   Clay__OpenElement();
 
   const int ordinal = widgetOrdinal++;
   const bool hovered = Clay_Hovered();
-  // if (hovered) pendingCursor = CursorKind::Pointer;
-  const bool pressed = hovered && activeBackend().pointerDown();
+  const bool pressed = hovered && n8v::activeBackend().pointerDown();
   const bool open = dropdownOpenState[ordinal];
-  const bool hasSelection = options.selected && *options.selected >= 0 && (size_t)*options.selected < options.items.size();
-  const DropdownPaint paint = activePaint().dropdown(open, hasSelection, hovered, pressed);
+  const bool hasSelection = options.selected && *options.selected >= 0 && (size_t)*options.selected < options.item_count;
+  const n8v::DropdownPaint paint = n8v::activePaint().dropdown(open, hasSelection, hovered, pressed);
 
   const bool floatingLabelStyle = paint.labelColor.a > 0.0f;
   const bool labelFloated = floatingLabelStyle && (hasSelection || open);
-  std::string_view selectedText = hasSelection ? options.items[(size_t)*options.selected] : std::string_view{};
+  std::string_view placeholderView = toView(options.placeholder);
+  std::string_view selectedText = hasSelection ? toView(options.items[(size_t)*options.selected]) : std::string_view{};
 
   Clay_ElementDeclaration decl = {};
   decl.layout.layoutDirection = CLAY_TOP_TO_BOTTOM;
   decl.layout.sizing.width = CLAY_SIZING_GROW(0);
-  decl.backgroundColor = toClay(paint.background);
+  decl.backgroundColor = n8v::detail::toClay(paint.background);
   decl.cornerRadius = {paint.cornerRadius.topLeft, paint.cornerRadius.topRight, paint.cornerRadius.bottomLeft, paint.cornerRadius.bottomRight};
-  if (!floatingLabelStyle) decl.layout.padding = toClay(paint.padding);
+  if (!floatingLabelStyle) decl.layout.padding = n8v::detail::toClay(paint.padding);
 
-  Clay_Dimensions nativeSize = activeBackend().measureNativeChrome(NativeWidgetKind::Dropdown, hasSelection ? selectedText : options.placeholder, paint.fontSize);
+  Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Dropdown, hasSelection ? selectedText : placeholderView, paint.fontSize);
   const bool hasNativeChrome = nativeSize.height > 0;
   float contentHeight = (float)paint.padding.top + (float)paint.labelFontSize * 1.2f + (float)paint.fontSize * 1.2f + (float)paint.padding.bottom;
   if (hasNativeChrome) {
@@ -103,19 +101,17 @@ void dropdown(const DropdownOptions &options) {
 
   dropdownItemsStorage.push_back({});
   std::vector<std::string> &itemsCopy = dropdownItemsStorage.back();
-  itemsCopy.reserve(options.items.size());
-  for (std::string_view item : options.items) itemsCopy.emplace_back(item);
+  itemsCopy.reserve(options.item_count);
+  for (size_t i = 0; i < options.item_count; ++i) itemsCopy.emplace_back(toView(options.items[i]));
 
-  const bool hasOnChange = static_cast<bool>(options.onChange);
-  if (hasOnChange) dropdownChangeCallbacks.push_back(options.onChange);
-
-  widgetMetaStorage.push_back(NativeWidgetMeta{});
-  NativeWidgetMeta &meta = widgetMetaStorage.back();
-  meta.kind = NativeWidgetKind::Dropdown;
+  widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
+  n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
+  meta.kind = n8v::NativeWidgetKind::Dropdown;
   meta.ordinal = ordinal;
   meta.dropdownItems = &itemsCopy;
   meta.dropdownSelected = options.selected;
-  meta.onDropdownChange = hasOnChange ? &dropdownChangeCallbacks.back() : nullptr;
+  meta.onDropdownChange = options.on_change;
+  meta.onDropdownChangeUserdata = options.on_change_userdata;
   decl.userData = &meta;
 
   Clay__ConfigureOpenElement(decl);
@@ -127,7 +123,7 @@ void dropdown(const DropdownOptions &options) {
   if (!hasNativeChrome && floatingLabelStyle) {
     Clay__OpenElement();
     Clay_ElementDeclaration contentRowDecl = {};
-    contentRowDecl.layout.padding = toClay(paint.padding);
+    contentRowDecl.layout.padding = n8v::detail::toClay(paint.padding);
     contentRowDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
     contentRowDecl.layout.sizing.height = CLAY_SIZING_GROW(0);
     contentRowDecl.layout.childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_BOTTOM};
@@ -136,7 +132,7 @@ void dropdown(const DropdownOptions &options) {
     std::string_view lineText = hasSelection ? selectedText : std::string_view{"\xC2\xA0"};
     textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
     Clay_TextElementConfig valueTextConfig = {};
-    valueTextConfig.textColor = toClay(paint.textColor);
+    valueTextConfig.textColor = n8v::detail::toClay(paint.textColor);
     valueTextConfig.fontSize = paint.fontSize;
     valueTextConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
     valueTextConfig.userData = &textStyleStorage.back();
@@ -147,9 +143,9 @@ void dropdown(const DropdownOptions &options) {
     chevronDecl.layout.sizing.width = CLAY_SIZING_FIXED(12.0f);
     chevronDecl.layout.sizing.height = CLAY_SIZING_FIXED(12.0f);
     chevronDecl.backgroundColor = {0, 0, 0, 1};
-    widgetMetaStorage.push_back(NativeWidgetMeta{});
-    NativeWidgetMeta &chevronMeta = widgetMetaStorage.back();
-    chevronMeta.kind = NativeWidgetKind::DropdownChevron;
+    widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
+    n8v::detail::NativeWidgetMeta &chevronMeta = widgetMetaStorage.back();
+    chevronMeta.kind = n8v::NativeWidgetKind::DropdownChevron;
     chevronMeta.ordinal = ordinal;
     chevronMeta.chevronColor = paint.labelColor;
     chevronMeta.chevronPointsUp = open;
@@ -159,7 +155,7 @@ void dropdown(const DropdownOptions &options) {
 
     Clay__CloseElement(); // contentRow
 
-    if (!options.placeholder.empty()) {
+    if (!placeholderView.empty()) {
       Clay__OpenElement();
       Clay_ElementDeclaration labelDecl = {};
       labelDecl.floating.attachTo = CLAY_ATTACH_TO_PARENT;
@@ -181,11 +177,11 @@ void dropdown(const DropdownOptions &options) {
 
       textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
       Clay_TextElementConfig labelTextConfig = {};
-      labelTextConfig.textColor = toClay(paint.labelColor);
+      labelTextConfig.textColor = n8v::detail::toClay(paint.labelColor);
       labelTextConfig.fontSize = labelFontSize;
       labelTextConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
       labelTextConfig.userData = &textStyleStorage.back();
-      CLAY_TEXT(internString(options.placeholder), labelTextConfig);
+      CLAY_TEXT(internString(placeholderView), labelTextConfig);
 
       Clay__CloseElement();
     }
@@ -195,25 +191,25 @@ void dropdown(const DropdownOptions &options) {
       Clay_ElementDeclaration indicatorDecl = {};
       indicatorDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
       indicatorDecl.layout.sizing.height = CLAY_SIZING_FIXED(paint.indicatorWidth);
-      indicatorDecl.backgroundColor = toClay(paint.indicatorColor);
+      indicatorDecl.backgroundColor = n8v::detail::toClay(paint.indicatorColor);
       Clay__ConfigureOpenElement(indicatorDecl);
       Clay__CloseElement();
     }
   } else {
     textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
     Clay_TextElementConfig textConfig = {};
-    textConfig.textColor = toClay(hasSelection ? paint.textColor : paint.placeholderColor);
+    textConfig.textColor = n8v::detail::toClay(hasSelection ? paint.textColor : paint.placeholderColor);
     textConfig.fontSize = paint.fontSize;
     textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
     textConfig.userData = &textStyleStorage.back();
-    CLAY_TEXT(internString(hasSelection ? selectedText : options.placeholder), textConfig);
+    CLAY_TEXT(internString(hasSelection ? selectedText : placeholderView), textConfig);
   }
 
   if (!hasNativeChrome && open && !itemsCopy.empty()) {
     Clay__OpenElement();
     dropdownOrdinalStorage.push_back(ordinal);
     Clay_ElementDeclaration backdropDecl = {};
-    Clay_Dimensions winSize = activeBackend().windowSize();
+    Clay_Dimensions winSize = n8v::activeBackend().windowSize();
     backdropDecl.layout.sizing.width = CLAY_SIZING_FIXED(winSize.width);
     backdropDecl.layout.sizing.height = CLAY_SIZING_FIXED(winSize.height);
     backdropDecl.floating.attachTo = CLAY_ATTACH_TO_ROOT;
@@ -226,7 +222,7 @@ void dropdown(const DropdownOptions &options) {
     Clay_ElementDeclaration popupDecl = {};
     popupDecl.layout.layoutDirection = CLAY_TOP_TO_BOTTOM;
     popupDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
-    popupDecl.backgroundColor = toClay(paint.popupBackground);
+    popupDecl.backgroundColor = n8v::detail::toClay(paint.popupBackground);
     Clay_CornerRadius popupRadius = floatingLabelStyle ? Clay_CornerRadius{0, 0, paint.cornerRadius.topLeft, paint.cornerRadius.topRight} : decl.cornerRadius;
     popupDecl.cornerRadius = popupRadius;
     popupDecl.floating.attachTo = CLAY_ATTACH_TO_PARENT;
@@ -239,14 +235,13 @@ void dropdown(const DropdownOptions &options) {
       Clay__OpenElement();
 
       const bool itemHovered = Clay_Hovered();
-      // if (itemHovered) pendingCursor = CursorKind::Pointer;
       const bool itemSelected = hasSelection && (size_t)*options.selected == i;
 
       Clay_ElementDeclaration rowDecl = {};
-      rowDecl.layout.padding = toClay(paint.padding);
+      rowDecl.layout.padding = n8v::detail::toClay(paint.padding);
       rowDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
-      Color rowBg = itemHovered ? paint.itemHoverBackground : (itemSelected && paint.itemSelectedBackground.a > 0.0f ? paint.itemSelectedBackground : paint.popupBackground);
-      rowDecl.backgroundColor = toClay(rowBg);
+      n8v::Color rowBg = itemHovered ? paint.itemHoverBackground : (itemSelected && paint.itemSelectedBackground.a > 0.0f ? paint.itemSelectedBackground : paint.popupBackground);
+      rowDecl.backgroundColor = n8v::detail::toClay(rowBg);
       bool isFirstRow = i == 0, isLastRow = i == itemsCopy.size() - 1;
       rowDecl.cornerRadius = {
         isFirstRow ? popupRadius.topLeft : 0.0f,
@@ -261,7 +256,7 @@ void dropdown(const DropdownOptions &options) {
 
       textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
       Clay_TextElementConfig itemTextConfig = {};
-      itemTextConfig.textColor = toClay(paint.textColor);
+      itemTextConfig.textColor = n8v::detail::toClay(paint.textColor);
       itemTextConfig.fontSize = paint.fontSize;
       itemTextConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
       itemTextConfig.userData = &textStyleStorage.back();
@@ -276,4 +271,4 @@ void dropdown(const DropdownOptions &options) {
   Clay__CloseElement();
 }
 
-} // namespace n8v::detail
+} // extern "C"

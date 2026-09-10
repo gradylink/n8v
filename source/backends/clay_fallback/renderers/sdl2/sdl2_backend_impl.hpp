@@ -3,12 +3,12 @@
 #include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
 
-#include <n8v/backend.hpp>
+#include "core/backend.hpp"
+#include <n8v/n8v_c.h>
 
 #include <SDL2/SDL.h>
 
 #include <cstdint>
-#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -35,7 +35,9 @@ public:
 private:
   struct EntryEditState {
     std::string *value = nullptr;
-    std::function<void(std::string_view)> onChange;
+    n8v_string_buf *buf = nullptr;
+    n8v_text_change_fn onChange = nullptr;
+    void *onChangeUserdata = nullptr;
     int ordinal = -1;
     size_t cursor = 0;
     size_t anchor = 0;

@@ -1,45 +1,223 @@
 #pragma once
 
+#include <n8v/detail/callback_bridge.hpp>
+#include <n8v/n8v_c.h>
 #include <n8v/options.hpp>
 
-#include <clay.h>
-
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <string>
 #include <string_view>
+#include <unordered_map>
+#include <vector>
 
 namespace n8v::detail {
 
-void beginFrame();
-void endFrame();
+inline n8v_direction toC(Direction d) { return d == Direction::Horizontal ? N8V_DIRECTION_HORIZONTAL : N8V_DIRECTION_VERTICAL; }
 
-void openFlex(const FlexOptions &options);
-void closeFlex();
+inline n8v_align toC(Align a) {
+  switch (a) {
+  case Align::Start:
+    return N8V_ALIGN_START;
+  case Align::Center:
+    return N8V_ALIGN_CENTER;
+  case Align::End:
+    return N8V_ALIGN_END;
+  }
+  return N8V_ALIGN_START;
+}
 
-void entry(const EntryOptions &options);
+inline n8v_button_style toC(ButtonStyle s) { return s == ButtonStyle::Primary ? N8V_BUTTON_STYLE_PRIMARY : N8V_BUTTON_STYLE_SECONDARY; }
 
-void dropdown(const DropdownOptions &options);
+inline n8v_sizing_mode toC(SizingMode m) {
+  switch (m) {
+  case SizingMode::Fit:
+    return N8V_SIZING_FIT;
+  case SizingMode::Grow:
+    return N8V_SIZING_GROW;
+  case SizingMode::Fixed:
+    return N8V_SIZING_FIXED;
+  case SizingMode::Percent:
+    return N8V_SIZING_PERCENT;
+  }
+  return N8V_SIZING_FIT;
+}
 
-void slider(const SliderOptions &options);
+inline n8v_sizing toC(Sizing s) { return n8v_sizing{toC(s.mode), s.value, s.min, s.max}; }
+
+inline n8v_color toC(Color c) { return n8v_color{c.r, c.g, c.b, c.a}; }
+
+inline n8v_padding toC(Padding p) { return n8v_padding{p.left, p.right, p.top, p.bottom}; }
+
+inline n8v_style_family toC(StyleFamily f) {
+  switch (f) {
+  case StyleFamily::Plain:
+    return N8V_STYLE_FAMILY_PLAIN;
+  case StyleFamily::Material:
+    return N8V_STYLE_FAMILY_MATERIAL;
+  case StyleFamily::Cupertino:
+    return N8V_STYLE_FAMILY_CUPERTINO;
+  case StyleFamily::Fluent:
+    return N8V_STYLE_FAMILY_FLUENT;
+  }
+  return N8V_STYLE_FAMILY_PLAIN;
+}
+
+inline StyleFamily fromC(n8v_style_family f) {
+  switch (f) {
+  case N8V_STYLE_FAMILY_PLAIN:
+    return StyleFamily::Plain;
+  case N8V_STYLE_FAMILY_MATERIAL:
+    return StyleFamily::Material;
+  case N8V_STYLE_FAMILY_CUPERTINO:
+    return StyleFamily::Cupertino;
+  case N8V_STYLE_FAMILY_FLUENT:
+    return StyleFamily::Fluent;
+  }
+  return StyleFamily::Plain;
+}
+
+inline void beginFrame() {
+  n8v_begin_frame();
+  callback_bridge::clearCallbackStorage();
+}
+
+inline void endFrame() { n8v_end_frame(); }
+
+inline void openFlex(const FlexOptions &options) {
+  n8v_flex_options c_opts{};
+  c_opts.direction = toC(options.direction);
+  c_opts.gap = options.gap;
+  c_opts.padding = toC(options.padding);
+  c_opts.h_align = toC(options.hAlign);
+  c_opts.v_align = toC(options.vAlign);
+  c_opts.width = toC(options.width);
+  c_opts.height = toC(options.height);
+  n8v_open_flex(c_opts);
+}
+
+inline void closeFlex() { n8v_close_flex(); }
 
 struct LeafBuilder {
   bool isButton;
   ButtonOptions buttonOptions;
   TextOptions textOptions;
 
-  void operator()(std::string_view label) &&;
+  void operator()(std::string_view label) && {
+    std::string labelStorage(label);
+    if (isButton) {
+      n8v_button_options c_opts{};
+      c_opts.style = toC(buttonOptions.style);
+      if (buttonOptions.onClick) callback_bridge::bridge(callback_bridge::clickClosures, std::move(buttonOptions.onClick), c_opts.on_click, c_opts.on_click_userdata);
+      _n8v_set_button_opts(c_opts);
+      _n8v_button_commit(labelStorage.c_str());
+    } else {
+      std::string urlStorage(textOptions.url);
+      n8v_text_options c_opts{};
+      c_opts.bold = textOptions.bold;
+      c_opts.italic = textOptions.italic;
+      c_opts.url = urlStorage.c_str();
+      c_opts.color = toC(textOptions.color);
+      _n8v_set_text_opts(c_opts);
+      _n8v_text_commit(labelStorage.c_str());
+    }
+  }
 };
 
 struct CheckboxBuilder {
   CheckboxOptions options;
 
-  void operator()(std::string_view label) &&;
+  void operator()(std::string_view label) && {
+    std::string labelStorage(label);
+    n8v_checkbox_options c_opts{};
+    c_opts.checked = options.checked;
+    if (options.onChange) callback_bridge::bridge(callback_bridge::boolChangeClosures, std::move(options.onChange), c_opts.on_change, c_opts.on_change_userdata);
+    _n8v_set_checkbox_opts(c_opts);
+    _n8v_checkbox_commit(labelStorage.c_str());
+  }
 };
 
 struct RadioBuilder {
   RadioOptions options;
 
-  void operator()(std::string_view label) &&;
+  void operator()(std::string_view label) && {
+    std::string labelStorage(label);
+    n8v_radio_options c_opts{};
+    c_opts.selected = options.selected;
+    c_opts.value = options.value;
+    if (options.onChange) callback_bridge::bridge(callback_bridge::intChangeClosures, std::move(options.onChange), c_opts.on_change, c_opts.on_change_userdata);
+    _n8v_set_radio_opts(c_opts);
+    _n8v_radio_commit(labelStorage.c_str());
+  }
 };
+
+inline std::unordered_map<std::string *, n8v_string_buf> entryBufShadows;
+
+inline void syncStringBuf(n8v_string_buf &buf, std::string_view value) {
+  std::string_view current(buf.data ? buf.data : "", buf.length);
+  if (current == value) return;
+  size_t needed = value.size() + 1;
+  if (buf.capacity < needed) {
+    size_t newCap = buf.capacity == 0 ? 16 : buf.capacity;
+    while (newCap < needed) newCap *= 2;
+    char *newData = static_cast<char *>(std::realloc(buf.data, newCap));
+    if (!newData) return;
+    buf.data = newData;
+    buf.capacity = newCap;
+  }
+  std::memcpy(buf.data, value.data(), value.size());
+  buf.data[value.size()] = '\0';
+  buf.length = value.size();
+}
+
+inline void entry(EntryOptions options) {
+  std::string placeholderStorage(options.placeholder);
+  n8v_entry_options c_opts{};
+  c_opts.placeholder = placeholderStorage.c_str();
+  c_opts.password = options.password;
+
+  n8v_string_buf *buf = nullptr;
+  if (options.value) {
+    n8v_string_buf &b = entryBufShadows[options.value];
+    syncStringBuf(b, *options.value);
+    buf = &b;
+  }
+  c_opts.value = buf;
+
+  if (options.onChange) callback_bridge::bridgeTextChange(std::move(options.onChange), c_opts.on_change, c_opts.on_change_userdata);
+
+  n8v_entry(c_opts);
+
+  if (buf && options.value) options.value->assign(buf->data ? buf->data : "", buf->length);
+}
+
+inline void dropdown(DropdownOptions options) {
+  std::string placeholderStorage(options.placeholder);
+  std::vector<std::string> itemStorage(options.items.begin(), options.items.end());
+  std::vector<const char *> itemPtrs;
+  itemPtrs.reserve(itemStorage.size());
+  for (const std::string &item : itemStorage) itemPtrs.push_back(item.c_str());
+
+  n8v_dropdown_options c_opts{};
+  c_opts.items = itemPtrs.data();
+  c_opts.item_count = itemPtrs.size();
+  c_opts.selected = options.selected;
+  c_opts.placeholder = placeholderStorage.c_str();
+  if (options.onChange) callback_bridge::bridge(callback_bridge::intChangeClosures, std::move(options.onChange), c_opts.on_change, c_opts.on_change_userdata);
+
+  n8v_dropdown(c_opts);
+}
+
+inline void slider(SliderOptions options) {
+  n8v_slider_options c_opts{};
+  c_opts.value = options.value;
+  c_opts.min = options.min;
+  c_opts.max = options.max;
+  if (options.onChange) callback_bridge::bridge(callback_bridge::floatChangeClosures, std::move(options.onChange), c_opts.on_change, c_opts.on_change_userdata);
+
+  n8v_slider(c_opts);
+}
 
 } // namespace n8v::detail
 
@@ -53,11 +231,24 @@ inline detail::CheckboxBuilder checkbox(CheckboxOptions options) { return detail
 
 inline detail::RadioBuilder radio(RadioOptions options) { return detail::RadioBuilder{std::move(options)}; }
 
-inline void entry(EntryOptions options) { detail::entry(options); }
+inline void entry(EntryOptions options) { detail::entry(std::move(options)); }
 
-inline void dropdown(DropdownOptions options) { detail::dropdown(options); }
+inline void dropdown(DropdownOptions options) { detail::dropdown(std::move(options)); }
 
-inline void slider(SliderOptions options) { detail::slider(options); }
+inline void slider(SliderOptions options) { detail::slider(std::move(options)); }
+
+inline bool initialize(int width, int height, std::string_view title) {
+  std::string titleStorage(title);
+  return n8v_initialize(width, height, titleStorage.c_str());
+}
+
+inline bool pumpEvents() { return n8v_pump_events(); }
+
+inline void shutdown() { n8v_shutdown(); }
+
+inline void setStyleFamily(StyleFamily family) { n8v_set_style_family(detail::toC(family)); }
+
+inline StyleFamily activeStyleFamily() { return detail::fromC(n8v_active_style_family()); }
 
 } // namespace n8v
 

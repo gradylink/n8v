@@ -339,7 +339,7 @@ private:
   static void syncEntry(GtkWidget *widget, const NativeWidgetMeta &meta, EntryState &state) {
     if (!meta.entryValue) return;
     state.value = meta.entryValue;
-    state.onChange = meta.onEntryChange ? *meta.onEntryChange : std::function<void(std::string_view)>{};
+    state.onChange = toStdFunction(meta.onEntryChange, meta.onEntryChangeUserdata);
 
     std::string widgetText = gtk_editable_get_text(GTK_EDITABLE(widget));
     if (widgetText != state.lastSynced) {
@@ -362,11 +362,11 @@ private:
     auto it = widgets_.find(key);
     if (it != widgets_.end()) {
       if (meta.kind == NativeWidgetKind::Button) {
-        buttonCallbacks_[meta.ordinal] = meta.onClick ? *meta.onClick : std::function<void()>{};
+        buttonCallbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
       } else if (meta.kind == NativeWidgetKind::Checkbox && meta.checked) {
         CheckboxState &state = checkboxStates_[meta.ordinal];
         state.checked = meta.checked;
-        state.onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
+        state.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
         gboolean current = gtk_check_button_get_active(GTK_CHECK_BUTTON(it->second));
         if ((bool)current != *meta.checked) gtk_check_button_set_active(GTK_CHECK_BUTTON(it->second), *meta.checked);
       } else if (meta.kind == NativeWidgetKind::Entry) {
@@ -377,21 +377,21 @@ private:
         RadioState &state = radioStates_[meta.ordinal];
         state.selected = meta.radioSelected;
         state.value = meta.radioValue;
-        state.onChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
+        state.onChange = toStdFunction(meta.onRadioChange, meta.onRadioChangeUserdata);
         bool shouldBeActive = *meta.radioSelected == meta.radioValue;
         gboolean current = gtk_check_button_get_active(GTK_CHECK_BUTTON(it->second));
         if ((bool)current != shouldBeActive) gtk_check_button_set_active(GTK_CHECK_BUTTON(it->second), shouldBeActive);
       } else if (meta.kind == NativeWidgetKind::Dropdown && meta.dropdownSelected) {
         DropdownState &state = dropdownStates_[meta.ordinal];
         state.selected = meta.dropdownSelected;
-        state.onChange = meta.onDropdownChange ? *meta.onDropdownChange : std::function<void(int)>{};
+        state.onChange = toStdFunction(meta.onDropdownChange, meta.onDropdownChangeUserdata);
         guint wantSelected = *meta.dropdownSelected >= 0 ? (guint)*meta.dropdownSelected : GTK_INVALID_LIST_POSITION;
         guint current = gtk_drop_down_get_selected(GTK_DROP_DOWN(it->second));
         if (current != wantSelected) gtk_drop_down_set_selected(GTK_DROP_DOWN(it->second), wantSelected);
       } else if (meta.kind == NativeWidgetKind::Slider && meta.sliderValue) {
         SliderState &state = sliderStates_[meta.ordinal];
         state.value = meta.sliderValue;
-        state.onChange = meta.onSliderChange ? *meta.onSliderChange : std::function<void(float)>{};
+        state.onChange = toStdFunction(meta.onSliderChange, meta.onSliderChangeUserdata);
         gtk_range_set_range(GTK_RANGE(it->second), meta.sliderMin, meta.sliderMax);
         if (gtk_range_get_value(GTK_RANGE(it->second)) != *meta.sliderValue) gtk_range_set_value(GTK_RANGE(it->second), *meta.sliderValue);
       }
@@ -401,13 +401,13 @@ private:
     GtkWidget *widget = nullptr;
     if (meta.kind == NativeWidgetKind::Button) {
       widget = gtk_button_new_with_label("");
-      buttonCallbacks_[meta.ordinal] = meta.onClick ? *meta.onClick : std::function<void()>{};
+      buttonCallbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
       g_signal_connect_data(widget, "clicked", G_CALLBACK(&Gtk4Backend::onButtonClicked), &buttonCallbacks_[meta.ordinal], nullptr, (GConnectFlags)0);
     } else if (meta.kind == NativeWidgetKind::Checkbox) {
       widget = gtk_check_button_new();
       CheckboxState &state = checkboxStates_[meta.ordinal];
       state.checked = meta.checked;
-      state.onChange = meta.onChange ? *meta.onChange : std::function<void(bool)>{};
+      state.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
       gtk_check_button_set_active(GTK_CHECK_BUTTON(widget), meta.checked && *meta.checked);
       g_signal_connect_data(widget, "toggled", G_CALLBACK(&Gtk4Backend::onCheckboxToggled), &checkboxStates_[meta.ordinal], nullptr, (GConnectFlags)0);
     } else if (meta.kind == NativeWidgetKind::Entry) {
@@ -420,7 +420,7 @@ private:
       RadioState &state = radioStates_[meta.ordinal];
       state.selected = meta.radioSelected;
       state.value = meta.radioValue;
-      state.onChange = meta.onRadioChange ? *meta.onRadioChange : std::function<void(int)>{};
+      state.onChange = toStdFunction(meta.onRadioChange, meta.onRadioChangeUserdata);
       gtk_check_button_set_active(GTK_CHECK_BUTTON(widget), meta.radioSelected && *meta.radioSelected == meta.radioValue);
       if (meta.radioSelected) {
         GtkWidget *&leader = radioGroups_[meta.radioSelected];
@@ -438,7 +438,7 @@ private:
       widget = gtk_drop_down_new_from_strings(cstrs.data());
       DropdownState &state = dropdownStates_[meta.ordinal];
       state.selected = meta.dropdownSelected;
-      state.onChange = meta.onDropdownChange ? *meta.onDropdownChange : std::function<void(int)>{};
+      state.onChange = toStdFunction(meta.onDropdownChange, meta.onDropdownChangeUserdata);
       guint initialSelected = meta.dropdownSelected && *meta.dropdownSelected >= 0 ? (guint)*meta.dropdownSelected : GTK_INVALID_LIST_POSITION;
       gtk_drop_down_set_selected(GTK_DROP_DOWN(widget), initialSelected);
       g_signal_connect_data(widget, "notify::selected", G_CALLBACK(&Gtk4Backend::onDropdownChanged), &dropdownStates_[meta.ordinal], nullptr, (GConnectFlags)0);
@@ -447,7 +447,7 @@ private:
       gtk_scale_set_draw_value(GTK_SCALE(widget), FALSE);
       SliderState &state = sliderStates_[meta.ordinal];
       state.value = meta.sliderValue;
-      state.onChange = meta.onSliderChange ? *meta.onSliderChange : std::function<void(float)>{};
+      state.onChange = toStdFunction(meta.onSliderChange, meta.onSliderChangeUserdata);
       if (meta.sliderValue) gtk_range_set_value(GTK_RANGE(widget), *meta.sliderValue);
       g_signal_connect_data(widget, "value-changed", G_CALLBACK(&Gtk4Backend::onSliderChanged), &sliderStates_[meta.ordinal], nullptr, (GConnectFlags)0);
     } else {

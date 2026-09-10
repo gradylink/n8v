@@ -4,9 +4,6 @@ project(n8v VERSION 0.1.0 LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# n8v builds both a static and a shared library from the same sources and
-# dependencies (see the n8v/n8v_shared targets below); everything needs to
-# be position-independent for the shared one to link.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/cl-bootstrap.cmake)
@@ -148,19 +145,6 @@ set(N8V_SOURCES
   source/backends/clay_fallback/renderers/sdl2/draw_primitives.cpp
 )
 
-# Build both a static (n8v) and a shared (n8v_shared, output "libn8v.so") lib
-# from the same sources - the shared one matters most for the C ABI in
-# n8v_c.h, since a static archive can't be dlopen()'d or linked from most
-# non-C++-toolchain FFI consumers.
-#
-# This needed a PIC fix upstream in lzy.cmake first: the *_lazy wrapper
-# libraries (sdl2_lazy, gtk4_lazy, etc.) use hand-written,
-# architecture-specific assembly trampolines that weren't
-# position-independent. Fixed and verified at runtime on x86_64/i386/
-# aarch64/riscv64; armv7/ppc32/ppc64 got a best-effort fix too but are
-# unverified (no compatible toolchain was available to test them) - see
-# lzy.cmake's own commit history for details if this option misbehaves on
-# one of those three.
 option(N8V_BUILD_SHARED "Also build a shared libn8v.so." ON)
 
 set(_n8v_targets n8v)
@@ -169,9 +153,11 @@ if(N8V_BUILD_SHARED)
   add_library(n8v_shared SHARED ${N8V_SOURCES})
   set_target_properties(n8v_shared PROPERTIES OUTPUT_NAME n8v)
   list(APPEND _n8v_targets n8v_shared)
+  target_link_options(n8v_shared PRIVATE "LINKER:--exclude-libs,ALL")
 endif()
 
 foreach(_n8v_target ${_n8v_targets})
+  set_target_properties(${_n8v_target} PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
   target_include_directories(${_n8v_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_include_directories(${_n8v_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/source)
   target_link_libraries(${_n8v_target} PRIVATE sdl2_lazy n8v_fonts)

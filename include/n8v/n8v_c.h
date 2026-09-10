@@ -5,6 +5,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#if defined(_WIN32)
+#define N8V_API __declspec(dllexport)
+#elif defined(__GNUC__) || defined(__clang__)
+#define N8V_API __attribute__((visibility("default")))
+#else
+#define N8V_API
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -100,9 +108,9 @@ typedef struct n8v_string_buf {
   size_t capacity;
 } n8v_string_buf;
 
-void n8v_string_buf_init(n8v_string_buf *buf);
-void n8v_string_buf_free(n8v_string_buf *buf);
-const char *n8v_string_buf_cstr(const n8v_string_buf *buf);
+N8V_API void n8v_string_buf_init(n8v_string_buf *buf);
+N8V_API void n8v_string_buf_free(n8v_string_buf *buf);
+N8V_API const char *n8v_string_buf_cstr(const n8v_string_buf *buf);
 
 typedef void (*n8v_click_fn)(void *userdata);
 typedef void (*n8v_bool_change_fn)(bool value, void *userdata);
@@ -171,52 +179,52 @@ typedef struct n8v_slider_options {
   void *on_change_userdata;
 } n8v_slider_options;
 
-bool n8v_initialize(int width, int height, const char *title);
-bool n8v_pump_events(void);
-void n8v_shutdown(void);
+N8V_API bool n8v_initialize(int width, int height, const char *title);
+N8V_API bool n8v_pump_events(void);
+N8V_API void n8v_shutdown(void);
 
-void n8v_set_style_family(n8v_style_family family);
-n8v_style_family n8v_active_style_family(void);
+N8V_API void n8v_set_style_family(n8v_style_family family);
+N8V_API n8v_style_family n8v_active_style_family(void);
 
-void n8v_begin_frame(void);
-void n8v_end_frame(void);
-void n8v_open_flex(n8v_flex_options options);
-void n8v_close_flex(void);
+N8V_API void n8v_begin_frame(void);
+N8V_API void n8v_end_frame(void);
+N8V_API void n8v_open_flex(n8v_flex_options options);
+N8V_API void n8v_close_flex(void);
 
 #define N8V_UI() for (uint8_t n8v_c_uiLatch = (n8v_begin_frame(), 0); n8v_c_uiLatch < 1; n8v_c_uiLatch = 1, n8v_end_frame())
 
 #define n8v_flex(...) for (uint8_t n8v_c_flexLatch = (n8v_open_flex(__VA_ARGS__), 0); n8v_c_flexLatch < 1; n8v_c_flexLatch = 1, n8v_close_flex())
 
-void _n8v_set_button_opts(n8v_button_options opts);
-void _n8v_button_commit(const char *label);
+N8V_API void _n8v_set_button_opts(n8v_button_options opts);
+N8V_API void _n8v_button_commit(const char *label);
 #define n8v_button(opts)                                                                                                                                                      \
   _n8v_set_button_opts(opts);                                                                                                                                                 \
   _n8v_button_commit
 
-void _n8v_set_text_opts(n8v_text_options opts);
-void _n8v_text_commit(const char *label);
+N8V_API void _n8v_set_text_opts(n8v_text_options opts);
+N8V_API void _n8v_text_commit(const char *label);
 #define n8v_text(opts)                                                                                                                                                        \
   _n8v_set_text_opts(opts);                                                                                                                                                   \
   _n8v_text_commit
 
-void _n8v_set_checkbox_opts(n8v_checkbox_options opts);
-void _n8v_checkbox_commit(const char *label);
+N8V_API void _n8v_set_checkbox_opts(n8v_checkbox_options opts);
+N8V_API void _n8v_checkbox_commit(const char *label);
 #define n8v_checkbox(opts)                                                                                                                                                    \
   _n8v_set_checkbox_opts(opts);                                                                                                                                               \
   _n8v_checkbox_commit
 
-void _n8v_set_radio_opts(n8v_radio_options opts);
-void _n8v_radio_commit(const char *label);
+N8V_API void _n8v_set_radio_opts(n8v_radio_options opts);
+N8V_API void _n8v_radio_commit(const char *label);
 #define n8v_radio(opts)                                                                                                                                                       \
   _n8v_set_radio_opts(opts);                                                                                                                                                  \
   _n8v_radio_commit
 
-void n8v_entry(n8v_entry_options options);
-void n8v_dropdown(n8v_dropdown_options options);
-void n8v_slider(n8v_slider_options options);
+N8V_API void n8v_entry(n8v_entry_options options);
+N8V_API void n8v_dropdown(n8v_dropdown_options options);
+N8V_API void n8v_slider(n8v_slider_options options);
 
 #ifdef __cplusplus
-} /* extern "C" */
+}
 #endif
 
 #ifdef N8V_NO_PREFIX
@@ -231,9 +239,6 @@ void n8v_slider(n8v_slider_options options);
 #define dropdown n8v_dropdown
 #define slider n8v_slider
 
-#define initialize n8v_initialize
-#define pump_events n8v_pump_events
-#define shutdown n8v_shutdown
 #define set_style_family n8v_set_style_family
 #define active_style_family n8v_active_style_family
 
@@ -246,15 +251,6 @@ void n8v_slider(n8v_slider_options options);
 #define string_buf_init n8v_string_buf_init
 #define string_buf_free n8v_string_buf_free
 #define string_buf_cstr n8v_string_buf_cstr
-
-/* Deliberately NOT aliased: direction, align, button_style, sizing_mode,
- * style_family, sizing, color, padding, corner_radius. Each of those exact
- * lowercase words is also a field name on one of the options structs below
- * (e.g. n8v_flex_options::direction, ::padding; n8v_text_options::color),
- * and unlike the C++ header there's no separate type/field namespace here
- * to keep `direction` (a type) and `.direction` (a field) apart - aliasing
- * the type would shadow the field name inside that struct's own designated
- * initializers. Keep using the n8v_/N8V_-prefixed spellings for these. */
 
 #define flex_options n8v_flex_options
 #define text_options n8v_text_options

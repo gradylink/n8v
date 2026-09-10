@@ -1,6 +1,6 @@
 #pragma once
 
-#include <n8v/style.hpp>
+#include "core/style.hpp"
 
 namespace n8v::detail {
 
