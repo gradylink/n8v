@@ -23,6 +23,7 @@ if(N8V_BACKEND_MILSKO)
         MwButtonClass MwClass
         MwLabelClass MwClass
         MwCheckBoxClass MwClass
+        MwRadioBoxClass MwClass
         MwEntryClass MwClass
         MwComboBoxClass MwClass
         MwScrollBarClass MwClass

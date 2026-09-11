@@ -245,6 +245,17 @@ private:
     if (action->onRadioChange) action->onRadioChange(action->radioValue);
   }
 
+  static void MWAPI onRadioMouseDown(MwWidget handle, void *userData, void *callData) {
+    auto *action = static_cast<ClickAction *>(userData);
+    if (!action || !action->radioSelected) return;
+    auto *mouse = static_cast<MwMouse *>(callData);
+    if (mouse && mouse->button != MwMOUSE_LEFT) return;
+    if (*action->radioSelected == action->radioValue) return;
+    *action->radioSelected = action->radioValue;
+    if (action->onRadioChange) action->onRadioChange(action->radioValue);
+    MwSetInteger(handle, MwNchecked, 1);
+  }
+
   static void MWAPI onDropdownChanged(MwWidget handle, void *userData, void * /*callData*/) {
     auto *action = static_cast<ClickAction *>(userData);
     if (!action || !action->dropdownSelected) return;
@@ -346,9 +357,10 @@ private:
       action.radioSelected = meta.radioSelected;
       action.radioValue = meta.radioValue;
       action.onRadioChange = toStdFunction(meta.onRadioChange, meta.onRadioChangeUserdata);
-      widget = MwCreateWidget(MwCheckBoxClass, "n8v-radio", window_, 0, 0, 1, 1);
+      widget = MwCreateWidget(MwRadioBoxClass, "n8v-radio", window_, 0, 0, 1, 1);
       MwSetInteger(widget, MwNchecked, meta.radioSelected && *meta.radioSelected == meta.radioValue ? 1 : 0);
       MwAddUserHandler(widget, MwNchangedHandler, onRadioChanged, &action);
+      MwAddUserHandler(widget, MwNmouseDownHandler, onRadioMouseDown, &action);
     } else if (meta.kind == NativeWidgetKind::Dropdown) {
       action.dropdownSelected = meta.dropdownSelected;
       action.onDropdownChange = toStdFunction(meta.onDropdownChange, meta.onDropdownChangeUserdata);
