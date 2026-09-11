@@ -1,2 +1,5 @@
 add_executable(n8v-basic-example main.cpp)
 target_link_libraries(n8v-basic-example PRIVATE n8v)
+if(EMSCRIPTEN)
+  set_target_properties(n8v-basic-example PROPERTIES SUFFIX ".html")
+endif()

@@ -22,14 +22,14 @@ static void on_password_toggle(bool value, void *userdata) {
 }
 
 int main(void) {
-  if (!initialize(800, 600, "n8v basic C example")) {
+  if (!n8v_initialize(800, 600, "n8v basic C example")) {
     return 1;
   }
 
   string_buf name;
   string_buf_init(&name);
 
-  while (pump_events()) {
+  while (n8v_pump_events()) {
     UI() {
       flex(((flex_options){
         .direction = N8V_DIRECTION_VERTICAL,
@@ -88,6 +88,6 @@ int main(void) {
   }
 
   string_buf_free(&name);
-  shutdown();
+  n8v_shutdown();
   return 0;
 }

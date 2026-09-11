@@ -5,6 +5,8 @@
 #if defined(_WIN32)
 #include <shellapi.h>
 #include <windows.h>
+#elif defined(__EMSCRIPTEN__)
+#include <emscripten.h>
 #else
 #include <sys/wait.h>
 #include <unistd.h>
@@ -17,6 +19,13 @@ namespace n8v::detail {
 void openUrl(std::string_view url) {
   std::string urlStr(url);
   ShellExecuteA(nullptr, "open", urlStr.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+}
+
+#elif defined(__EMSCRIPTEN__)
+
+void openUrl(std::string_view url) {
+  std::string urlStr(url);
+  EM_ASM({ window.open(UTF8ToString($0), '_blank'); }, urlStr.c_str());
 }
 
 #else

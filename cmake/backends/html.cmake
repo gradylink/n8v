@@ -1,0 +1,5 @@
+set(N8V_HAVE_HTML FALSE)
+
+if(EMSCRIPTEN)
+  set(N8V_HAVE_HTML TRUE)
+endif()

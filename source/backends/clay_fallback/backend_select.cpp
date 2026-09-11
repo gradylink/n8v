@@ -2,8 +2,12 @@
 #include <cstring>
 #include "core/backend.hpp"
 
+#ifdef __EMSCRIPTEN__
+#include "renderers/html/html_backend.hpp"
+#else
 #include "renderers/sdl2/sdl2_backend.hpp"
 #include "sdl2_lazy_vars.h"
+#endif
 
 #ifdef N8V_HAS_GTK4_BACKEND
 #include "backends/native_gtk4/gtk4_backend.hpp"
@@ -48,6 +52,9 @@ public:
 };
 
 std::unique_ptr<Backend> selectBackend() {
+#ifdef __EMSCRIPTEN__
+  return detail::makeHtmlBackend();
+#else
   const char *preferredBackend = std::getenv("N8V_BACKEND");
 
 #ifdef N8V_HAS_GTK4_BACKEND
@@ -74,6 +81,7 @@ std::unique_ptr<Backend> selectBackend() {
     return detail::makeSdl2Backend();
   }
   return std::make_unique<HeadlessBackend>();
+#endif
 }
 
 } // namespace

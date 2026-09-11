@@ -152,7 +152,12 @@ struct RadioBuilder {
   }
 };
 
-inline std::unordered_map<std::string *, n8v_string_buf> entryBufShadows;
+struct EntryShadow {
+  n8v_string_buf buf{};
+  std::string lastSyncedValue;
+};
+
+inline std::unordered_map<std::string *, EntryShadow> entryBufShadows;
 
 inline void syncStringBuf(n8v_string_buf &buf, std::string_view value) {
   std::string_view current(buf.data ? buf.data : "", buf.length);
@@ -178,10 +183,12 @@ inline void entry(EntryOptions options) {
   c_opts.password = options.password;
 
   n8v_string_buf *buf = nullptr;
+  EntryShadow *shadow = nullptr;
   if (options.value) {
-    n8v_string_buf &b = entryBufShadows[options.value];
-    syncStringBuf(b, *options.value);
-    buf = &b;
+    EntryShadow &s = entryBufShadows[options.value];
+    if (*options.value != s.lastSyncedValue) syncStringBuf(s.buf, *options.value);
+    buf = &s.buf;
+    shadow = &s;
   }
   c_opts.value = buf;
 
@@ -189,7 +196,10 @@ inline void entry(EntryOptions options) {
 
   n8v_entry(c_opts);
 
-  if (buf && options.value) options.value->assign(buf->data ? buf->data : "", buf->length);
+  if (buf && options.value) {
+    options.value->assign(buf->data ? buf->data : "", buf->length);
+    shadow->lastSyncedValue = *options.value;
+  }
 }
 
 inline void dropdown(DropdownOptions options) {
