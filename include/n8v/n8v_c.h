@@ -163,6 +163,8 @@ typedef struct n8v_flex_options {
   n8v_align v_align;
   n8v_sizing width;
   n8v_sizing height;
+  bool clip_horizontal;
+  bool clip_vertical;
 } n8v_flex_options;
 
 typedef struct n8v_text_options {

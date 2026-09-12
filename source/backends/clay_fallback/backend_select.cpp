@@ -1,6 +1,6 @@
+#include "core/backend.hpp"
 #include <cstdlib>
 #include <cstring>
-#include "core/backend.hpp"
 
 #ifdef __EMSCRIPTEN__
 #include "renderers/html/html_backend.hpp"

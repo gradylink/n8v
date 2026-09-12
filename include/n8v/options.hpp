@@ -19,6 +19,8 @@ struct FlexOptions {
   Align vAlign = Align::Start;
   Sizing width = Sizing::fit();
   Sizing height = Sizing::fit();
+  bool clipHorizontal = false;
+  bool clipVertical = false;
 };
 
 struct TextOptions {

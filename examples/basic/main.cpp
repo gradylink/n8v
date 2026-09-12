@@ -51,6 +51,12 @@ int main() {
           .rounding = Rounding::fixed({24, 24, 0, 0}),
         });
 
+        flex({.direction = Direction::Vertical, .gap = 4, .width = Sizing::grow(), .height = Sizing::fixed(120), .clipVertical = true}) {
+          for (int i = 1; i <= 15; ++i) {
+            text({})("Scrollable row " + std::to_string(i));
+          }
+        }
+
         flex({.direction = Direction::Horizontal, .gap = 8, .hAlign = Align::Center, .vAlign = Align::Center, .width = Sizing::grow()}) {
           button({.style = ButtonStyle::Secondary})("Secondary");
           text({})("this text is a plain container, styled buttons above it, and a link below");

@@ -153,6 +153,8 @@ public:
     GtkWidget *pendingLabelTarget = nullptr;
     NativeWidgetKind pendingKind = NativeWidgetKind::Button;
     std::string pendingLinkUrl;
+    containerStack_.clear();
+    touchedScrollContainers_.clear();
 
     for (int32_t i = 0; i < commands.length; ++i) {
       Clay_RenderCommand *command = Clay_RenderCommandArray_Get(&commands, i);
@@ -181,6 +183,18 @@ public:
         GtkWidget *widget = ensureWidget(key, *meta);
         positionWidget(widget, command->boundingBox);
         ensureImageTexture(widget, *meta, (int)command->boundingBox.width, (int)command->boundingBox.height, command->renderData.image.cornerRadius);
+        pendingLabelTarget = nullptr;
+        continue;
+      }
+
+      if (command->commandType == CLAY_RENDER_COMMAND_TYPE_SCISSOR_START) {
+        ensureScrollContainer(command->id, command->boundingBox, command->renderData.clip);
+        pendingLabelTarget = nullptr;
+        continue;
+      }
+
+      if (command->commandType == CLAY_RENDER_COMMAND_TYPE_SCISSOR_END) {
+        closeScrollContainer();
         pendingLabelTarget = nullptr;
         continue;
       }
@@ -217,7 +231,7 @@ public:
 
     for (auto it = widgets_.begin(); it != widgets_.end();) {
       if (!seenKeys.count(it->first)) {
-        gtk_fixed_remove(GTK_FIXED(fixed_), it->second);
+        gtk_widget_unparent(it->second);
         buttonCallbacks_.erase(it->first.ordinal);
         checkboxStates_.erase(it->first.ordinal);
         entryStates_.erase(it->first.ordinal);
@@ -230,6 +244,15 @@ public:
         sliderStates_.erase(it->first.ordinal);
         imageTextureSources_.erase(it->second);
         it = widgets_.erase(it);
+      } else {
+        ++it;
+      }
+    }
+
+    for (auto it = scrollContainers_.begin(); it != scrollContainers_.end();) {
+      if (!touchedScrollContainers_.count(it->first)) {
+        gtk_widget_unparent(it->second.scrolled);
+        it = scrollContainers_.erase(it);
       } else {
         ++it;
       }
@@ -476,7 +499,7 @@ private:
       gtk_widget_set_valign(widget, GTK_ALIGN_START);
     }
 
-    gtk_fixed_put(GTK_FIXED(fixed_), widget, 0, 0);
+    gtk_fixed_put(GTK_FIXED(currentFixed()), widget, 0, 0);
     gtk_widget_set_visible(widget, TRUE);
     widgets_[key] = widget;
     return widget;
@@ -505,15 +528,68 @@ private:
     GtkWidget *label = gtk_label_new("");
     gtk_label_set_xalign(GTK_LABEL(label), 0.0f);
     gtk_widget_set_valign(label, GTK_ALIGN_START);
-    gtk_fixed_put(GTK_FIXED(fixed_), label, 0, 0);
+    gtk_fixed_put(GTK_FIXED(currentFixed()), label, 0, 0);
     gtk_widget_set_visible(label, TRUE);
     widgets_[key] = label;
     return label;
   }
 
   void positionWidget(GtkWidget *widget, const Clay_BoundingBox &box) {
-    gtk_fixed_move(GTK_FIXED(fixed_), widget, box.x, box.y);
+    float originX = 0.0f, originY = 0.0f;
+    if (!containerStack_.empty()) {
+      originX = containerStack_.back().originX;
+      originY = containerStack_.back().originY;
+    }
+    gtk_fixed_move(GTK_FIXED(currentFixed()), widget, box.x - originX, box.y - originY);
     gtk_widget_set_size_request(widget, (int)box.width, (int)box.height);
+  }
+
+  GtkWidget *currentFixed() const { return containerStack_.empty() ? fixed_ : containerStack_.back().fixed; }
+
+  struct ContainerFrame {
+    GtkWidget *scrolled = nullptr;
+    GtkWidget *fixed = nullptr;
+    float originX = 0.0f;
+    float originY = 0.0f;
+  };
+
+  void ensureScrollContainer(uint32_t id, const Clay_BoundingBox &box, const Clay_ClipRenderData &clip) {
+    auto it = scrollContainers_.find(id);
+    if (it == scrollContainers_.end()) {
+      GtkWidget *scrolled = gtk_scrolled_window_new();
+      GtkWidget *innerFixed = gtk_fixed_new();
+      gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), innerFixed);
+      gtk_fixed_put(GTK_FIXED(currentFixed()), scrolled, 0, 0);
+      gtk_widget_set_visible(scrolled, TRUE);
+      it = scrollContainers_.emplace(id, ContainerFrame{scrolled, innerFixed, box.x, box.y}).first;
+    }
+    ContainerFrame &frame = it->second;
+    gtk_scrolled_window_set_policy(
+      GTK_SCROLLED_WINDOW(frame.scrolled),
+      clip.horizontal ? GTK_POLICY_AUTOMATIC : GTK_POLICY_NEVER,
+      clip.vertical ? GTK_POLICY_AUTOMATIC : GTK_POLICY_NEVER
+    );
+    float originX = 0.0f, originY = 0.0f;
+    if (!containerStack_.empty()) {
+      originX = containerStack_.back().originX;
+      originY = containerStack_.back().originY;
+    }
+    gtk_fixed_move(GTK_FIXED(currentFixed()), frame.scrolled, box.x - originX, box.y - originY);
+    gtk_widget_set_size_request(frame.scrolled, (int)box.width, (int)box.height);
+    frame.originX = box.x;
+    frame.originY = box.y;
+
+    Clay_ScrollContainerData scrollData = Clay_GetScrollContainerData(Clay_ElementId{id});
+    if (scrollData.found) {
+      gtk_widget_set_size_request(frame.fixed, (int)scrollData.contentDimensions.width, (int)scrollData.contentDimensions.height);
+    }
+
+    containerStack_.push_back(frame);
+    touchedScrollContainers_.insert(id);
+  }
+
+  void closeScrollContainer() {
+    if (!containerStack_.empty()) containerStack_.pop_back();
   }
 
   GtkWidget *window_ = nullptr;
@@ -537,6 +613,9 @@ private:
   std::unordered_map<int, DropdownState> dropdownStates_;
   std::unordered_map<int, SliderState> sliderStates_;
   std::unordered_map<GtkWidget *, const void *> imageTextureSources_;
+  std::unordered_map<uint32_t, ContainerFrame> scrollContainers_;
+  std::vector<ContainerFrame> containerStack_;
+  std::set<uint32_t> touchedScrollContainers_;
 };
 
 } // namespace

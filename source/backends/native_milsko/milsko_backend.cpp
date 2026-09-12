@@ -19,6 +19,7 @@ typedef void (*MwLLDestroyPixmapFn)(MwLLPixmap);
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace n8v::detail {
 namespace {
@@ -122,6 +123,8 @@ public:
     NativeWidgetKind pendingKind = NativeWidgetKind::Button;
     MwWidget pendingCheckboxWidget = nullptr;
     int pendingCheckboxOrdinal = -1;
+    containerStack_.clear();
+    touchedScrollContainers_.clear();
 
     for (int32_t i = 0; i < commands.length; ++i) {
       Clay_RenderCommand *command = Clay_RenderCommandArray_Get(&commands, i);
@@ -159,6 +162,18 @@ public:
         continue;
       }
 
+      if (command->commandType == CLAY_RENDER_COMMAND_TYPE_SCISSOR_START) {
+        ensureScrollContainer(command->id, command->boundingBox);
+        pendingLabelTarget = nullptr;
+        continue;
+      }
+
+      if (command->commandType == CLAY_RENDER_COMMAND_TYPE_SCISSOR_END) {
+        closeScrollContainer();
+        pendingLabelTarget = nullptr;
+        continue;
+      }
+
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_TEXT) {
         auto *flags = static_cast<TextStyleFlags *>(command->userData);
         std::string text(command->renderData.text.stringContents.chars, (size_t)command->renderData.text.stringContents.length);
@@ -167,18 +182,8 @@ public:
           const Clay_BoundingBox &box = command->boundingBox;
           float squareSize = box.height;
           float gap = squareSize * 0.4f;
-          MwVaApply(
-            pendingCheckboxWidget,
-            MwNx,
-            (int)std::floor(box.x - squareSize - gap),
-            MwNy,
-            (int)std::floor(box.y),
-            MwNwidth,
-            (int)std::ceil(squareSize),
-            MwNheight,
-            (int)std::ceil(squareSize),
-            NULL
-          );
+          Clay_BoundingBox indicatorBox{box.x - squareSize - gap, box.y, squareSize, squareSize};
+          positionWidget(pendingCheckboxWidget, indicatorBox);
 
           WidgetKey labelKey{pendingCheckboxOrdinal, -2};
           seenKeys.insert(labelKey);
@@ -223,6 +228,15 @@ public:
         actions_.erase(it->first.ordinal);
         entryStates_.erase(it->first.ordinal);
         it = widgets_.erase(it);
+      } else {
+        ++it;
+      }
+    }
+
+    for (auto it = scrollContainers_.begin(); it != scrollContainers_.end();) {
+      if (!touchedScrollContainers_.count(it->first)) {
+        MwDestroyWidget(it->second.viewport);
+        it = scrollContainers_.erase(it);
       } else {
         ++it;
       }
@@ -382,25 +396,25 @@ private:
     if (meta.kind == NativeWidgetKind::Checkbox) {
       action.checked = meta.checked;
       action.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
-      widget = MwCreateWidget(MwCheckBoxClass, "n8v-checkbox", window_, 0, 0, 1, 1);
+      widget = MwCreateWidget(MwCheckBoxClass, "n8v-checkbox", currentParent(), 0, 0, 1, 1);
       MwSetInteger(widget, MwNchecked, meta.checked && *meta.checked ? 1 : 0);
       MwAddUserHandler(widget, MwNchangedHandler, onCheckboxChanged, &action);
     } else if (meta.kind == NativeWidgetKind::Entry) {
-      widget = MwCreateWidget(MwEntryClass, "n8v-entry", window_, 0, 0, 1, 1);
+      widget = MwCreateWidget(MwEntryClass, "n8v-entry", currentParent(), 0, 0, 1, 1);
       MwSetInteger(widget, MwNhideInput, meta.password ? 1 : 0);
       syncEntry(widget, meta, entryStates_[meta.ordinal]);
     } else if (meta.kind == NativeWidgetKind::Radio) {
       action.radioSelected = meta.radioSelected;
       action.radioValue = meta.radioValue;
       action.onRadioChange = toStdFunction(meta.onRadioChange, meta.onRadioChangeUserdata);
-      widget = MwCreateWidget(MwRadioBoxClass, "n8v-radio", window_, 0, 0, 1, 1);
+      widget = MwCreateWidget(MwRadioBoxClass, "n8v-radio", currentParent(), 0, 0, 1, 1);
       MwSetInteger(widget, MwNchecked, meta.radioSelected && *meta.radioSelected == meta.radioValue ? 1 : 0);
       MwAddUserHandler(widget, MwNchangedHandler, onRadioChanged, &action);
       MwAddUserHandler(widget, MwNmouseDownHandler, onRadioMouseDown, &action);
     } else if (meta.kind == NativeWidgetKind::Dropdown) {
       action.dropdownSelected = meta.dropdownSelected;
       action.onDropdownChange = toStdFunction(meta.onDropdownChange, meta.onDropdownChangeUserdata);
-      widget = MwCreateWidget(MwComboBoxClass, "n8v-dropdown", window_, 0, 0, 1, 1);
+      widget = MwCreateWidget(MwComboBoxClass, "n8v-dropdown", currentParent(), 0, 0, 1, 1);
       if (meta.dropdownItems) {
         for (const std::string &item : *meta.dropdownItems) MwComboBoxAdd(widget, -1, item.c_str());
       }
@@ -411,12 +425,12 @@ private:
       action.sliderMin = meta.sliderMin;
       action.sliderMax = meta.sliderMax;
       action.onSliderChange = toStdFunction(meta.onSliderChange, meta.onSliderChangeUserdata);
-      widget = MwCreateWidget(MwScrollBarClass, "n8v-slider", window_, 0, 0, 1, 1);
+      widget = MwCreateWidget(MwScrollBarClass, "n8v-slider", currentParent(), 0, 0, 1, 1);
       MwVaApply(widget, MwNorientation, MwHORIZONTAL, MwNminValue, 0, MwNmaxValue, sliderSteps, MwNareaShown, sliderSteps / 30, NULL);
       if (meta.sliderValue) MwSetInteger(widget, MwNvalue, sliderPositionFor(*meta.sliderValue, meta.sliderMin, meta.sliderMax));
       MwAddUserHandler(widget, MwNchangedHandler, onSliderChanged, &action);
     } else if (meta.kind == NativeWidgetKind::Image) {
-      widget = MwCreateWidget(MwImageClass, "n8v-image", window_, 0, 0, 1, 1);
+      widget = MwCreateWidget(MwImageClass, "n8v-image", currentParent(), 0, 0, 1, 1);
     } else {
       if (action.isLink) {
         action.url = meta.url ? *meta.url : std::string();
@@ -424,7 +438,7 @@ private:
         action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
       }
 
-      widget = MwCreateWidget(MwButtonClass, "n8v-widget", window_, 0, 0, 1, 1);
+      widget = MwCreateWidget(MwButtonClass, "n8v-widget", currentParent(), 0, 0, 1, 1);
       if (action.isLink) {
         MwSetInteger(widget, MwNflat, 1);
         MwSetText(widget, MwNforeground, "#4287f5");
@@ -440,13 +454,63 @@ private:
     auto it = widgets_.find(key);
     if (it != widgets_.end()) return it->second;
 
-    MwWidget label = MwCreateWidget(MwLabelClass, "n8v-label", window_, 0, 0, 1, 1);
+    MwWidget label = MwCreateWidget(MwLabelClass, "n8v-label", currentParent(), 0, 0, 1, 1);
     widgets_[key] = label;
     return label;
   }
 
   void positionWidget(MwWidget widget, const Clay_BoundingBox &box) {
-    MwVaApply(widget, MwNx, (int)std::floor(box.x), MwNy, (int)std::floor(box.y), MwNwidth, (int)std::ceil(box.width), MwNheight, (int)std::ceil(box.height), NULL);
+    float originX = 0.0f, originY = 0.0f;
+    if (!containerStack_.empty()) {
+      originX = containerStack_.back().originX;
+      originY = containerStack_.back().originY;
+    }
+    MwVaApply(
+      widget,
+      MwNx,
+      (int)std::floor(box.x - originX),
+      MwNy,
+      (int)std::floor(box.y - originY),
+      MwNwidth,
+      (int)std::ceil(box.width),
+      MwNheight,
+      (int)std::ceil(box.height),
+      NULL
+    );
+  }
+
+  MwWidget currentParent() const { return containerStack_.empty() ? window_ : containerStack_.back().inner; }
+
+  struct ContainerFrame {
+    MwWidget viewport = nullptr;
+    MwWidget inner = nullptr;
+    float originX = 0.0f;
+    float originY = 0.0f;
+  };
+
+  void ensureScrollContainer(uint32_t id, const Clay_BoundingBox &box) {
+    auto it = scrollContainers_.find(id);
+    if (it == scrollContainers_.end()) {
+      MwWidget viewport = MwCreateWidget(MwViewportClass, "n8v-scroll", currentParent(), (int)box.x, (int)box.y, (unsigned int)box.width, (unsigned int)box.height);
+      MwWidget inner = MwViewportGetViewport(viewport);
+      it = scrollContainers_.emplace(id, ContainerFrame{viewport, inner, box.x, box.y}).first;
+    }
+    ContainerFrame &frame = it->second;
+    positionWidget(frame.viewport, box);
+
+    Clay_ScrollContainerData scrollData = Clay_GetScrollContainerData(Clay_ElementId{id});
+    if (scrollData.found) {
+      MwViewportSetSize(frame.viewport, (int)scrollData.contentDimensions.width, (int)scrollData.contentDimensions.height);
+    }
+
+    frame.originX = box.x;
+    frame.originY = box.y;
+    containerStack_.push_back(frame);
+    touchedScrollContainers_.insert(id);
+  }
+
+  void closeScrollContainer() {
+    if (!containerStack_.empty()) containerStack_.pop_back();
   }
 
   MwWidget window_ = nullptr;
@@ -456,6 +520,9 @@ private:
   std::unordered_map<int, ClickAction> actions_;
   std::unordered_map<int, EntryState> entryStates_;
   std::unordered_map<MwWidget, const void *> imagePixmapSources_;
+  std::unordered_map<uint32_t, ContainerFrame> scrollContainers_;
+  std::vector<ContainerFrame> containerStack_;
+  std::set<uint32_t> touchedScrollContainers_;
 };
 
 } // namespace

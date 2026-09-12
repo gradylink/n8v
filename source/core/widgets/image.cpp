@@ -50,10 +50,10 @@ void n8v_image(n8v_image_options options) {
 
   n8v::Sizing width = toSizing(options.width);
   n8v::Sizing height = toSizing(options.height);
-  decl.layout.sizing.width = (width.mode == n8v::SizingMode::Fit && width.min <= 0.0f && width.max <= 0.0f) ? CLAY_SIZING_FIXED((float)decoded->width)
-                                                                                                             : n8v::detail::toClay(width);
-  decl.layout.sizing.height = (height.mode == n8v::SizingMode::Fit && height.min <= 0.0f && height.max <= 0.0f) ? CLAY_SIZING_FIXED((float)decoded->height)
-                                                                                                                 : n8v::detail::toClay(height);
+  decl.layout.sizing.width =
+    (width.mode == n8v::SizingMode::Fit && width.min <= 0.0f && width.max <= 0.0f) ? CLAY_SIZING_FIXED((float)decoded->width) : n8v::detail::toClay(width);
+  decl.layout.sizing.height =
+    (height.mode == n8v::SizingMode::Fit && height.min <= 0.0f && height.max <= 0.0f) ? CLAY_SIZING_FIXED((float)decoded->height) : n8v::detail::toClay(height);
 
   widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
   n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();

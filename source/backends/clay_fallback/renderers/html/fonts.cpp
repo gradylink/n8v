@@ -9,11 +9,15 @@ namespace n8v::detail {
 
 std::string htmlFontFamilyName(FontFamily family) {
   switch (family) {
-  case FontFamily::Roboto: return "n8v-Roboto";
-  case FontFamily::Inter: return "n8v-Inter";
-  case FontFamily::Selawik: return "n8v-Selawik";
+  case FontFamily::Roboto:
+    return "n8v-Roboto";
+  case FontFamily::Inter:
+    return "n8v-Inter";
+  case FontFamily::Selawik:
+    return "n8v-Selawik";
   case FontFamily::DejaVuSans:
-  default: return "n8v-DejaVuSans";
+  default:
+    return "n8v-DejaVuSans";
   }
 }
 
@@ -49,8 +53,8 @@ std::string base64Encode(const std::vector<unsigned char> &data) {
 
 void appendFace(std::string &css, FontFamily family, bool bold, bool italic) {
   std::vector<unsigned char> bytes = bundledFontBytes(family, bold, italic);
-  css += "@font-face{font-family:'" + htmlFontFamilyName(family) + "';font-weight:" + (bold ? "bold" : "normal") + ";font-style:" +
-         (italic ? "italic" : "normal") + ";src:url(data:font/ttf;base64," + base64Encode(bytes) + ") format('truetype');}\n";
+  css += "@font-face{font-family:'" + htmlFontFamilyName(family) + "';font-weight:" + (bold ? "bold" : "normal") + ";font-style:" + (italic ? "italic" : "normal") +
+         ";src:url(data:font/ttf;base64," + base64Encode(bytes) + ") format('truetype');}\n";
 }
 
 } // namespace

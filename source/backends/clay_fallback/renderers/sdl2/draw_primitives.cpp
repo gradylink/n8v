@@ -51,8 +51,9 @@ void Sdl2Backend::drawCursorCaret(const Clay_BoundingBox &textBox, std::string_v
   SDL_RenderDrawLine(renderer_, (int)x, y0, (int)x, y1);
 }
 
-void Sdl2Backend::drawSelectionHighlight(const Clay_BoundingBox &textBox, std::string_view value, FontFamily family, uint16_t fontSize, size_t selStart, size_t selEnd,
-                                          bool bold, bool italic) {
+void Sdl2Backend::drawSelectionHighlight(
+  const Clay_BoundingBox &textBox, std::string_view value, FontFamily family, uint16_t fontSize, size_t selStart, size_t selEnd, bool bold, bool italic
+) {
   float x0 = caretPixelX(value, family, fontSize, selStart, bold, italic);
   float x1 = caretPixelX(value, family, fontSize, selEnd, bold, italic);
   Clay_BoundingBox box{textBox.x + x0, textBox.y, x1 - x0, textBox.height};
@@ -152,7 +153,9 @@ void Sdl2Backend::drawText(const Clay_RenderCommand &command, size_t selStartByt
   }
 }
 
-void Sdl2Backend::drawFocusRing(const Clay_BoundingBox &box, const Clay_CornerRadius &cornerRadius) { drawRoundedRectBorder(box, Clay_Color{60, 110, 220, 255}, cornerRadius, 2.0f); }
+void Sdl2Backend::drawFocusRing(const Clay_BoundingBox &box, const Clay_CornerRadius &cornerRadius) {
+  drawRoundedRectBorder(box, Clay_Color{60, 110, 220, 255}, cornerRadius, 2.0f);
+}
 
 void Sdl2Backend::drawThickLine(float x0, float y0, float x1, float y1, float thickness, const Clay_Color &color) {
   float dx = x1 - x0, dy = y1 - y0;

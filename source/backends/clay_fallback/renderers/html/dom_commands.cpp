@@ -55,7 +55,7 @@ emscripten::val HtmlBackend::getOrCreateElement(uint32_t id, Clay_RenderCommandT
   }
 
   emscripten::val el = doc_.call<emscripten::val>("createElement", std::string(tag));
-  root_.call<void>("appendChild", el);
+  currentContainer().call<void>("appendChild", el);
   lastAppendedSibling_ = el;
   elementCache_[key] = el;
   touchedThisFrame_[key] = true;
@@ -66,7 +66,7 @@ emscripten::val HtmlBackend::getOrCreateElement(uint32_t id, Clay_RenderCommandT
 void HtmlBackend::reorderElement(emscripten::val &el) {
   emscripten::val prevSibling = el["previousSibling"];
   bool inPlace = lastAppendedSibling_.isNull() ? prevSibling.isNull() : prevSibling.strictlyEquals(lastAppendedSibling_);
-  if (!inPlace) root_.call<void>("appendChild", el); // moves the existing node - only reached when paint order actually changed
+  if (!inPlace) currentContainer().call<void>("appendChild", el);
   lastAppendedSibling_ = el;
 }
 
@@ -74,11 +74,41 @@ void HtmlBackend::positionElement(emscripten::val &el, Clay_BoundingBox &lastBox
   if (boxEquals(lastBox, box)) return;
   lastBox = box;
 
+  float x = box.x, y = box.y;
+  if (!clipStack_.empty()) {
+    x -= clipStack_.back().originX;
+    y -= clipStack_.back().originY;
+  }
+
   char transform[96];
-  std::snprintf(transform, sizeof(transform), "translate(%.2fpx, %.2fpx)", box.x, box.y);
+  std::snprintf(transform, sizeof(transform), "translate(%.2fpx, %.2fpx)", x, y);
   el["style"].set("transform", std::string(transform));
   el["style"].set("width", std::to_string(box.width) + "px");
   el["style"].set("height", std::to_string(box.height) + "px");
+}
+
+void HtmlBackend::renderClipStart(const Clay_RenderCommand &command) {
+  ElementKey key = elementKey(command.id, CLAY_RENDER_COMMAND_TYPE_SCISSOR_START);
+  bool created = false;
+  emscripten::val el = getOrCreateElement(command.id, CLAY_RENDER_COMMAND_TYPE_SCISSOR_START, "div", created);
+  positionElement(el, elementLastBox_[key], command.boundingBox);
+
+  const Clay_ClipRenderData &clip = command.renderData.clip;
+  if (created) {
+    el["style"].set("position", std::string("absolute"));
+    el["style"].set("overflowX", std::string(clip.horizontal ? "auto" : "visible"));
+    el["style"].set("overflowY", std::string(clip.vertical ? "auto" : "visible"));
+  }
+
+  clipStack_.push_back(ClipFrame{el, command.boundingBox.x, command.boundingBox.y});
+  lastAppendedSibling_ = emscripten::val::null();
+}
+
+void HtmlBackend::renderClipEnd() {
+  if (!clipStack_.empty()) {
+    lastAppendedSibling_ = clipStack_.back().container;
+    clipStack_.pop_back();
+  }
 }
 
 void HtmlBackend::removeUntouchedElements() {
@@ -105,7 +135,7 @@ void HtmlBackend::renderRectangle(const Clay_RenderCommand &command, PendingStat
   pending.isRadio = meta && meta->kind == NativeWidgetKind::Radio;
   if (pending.isCheckbox || pending.isRadio) {
     pending.indicatorMeta = meta;
-    return; // this row's own background is invisible (alpha ~0) - the indicator is drawn against the label's box instead
+    return;
   }
 
   if (meta && meta->kind == NativeWidgetKind::DropdownChevron) {
@@ -114,9 +144,6 @@ void HtmlBackend::renderRectangle(const Clay_RenderCommand &command, PendingStat
   }
 
   if (meta && meta->kind == NativeWidgetKind::Link && meta->url) {
-    // The link's own background rectangle (opaque white in leaf.cpp) doesn't need a DOM node - the
-    // <a href> rendered for the paired TEXT command below covers the same box and is what should
-    // actually be hoverable/right-clickable, not an invisible div sitting on top of it.
     pending.linkMeta = meta;
     return;
   }
@@ -156,7 +183,10 @@ void HtmlBackend::renderText(const Clay_RenderCommand &command, PendingState &pe
   ElementKey key = elementKey(command.id, CLAY_RENDER_COMMAND_TYPE_TEXT);
   bool created = false;
   emscripten::val el = getOrCreateElement(command.id, CLAY_RENDER_COMMAND_TYPE_TEXT, "div", created);
-  if (created) el.call<void>("setAttribute", std::string("class"), std::string("n8v-text"));
+  if (created) {
+    bool selectable = !pending.isCheckbox && !pending.isRadio;
+    el.call<void>("setAttribute", std::string("class"), std::string(selectable ? "n8v-text" : "n8v-text n8v-text-unselectable"));
+  }
   positionElement(el, elementLastBox_[key], command.boundingBox);
 
   const Clay_TextRenderData &text = command.renderData.text;
@@ -237,6 +267,7 @@ void HtmlBackend::present(Clay_RenderCommandArray commands) {
   touchedEntryThisFrame_.clear();
   touchedIndicatorThisFrame_.clear();
   lastAppendedSibling_ = emscripten::val::null();
+  clipStack_.clear();
 
   PendingState pending;
 
@@ -255,6 +286,14 @@ void HtmlBackend::present(Clay_RenderCommandArray commands) {
       break;
     case CLAY_RENDER_COMMAND_TYPE_IMAGE:
       renderImage(*command);
+      pending.clear();
+      break;
+    case CLAY_RENDER_COMMAND_TYPE_SCISSOR_START:
+      renderClipStart(*command);
+      pending.clear();
+      break;
+    case CLAY_RENDER_COMMAND_TYPE_SCISSOR_END:
+      renderClipEnd();
       pending.clear();
       break;
     default:

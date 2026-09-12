@@ -83,6 +83,7 @@ void n8v_begin_frame(void) {
   resetImageFrameState();
 
   Clay_SetLayoutDimensions(backend.windowSize());
+  Clay_UpdateScrollContainers(false, backend.consumeScrollDelta(), currentDelta);
   Clay_BeginLayout();
 }
 
@@ -103,6 +104,11 @@ void n8v_open_flex(n8v_flex_options options) {
   decl.layout.childAlignment = {n8v::detail::toClayX(toAlign(options.h_align)), n8v::detail::toClayY(toAlign(options.v_align))};
   decl.layout.sizing.width = n8v::detail::toClay(toSizing(options.width));
   decl.layout.sizing.height = n8v::detail::toClay(toSizing(options.height));
+  decl.clip.horizontal = options.clip_horizontal;
+  decl.clip.vertical = options.clip_vertical;
+  if ((options.clip_horizontal || options.clip_vertical) && n8v::activeBackend().ownsScrollMath()) {
+    decl.clip.childOffset = Clay_GetScrollOffset();
+  }
 
   Clay__ConfigureOpenElement(decl);
 }

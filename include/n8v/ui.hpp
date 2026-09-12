@@ -124,6 +124,8 @@ inline void openFlex(const FlexOptions &options) {
   c_opts.v_align = toC(options.vAlign);
   c_opts.width = toC(options.width);
   c_opts.height = toC(options.height);
+  c_opts.clip_horizontal = options.clipHorizontal;
+  c_opts.clip_vertical = options.clipVertical;
   n8v_open_flex(c_opts);
 }
 

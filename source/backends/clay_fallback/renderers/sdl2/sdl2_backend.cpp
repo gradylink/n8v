@@ -16,6 +16,10 @@
 
 namespace n8v::detail {
 
+namespace {
+constexpr float WheelScrollScale = 3.0f;
+} // namespace
+
 bool Sdl2Backend::initialize(int width, int height, std::string_view title) {
   if (SDL_Init(SDL_INIT_VIDEO) != 0) {
     std::fprintf(stderr, "[n8v] SDL_Init failed: %s\n", SDL_GetError());
@@ -67,14 +71,16 @@ bool Sdl2Backend::pumpEvents() {
         textMouseSelecting_ = false;
       }
       break;
+    case SDL_MOUSEWHEEL:
+      pendingScrollDelta_.x += (float)event.wheel.x * WheelScrollScale;
+      pendingScrollDelta_.y += (float)event.wheel.y * WheelScrollScale;
+      break;
     case SDL_TEXTINPUT:
       if (entry_.value) insertAtCursor(event.text.text);
       break;
     case SDL_KEYDOWN:
-      if (entry_.value)
-        handleEntryKey(event.key.keysym);
-      else if (textSel_.active)
-        handleTextKey(event.key.keysym);
+      if (entry_.value) handleEntryKey(event.key.keysym);
+      else if (textSel_.active) handleTextKey(event.key.keysym);
       break;
     default:
       break;
@@ -106,6 +112,9 @@ void Sdl2Backend::beginFrame() {
 }
 
 void Sdl2Backend::present(Clay_RenderCommandArray commands) {
+  clipStack_.clear();
+  SDL_RenderSetClipRect(renderer_, nullptr);
+
   bool pendingIsCheckbox = false;
   bool pendingIsRadio = false;
   NativeWidgetMeta *pendingIndicatorMeta = nullptr;
@@ -192,6 +201,18 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
       }
       break;
     }
+    case CLAY_RENDER_COMMAND_TYPE_SCISSOR_START: {
+      const Clay_BoundingBox &box = command->boundingBox;
+      SDL_Rect rect{(int)box.x, (int)box.y, (int)box.width, (int)box.height};
+      if (!clipStack_.empty()) SDL_IntersectRect(&rect, &clipStack_.back(), &rect);
+      clipStack_.push_back(rect);
+      SDL_RenderSetClipRect(renderer_, &rect);
+      break;
+    }
+    case CLAY_RENDER_COMMAND_TYPE_SCISSOR_END:
+      if (!clipStack_.empty()) clipStack_.pop_back();
+      SDL_RenderSetClipRect(renderer_, clipStack_.empty() ? nullptr : &clipStack_.back());
+      break;
     default:
       pendingIsCheckbox = false;
       pendingIsRadio = false;

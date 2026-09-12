@@ -18,6 +18,8 @@
 #include <QPixmap>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QSlider>
 #include <QWidget>
 
@@ -27,6 +29,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 const char qt_version_tag = 0;
 
@@ -191,6 +194,8 @@ public:
     QWidget *pendingLabelTarget = nullptr;
     NativeWidgetKind pendingKind = NativeWidgetKind::Button;
     std::string pendingLinkUrl;
+    containerStack_.clear();
+    touchedScrollContainers_.clear();
 
     for (int32_t i = 0; i < commands.length; ++i) {
       Clay_RenderCommand *command = Clay_RenderCommandArray_Get(&commands, i);
@@ -219,6 +224,18 @@ public:
         QWidget *widget = ensureWidget(key, *meta);
         positionWidget(widget, command->boundingBox);
         ensureImagePixmap(static_cast<QLabel *>(widget), *meta, (int)command->boundingBox.width, (int)command->boundingBox.height, command->renderData.image.cornerRadius);
+        pendingLabelTarget = nullptr;
+        continue;
+      }
+
+      if (command->commandType == CLAY_RENDER_COMMAND_TYPE_SCISSOR_START) {
+        ensureScrollContainer(command->id, command->boundingBox, command->renderData.clip);
+        pendingLabelTarget = nullptr;
+        continue;
+      }
+
+      if (command->commandType == CLAY_RENDER_COMMAND_TYPE_SCISSOR_END) {
+        closeScrollContainer();
         pendingLabelTarget = nullptr;
         continue;
       }
@@ -265,6 +282,15 @@ public:
         sliderStates_.erase(it->first.ordinal);
         imagePixmapSources_.erase(static_cast<QLabel *>(it->second));
         it = widgets_.erase(it);
+      } else {
+        ++it;
+      }
+    }
+
+    for (auto it = scrollContainers_.begin(); it != scrollContainers_.end();) {
+      if (!touchedScrollContainers_.count(it->first)) {
+        delete it->second.scrollArea;
+        it = scrollContainers_.erase(it);
       } else {
         ++it;
       }
@@ -392,6 +418,51 @@ private:
     imagePixmapSources_[label] = image;
   }
 
+  struct ContainerFrame {
+    QScrollArea *scrollArea = nullptr;
+    QWidget *inner = nullptr;
+    float originX = 0.0f;
+    float originY = 0.0f;
+  };
+
+  QWidget *currentParent() const { return containerStack_.empty() ? window_ : containerStack_.back().inner; }
+
+  void ensureScrollContainer(uint32_t id, const Clay_BoundingBox &box, const Clay_ClipRenderData &clip) {
+    auto it = scrollContainers_.find(id);
+    if (it == scrollContainers_.end()) {
+      auto *scrollArea = new QScrollArea(currentParent());
+      auto *inner = new QWidget();
+      scrollArea->setWidget(inner);
+      scrollArea->setWidgetResizable(false);
+      it = scrollContainers_.emplace(id, ContainerFrame{scrollArea, inner, box.x, box.y}).first;
+    }
+    ContainerFrame &frame = it->second;
+    frame.scrollArea->setHorizontalScrollBarPolicy(clip.horizontal ? Qt::ScrollBarAsNeeded : Qt::ScrollBarAlwaysOff);
+    frame.scrollArea->setVerticalScrollBarPolicy(clip.vertical ? Qt::ScrollBarAsNeeded : Qt::ScrollBarAlwaysOff);
+
+    float originX = 0.0f, originY = 0.0f;
+    if (!containerStack_.empty()) {
+      originX = containerStack_.back().originX;
+      originY = containerStack_.back().originY;
+    }
+    frame.scrollArea->setGeometry((int)(box.x - originX), (int)(box.y - originY), (int)box.width, (int)box.height);
+    frame.scrollArea->setVisible(true);
+    frame.originX = box.x;
+    frame.originY = box.y;
+
+    Clay_ScrollContainerData scrollData = Clay_GetScrollContainerData(Clay_ElementId{id});
+    if (scrollData.found) {
+      frame.inner->resize((int)scrollData.contentDimensions.width, (int)scrollData.contentDimensions.height);
+    }
+
+    containerStack_.push_back(frame);
+    touchedScrollContainers_.insert(id);
+  }
+
+  void closeScrollContainer() {
+    if (!containerStack_.empty()) containerStack_.pop_back();
+  }
+
   QWidget *ensureWidget(const WidgetKey &key, const NativeWidgetMeta &meta) {
     auto it = widgets_.find(key);
     if (it != widgets_.end()) {
@@ -426,24 +497,24 @@ private:
 
     QWidget *widget = nullptr;
     if (meta.kind == NativeWidgetKind::Button) {
-      auto *button = new N8VButton(window_);
+      auto *button = new N8VButton(currentParent());
       callbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
       button->callback = &callbacks_[meta.ordinal];
       widget = button;
     } else if (meta.kind == NativeWidgetKind::Checkbox) {
-      auto *checkbox = new N8VCheckBox(window_);
+      auto *checkbox = new N8VCheckBox(currentParent());
       checkbox->checkedPtr = meta.checked;
       checkbox->onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
       checkbox->setChecked(meta.checked && *meta.checked);
       widget = checkbox;
     } else if (meta.kind == NativeWidgetKind::Entry) {
-      auto *lineEdit = new QLineEdit(window_);
+      auto *lineEdit = new QLineEdit(currentParent());
       lineEdit->setEchoMode(meta.password ? QLineEdit::Password : QLineEdit::Normal);
       lineEdit->setPlaceholderText(meta.placeholder ? QString::fromStdString(*meta.placeholder) : QString());
       syncEntry(lineEdit, meta, entryStates_[meta.ordinal]);
       widget = lineEdit;
     } else if (meta.kind == NativeWidgetKind::Radio) {
-      auto *radio = new N8VRadioButton(window_);
+      auto *radio = new N8VRadioButton(currentParent());
       radio->setAutoExclusive(false);
       radio->selectedPtr = meta.radioSelected;
       radio->value = meta.radioValue;
@@ -456,7 +527,7 @@ private:
       }
       widget = radio;
     } else if (meta.kind == NativeWidgetKind::Dropdown) {
-      auto *combo = new QComboBox(window_);
+      auto *combo = new QComboBox(currentParent());
       if (meta.dropdownItems) {
         for (const std::string &item : *meta.dropdownItems) combo->addItem(QString::fromStdString(item));
       }
@@ -468,7 +539,7 @@ private:
       syncDropdown(combo, meta, state);
       widget = combo;
     } else if (meta.kind == NativeWidgetKind::Slider) {
-      auto *sliderWidget = new QSlider(Qt::Horizontal, window_);
+      auto *sliderWidget = new QSlider(Qt::Horizontal, currentParent());
       sliderWidget->setRange(0, sliderSteps);
       SliderState &state = sliderStates_[meta.ordinal];
       int initialPos = meta.sliderValue ? sliderPositionFor(*meta.sliderValue, meta.sliderMin, meta.sliderMax) : 0;
@@ -477,11 +548,11 @@ private:
       syncSlider(sliderWidget, meta, state);
       widget = sliderWidget;
     } else if (meta.kind == NativeWidgetKind::Image) {
-      auto *label = new QLabel(window_);
+      auto *label = new QLabel(currentParent());
       label->setScaledContents(true);
       widget = label;
     } else {
-      auto *label = new N8VLinkLabel(window_);
+      auto *label = new N8VLinkLabel(currentParent());
       label->setTextFormat(Qt::RichText);
       label->url = meta.url ? *meta.url : std::string();
       widget = label;
@@ -496,14 +567,21 @@ private:
     auto it = widgets_.find(key);
     if (it != widgets_.end()) return static_cast<QLabel *>(it->second);
 
-    auto *label = new QLabel(window_);
+    auto *label = new QLabel(currentParent());
     label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     label->setVisible(true);
     widgets_[key] = label;
     return label;
   }
 
-  void positionWidget(QWidget *widget, const Clay_BoundingBox &box) { widget->setGeometry((int)box.x, (int)box.y, (int)box.width, (int)box.height); }
+  void positionWidget(QWidget *widget, const Clay_BoundingBox &box) {
+    float originX = 0.0f, originY = 0.0f;
+    if (!containerStack_.empty()) {
+      originX = containerStack_.back().originX;
+      originY = containerStack_.back().originY;
+    }
+    widget->setGeometry((int)(box.x - originX), (int)(box.y - originY), (int)box.width, (int)box.height);
+  }
 
   std::unique_ptr<QApplication> app_;
   QWidget *window_ = nullptr;
@@ -523,6 +601,9 @@ private:
   std::unordered_map<int, DropdownState> dropdownStates_;
   std::unordered_map<int, SliderState> sliderStates_;
   std::unordered_map<QLabel *, const void *> imagePixmapSources_;
+  std::unordered_map<uint32_t, ContainerFrame> scrollContainers_;
+  std::vector<ContainerFrame> containerStack_;
+  std::set<uint32_t> touchedScrollContainers_;
 };
 
 } // namespace

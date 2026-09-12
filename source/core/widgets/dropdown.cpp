@@ -240,7 +240,8 @@ void n8v_dropdown(n8v_dropdown_options options) {
       Clay_ElementDeclaration rowDecl = {};
       rowDecl.layout.padding = n8v::detail::toClay(paint.padding);
       rowDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
-      n8v::Color rowBg = itemHovered ? paint.itemHoverBackground : (itemSelected && paint.itemSelectedBackground.a > 0.0f ? paint.itemSelectedBackground : paint.popupBackground);
+      n8v::Color rowBg =
+        itemHovered ? paint.itemHoverBackground : (itemSelected && paint.itemSelectedBackground.a > 0.0f ? paint.itemSelectedBackground : paint.popupBackground);
       rowDecl.backgroundColor = n8v::detail::toClay(rowBg);
       bool isFirstRow = i == 0, isLastRow = i == itemsCopy.size() - 1;
       rowDecl.cornerRadius = {

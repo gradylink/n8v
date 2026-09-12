@@ -14,6 +14,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 extern "C" void n8vHtmlInstallListeners();
 
@@ -64,6 +65,15 @@ private:
   void reorderElement(emscripten::val &el);
   void positionElement(emscripten::val &el, Clay_BoundingBox &lastBox, const Clay_BoundingBox &box);
   void removeUntouchedElements();
+
+  struct ClipFrame {
+    emscripten::val container;
+    float originX = 0.0f;
+    float originY = 0.0f;
+  };
+  emscripten::val &currentContainer() { return clipStack_.empty() ? root_ : clipStack_.back().container; }
+  void renderClipStart(const Clay_RenderCommand &command);
+  void renderClipEnd();
 
   struct PendingState {
     NativeWidgetMeta *indicatorMeta = nullptr;
@@ -160,12 +170,14 @@ private:
   std::unordered_map<int, bool> touchedIndicatorThisFrame_;
   std::unordered_map<const void *, std::string> imageDataUris_;
   std::unordered_map<ElementKey, const void *> elementImageSource_;
+  std::vector<ClipFrame> clipStack_;
 
   float pointerX_ = 0.0f, pointerY_ = 0.0f;
   bool pointerDown_ = false;
   CursorKind currentCursorKind_ = CursorKind::Default;
   int width_ = 0, height_ = 0;
   bool initialized_ = false;
+  double lastFrameTime_ = 0.0;
 };
 
 } // namespace n8v::detail

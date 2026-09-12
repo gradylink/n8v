@@ -45,6 +45,7 @@ bool HtmlBackend::initialize(int width, int height, std::string_view title) {
       "#n8v-root div,#n8v-root a,#n8v-root svg{position:absolute;left:0;top:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;}"
       "#n8v-root input{position:absolute;left:0;top:0;box-sizing:border-box;margin:0;border:none;outline:none;background:transparent;}"
       "#n8v-root .n8v-text{white-space:pre;pointer-events:auto;user-select:text;-webkit-user-select:text;}"
+      "#n8v-root .n8v-text-unselectable{user-select:none;-webkit-user-select:none;}"
     )
   );
   doc_["head"].call<void>("appendChild", style);
@@ -69,7 +70,13 @@ bool HtmlBackend::initialize(int width, int height, std::string_view title) {
 }
 
 bool HtmlBackend::pumpEvents() {
-  emscripten_sleep(0);
+  constexpr double kTargetFrameMs = 1000.0 / 60.0;
+  double now = emscripten_get_now();
+  double elapsed = lastFrameTime_ > 0.0 ? now - lastFrameTime_ : kTargetFrameMs;
+  double remaining = kTargetFrameMs - elapsed;
+  emscripten_sleep(remaining > 0.0 ? (unsigned int)remaining : 0);
+  lastFrameTime_ = emscripten_get_now();
+
   emscripten::val win = emscripten::val::global("window");
   width_ = win["innerWidth"].as<int>();
   height_ = win["innerHeight"].as<int>();

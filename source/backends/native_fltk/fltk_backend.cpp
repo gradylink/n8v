@@ -20,6 +20,7 @@
 #include <FL/Fl_Input.H>
 #include <FL/Fl_RGB_Image.H>
 #include <FL/Fl_Round_Button.H>
+#include <FL/Fl_Scroll.H>
 #include <FL/fl_draw.H>
 
 #include <functional>
@@ -112,6 +113,8 @@ public:
     std::set<WidgetKey> seenKeys;
     Fl_Widget *pendingLabelTarget = nullptr;
     NativeWidgetKind pendingKind = NativeWidgetKind::Button;
+    containerStack_.clear();
+    touchedScrollContainers_.clear();
 
     for (int32_t i = 0; i < commands.length; ++i) {
       Clay_RenderCommand *command = Clay_RenderCommandArray_Get(&commands, i);
@@ -139,6 +142,18 @@ public:
         Fl_Widget *widget = ensureWidget(key, *meta);
         positionWidget(widget, command->boundingBox);
         ensureImageScaled(static_cast<Fl_Box *>(widget), *meta, (int)command->boundingBox.width, (int)command->boundingBox.height, command->renderData.image.cornerRadius);
+        pendingLabelTarget = nullptr;
+        continue;
+      }
+
+      if (command->commandType == CLAY_RENDER_COMMAND_TYPE_SCISSOR_START) {
+        ensureScrollContainer(command->id, command->boundingBox, command->renderData.clip);
+        pendingLabelTarget = nullptr;
+        continue;
+      }
+
+      if (command->commandType == CLAY_RENDER_COMMAND_TYPE_SCISSOR_END) {
+        closeScrollContainer();
         pendingLabelTarget = nullptr;
         continue;
       }
@@ -176,11 +191,19 @@ public:
           delete imageIt->second.image;
           imageStates_.erase(imageIt);
         }
-        window_->remove(it->second);
         delete it->second;
         actions_.erase(it->first.ordinal);
         entryStates_.erase(it->first.ordinal);
         it = widgets_.erase(it);
+      } else {
+        ++it;
+      }
+    }
+
+    for (auto it = scrollContainers_.begin(); it != scrollContainers_.end();) {
+      if (!touchedScrollContainers_.count(it->first)) {
+        delete it->second.scroll;
+        it = scrollContainers_.erase(it);
       } else {
         ++it;
       }
@@ -306,6 +329,31 @@ private:
     bool operator<(const WidgetKey &other) const { return ordinal != other.ordinal ? ordinal < other.ordinal : subIndex < other.subIndex; }
   };
 
+  struct ContainerFrame {
+    Fl_Scroll *scroll = nullptr;
+  };
+
+  Fl_Group *currentGroup() const { return containerStack_.empty() ? static_cast<Fl_Group *>(window_) : static_cast<Fl_Group *>(containerStack_.back().scroll); }
+
+  void ensureScrollContainer(uint32_t id, const Clay_BoundingBox &box, const Clay_ClipRenderData &clip) {
+    auto it = scrollContainers_.find(id);
+    if (it == scrollContainers_.end()) {
+      auto *scroll = new Fl_Scroll((int)box.x, (int)box.y, (int)box.width, (int)box.height);
+      currentGroup()->add(scroll);
+      it = scrollContainers_.emplace(id, ContainerFrame{scroll}).first;
+    }
+    Fl_Scroll *scroll = it->second.scroll;
+    scroll->resize((int)box.x, (int)box.y, (int)box.width, (int)box.height);
+    scroll->type(clip.horizontal && clip.vertical ? Fl_Scroll::BOTH : clip.horizontal ? Fl_Scroll::HORIZONTAL : clip.vertical ? Fl_Scroll::VERTICAL : 0);
+
+    containerStack_.push_back(it->second);
+    touchedScrollContainers_.insert(id);
+  }
+
+  void closeScrollContainer() {
+    if (!containerStack_.empty()) containerStack_.pop_back();
+  }
+
   Fl_Widget *ensureWidget(const WidgetKey &key, const NativeWidgetMeta &meta) {
     auto it = widgets_.find(key);
     if (it != widgets_.end()) {
@@ -408,7 +456,7 @@ private:
       widget = button;
     }
 
-    window_->add(widget);
+    currentGroup()->add(widget);
     widgets_[key] = widget;
     return widget;
   }
@@ -419,7 +467,7 @@ private:
 
     auto *label = new Fl_Box(0, 0, 1, 1);
     label->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_TOP);
-    window_->add(label);
+    currentGroup()->add(label);
     widgets_[key] = label;
     return label;
   }
@@ -434,6 +482,9 @@ private:
   std::unordered_map<int, WidgetAction> actions_;
   std::unordered_map<int, EntryState> entryStates_;
   std::unordered_map<Fl_Widget *, ImageState> imageStates_;
+  std::unordered_map<uint32_t, ContainerFrame> scrollContainers_;
+  std::vector<ContainerFrame> containerStack_;
+  std::set<uint32_t> touchedScrollContainers_;
 };
 
 } // namespace

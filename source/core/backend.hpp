@@ -36,6 +36,9 @@ struct Backend {
 
   virtual bool isEntryFocused(int) const { return false; }
 
+  virtual Clay_Vector2 consumeScrollDelta() { return {0, 0}; }
+  virtual bool ownsScrollMath() const { return false; }
+
   virtual void beginFrame() = 0;
   virtual void present(Clay_RenderCommandArray commands) = 0;
   virtual void setCursor(CursorKind cursor) = 0;

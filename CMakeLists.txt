@@ -51,6 +51,8 @@ if(NOT EMSCRIPTEN)
       SDL_RenderCopy
       SDL_RenderGeometry
       SDL_RenderDrawLine
+      SDL_RenderSetClipRect
+      SDL_IntersectRect
       SDL_CreateSystemCursor
       SDL_SetCursor
       SDL_FreeCursor

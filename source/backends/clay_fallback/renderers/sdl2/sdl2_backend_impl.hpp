@@ -26,6 +26,12 @@ public:
   bool pumpEvents() override;
   bool pointerDown() const override { return pointerDown_; }
   bool isEntryFocused(int ordinal) const override { return entry_.ordinal == ordinal; }
+  Clay_Vector2 consumeScrollDelta() override {
+    Clay_Vector2 delta = pendingScrollDelta_;
+    pendingScrollDelta_ = {0, 0};
+    return delta;
+  }
+  bool ownsScrollMath() const override { return true; }
   Clay_Dimensions windowSize() const override;
   Clay_Dimensions measureText(std::string_view text, FontFamily family, uint16_t fontSize, bool bold, bool italic) const override;
   void beginFrame() override;
@@ -118,6 +124,8 @@ private:
   int clickCount_ = 0;
   bool debugModeChecked_ = false;
   std::unordered_map<const void *, SDL_Texture *> imageTextures_;
+  Clay_Vector2 pendingScrollDelta_{0, 0};
+  std::vector<SDL_Rect> clipStack_;
 };
 
 } // namespace n8v::detail

@@ -99,8 +99,7 @@ bool Sdl2Backend::renderSelectableText(const Clay_RenderCommand &command, const 
   bool italic = flags.italic;
   const Clay_BoundingBox &box = command.boundingBox;
 
-  bool hit = pointerX_ >= box.x && pointerX_ <= box.x + box.width &&
-             pointerY_ >= box.y && pointerY_ <= box.y + box.height;
+  bool hit = pointerX_ >= box.x && pointerX_ <= box.x + box.width && pointerY_ >= box.y && pointerY_ <= box.y + box.height;
 
   if (hit && currentCursorKind_ == CursorKind::Default) {
     setCursor(CursorKind::Text);
