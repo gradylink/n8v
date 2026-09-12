@@ -3,6 +3,7 @@
 #include "core/native_widget_meta.hpp"
 #include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
+#include "core/ui_core_internal.hpp"
 
 #include <QApplication>
 #include <QButtonGroup>
@@ -355,6 +356,7 @@ private:
     if (widgetText != state.lastSynced) {
       *state.value = widgetText;
       state.lastSynced = widgetText;
+      if (meta.entryBuf) ui_internal::writeToStringBuf(*state.value, *meta.entryBuf);
       if (state.onChange) state.onChange(widgetText);
     } else if (*state.value != state.lastSynced) {
       widget->setText(QString::fromStdString(*state.value));

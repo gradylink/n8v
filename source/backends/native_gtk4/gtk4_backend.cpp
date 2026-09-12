@@ -2,6 +2,7 @@
 
 #include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
+#include "core/ui_core_internal.hpp"
 
 #include <gtk/gtk.h>
 
@@ -345,6 +346,7 @@ private:
     if (widgetText != state.lastSynced) {
       *state.value = widgetText;
       state.lastSynced = widgetText;
+      if (meta.entryBuf) ui_internal::writeToStringBuf(*state.value, *meta.entryBuf);
       if (state.onChange) state.onChange(widgetText);
     } else if (*state.value != state.lastSynced) {
       gtk_editable_set_text(GTK_EDITABLE(widget), state.value->c_str());
