@@ -90,6 +90,7 @@ void HtmlBackend::removeUntouchedElements() {
       elementTextSig_.erase(it->first);
       elementBorderSig_.erase(it->first);
       elementChevronSig_.erase(it->first);
+      elementImageSource_.erase(it->first);
       it = elementCache_.erase(it);
     } else {
       ++it;
@@ -251,6 +252,10 @@ void HtmlBackend::present(Clay_RenderCommandArray commands) {
       break;
     case CLAY_RENDER_COMMAND_TYPE_BORDER:
       renderBorder(*command);
+      break;
+    case CLAY_RENDER_COMMAND_TYPE_IMAGE:
+      renderImage(*command);
+      pending.clear();
       break;
     default:
       pending.clear();

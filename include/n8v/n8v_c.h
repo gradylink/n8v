@@ -102,6 +102,43 @@ typedef struct n8v_corner_radius {
   float top_left, top_right, bottom_left, bottom_right;
 } n8v_corner_radius;
 
+typedef enum n8v_rounding_mode {
+  N8V_ROUNDING_STYLE_DEFAULT,
+  N8V_ROUNDING_NONE,
+  N8V_ROUNDING_FIXED,
+} n8v_rounding_mode;
+
+typedef struct n8v_rounding {
+  n8v_rounding_mode mode;
+  n8v_corner_radius radius; /** FIXED only */
+} n8v_rounding;
+
+static inline n8v_rounding n8v_rounding_style_default(void) {
+  n8v_rounding r;
+  r.mode = N8V_ROUNDING_STYLE_DEFAULT;
+  r.radius.top_left = 0.0f;
+  r.radius.top_right = 0.0f;
+  r.radius.bottom_left = 0.0f;
+  r.radius.bottom_right = 0.0f;
+  return r;
+}
+
+static inline n8v_rounding n8v_rounding_none(void) {
+  n8v_rounding r = n8v_rounding_style_default();
+  r.mode = N8V_ROUNDING_NONE;
+  return r;
+}
+
+static inline n8v_rounding n8v_rounding_fixed(float top_left, float top_right, float bottom_left, float bottom_right) {
+  n8v_rounding r;
+  r.mode = N8V_ROUNDING_FIXED;
+  r.radius.top_left = top_left;
+  r.radius.top_right = top_right;
+  r.radius.bottom_left = bottom_left;
+  r.radius.bottom_right = bottom_right;
+  return r;
+}
+
 typedef struct n8v_string_buf {
   char *data;
   size_t length;
@@ -179,6 +216,28 @@ typedef struct n8v_slider_options {
   void *on_change_userdata;
 } n8v_slider_options;
 
+typedef enum n8v_image_source_kind {
+  N8V_IMAGE_SOURCE_PATH,
+  N8V_IMAGE_SOURCE_BUNDLE,
+  N8V_IMAGE_SOURCE_ENCODED,
+  N8V_IMAGE_SOURCE_RGBA,
+} n8v_image_source_kind;
+
+typedef struct n8v_image_options {
+  n8v_image_source_kind source_kind;
+  const char *path;
+  const uint8_t *encoded_data;
+  size_t encoded_size;
+  const uint8_t *pixels;
+  int pixel_width;
+  int pixel_height;
+  n8v_sizing width;
+  n8v_sizing height;
+  n8v_rounding rounding;
+} n8v_image_options;
+
+typedef bool (*n8v_image_bundle_lookup_fn)(const char *virtual_path, const void **out_data, size_t *out_size, void *userdata);
+
 N8V_API bool n8v_initialize(int width, int height, const char *title);
 N8V_API bool n8v_pump_events(void);
 N8V_API void n8v_shutdown(void);
@@ -222,6 +281,8 @@ N8V_API void _n8v_radio_commit(const char *label);
 N8V_API void n8v_entry(n8v_entry_options options);
 N8V_API void n8v_dropdown(n8v_dropdown_options options);
 N8V_API void n8v_slider(n8v_slider_options options);
+N8V_API void n8v_image(n8v_image_options options);
+N8V_API void n8v_set_image_bundle_lookup(n8v_image_bundle_lookup_fn fn, void *userdata);
 
 #ifdef __cplusplus
 }
@@ -238,6 +299,8 @@ N8V_API void n8v_slider(n8v_slider_options options);
 #define entry n8v_entry
 #define dropdown n8v_dropdown
 #define slider n8v_slider
+#define image n8v_image
+#define set_image_bundle_lookup n8v_set_image_bundle_lookup
 
 #define set_style_family n8v_set_style_family
 #define active_style_family n8v_active_style_family
@@ -246,6 +309,10 @@ N8V_API void n8v_slider(n8v_slider_options options);
 #define sizing_grow n8v_sizing_grow
 #define sizing_fixed n8v_sizing_fixed
 #define sizing_percent n8v_sizing_percent
+
+#define rounding_style_default n8v_rounding_style_default
+#define rounding_none n8v_rounding_none
+#define rounding_fixed n8v_rounding_fixed
 
 #define string_buf n8v_string_buf
 #define string_buf_init n8v_string_buf_init
@@ -260,6 +327,8 @@ N8V_API void n8v_slider(n8v_slider_options options);
 #define entry_options n8v_entry_options
 #define dropdown_options n8v_dropdown_options
 #define slider_options n8v_slider_options
+#define image_options n8v_image_options
+#define image_source_kind n8v_image_source_kind
 
 #endif
 

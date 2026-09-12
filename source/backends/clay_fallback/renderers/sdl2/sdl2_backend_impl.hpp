@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace n8v::detail {
@@ -77,6 +78,8 @@ private:
   void drawRadioDot(const Clay_BoundingBox &box, const Clay_Color &color, float scale);
   void drawDropdownChevron(const Clay_BoundingBox &box, const Clay_Color &color, bool pointsUp);
 
+  void drawImage(NativeWidgetMeta &meta, const Clay_BoundingBox &box, const Clay_CornerRadius &corner);
+
   size_t hitTestOffset(std::string_view text, FontFamily family, uint16_t fontSize, float localX, bool bold = false, bool italic = false) const;
   float caretPixelX(std::string_view text, FontFamily family, uint16_t fontSize, size_t byteOffset, bool bold = false, bool italic = false) const;
   void
@@ -114,6 +117,7 @@ private:
   int lastClickOrdinal_ = -1;
   int clickCount_ = 0;
   bool debugModeChecked_ = false;
+  std::unordered_map<const void *, SDL_Texture *> imageTextures_;
 };
 
 } // namespace n8v::detail

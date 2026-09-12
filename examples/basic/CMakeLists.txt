@@ -1,5 +1,6 @@
 add_executable(n8v-basic-example main.cpp)
 target_link_libraries(n8v-basic-example PRIVATE n8v)
+target_compile_definitions(n8v-basic-example PRIVATE N8V_EXAMPLE_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
 if(EMSCRIPTEN)
   set_target_properties(n8v-basic-example PROPERTIES SUFFIX ".html")
 endif()

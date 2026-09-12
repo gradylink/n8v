@@ -1,5 +1,6 @@
 add_executable(n8v-basic-c-example main.c)
 target_link_libraries(n8v-basic-c-example PRIVATE n8v)
+target_compile_definitions(n8v-basic-c-example PRIVATE N8V_EXAMPLE_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
 set_target_properties(n8v-basic-c-example PROPERTIES LINKER_LANGUAGE CXX)
 if(EMSCRIPTEN)
   set_target_properties(n8v-basic-c-example PROPERTIES SUFFIX ".html")

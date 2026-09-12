@@ -1,5 +1,6 @@
 #include "qt_backend.hpp"
 
+#include "core/image_loader.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
@@ -10,9 +11,11 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFontMetrics>
+#include <QImage>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMouseEvent>
+#include <QPixmap>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSlider>
@@ -208,6 +211,18 @@ public:
         continue;
       }
 
+      if (command->commandType == CLAY_RENDER_COMMAND_TYPE_IMAGE) {
+        auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
+        if (!meta) continue;
+        WidgetKey key{meta->ordinal, -1};
+        seenKeys.insert(key);
+        QWidget *widget = ensureWidget(key, *meta);
+        positionWidget(widget, command->boundingBox);
+        ensureImagePixmap(static_cast<QLabel *>(widget), *meta, (int)command->boundingBox.width, (int)command->boundingBox.height, command->renderData.image.cornerRadius);
+        pendingLabelTarget = nullptr;
+        continue;
+      }
+
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_TEXT) {
         auto *flags = static_cast<TextStyleFlags *>(command->userData);
         std::string text(command->renderData.text.stringContents.chars, (size_t)command->renderData.text.stringContents.length);
@@ -248,6 +263,7 @@ public:
         entryStates_.erase(it->first.ordinal);
         dropdownStates_.erase(it->first.ordinal);
         sliderStates_.erase(it->first.ordinal);
+        imagePixmapSources_.erase(static_cast<QLabel *>(it->second));
         it = widgets_.erase(it);
       } else {
         ++it;
@@ -364,6 +380,18 @@ private:
     }
   }
 
+  void ensureImagePixmap(QLabel *label, const NativeWidgetMeta &meta, int targetW, int targetH, const Clay_CornerRadius &corner) {
+    if (!meta.image) return;
+    const n8v::detail::DecodedImage *image =
+      n8v::detail::getOrBakeRoundedImage(meta.image, targetW, targetH, corner.topLeft, corner.topRight, corner.bottomLeft, corner.bottomRight);
+    auto it = imagePixmapSources_.find(label);
+    if (it != imagePixmapSources_.end() && it->second == image) return;
+
+    QImage qImage(image->rgba, image->width, image->height, image->width * 4, QImage::Format_RGBA8888);
+    label->setPixmap(QPixmap::fromImage(qImage));
+    imagePixmapSources_[label] = image;
+  }
+
   QWidget *ensureWidget(const WidgetKey &key, const NativeWidgetMeta &meta) {
     auto it = widgets_.find(key);
     if (it != widgets_.end()) {
@@ -448,6 +476,10 @@ private:
       state.lastSynced = initialPos;
       syncSlider(sliderWidget, meta, state);
       widget = sliderWidget;
+    } else if (meta.kind == NativeWidgetKind::Image) {
+      auto *label = new QLabel(window_);
+      label->setScaledContents(true);
+      widget = label;
     } else {
       auto *label = new N8VLinkLabel(window_);
       label->setTextFormat(Qt::RichText);
@@ -490,6 +522,7 @@ private:
   std::unordered_map<int *, QButtonGroup *> radioGroups_;
   std::unordered_map<int, DropdownState> dropdownStates_;
   std::unordered_map<int, SliderState> sliderStates_;
+  std::unordered_map<QLabel *, const void *> imagePixmapSources_;
 };
 
 } // namespace

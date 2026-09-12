@@ -27,6 +27,8 @@ if(N8V_BACKEND_MILSKO)
         MwEntryClass MwClass
         MwComboBoxClass MwClass
         MwScrollBarClass MwClass
+        MwImageClass MwClass
+        MwLLDestroyPixmap MwLLDestroyPixmapFn
     )
     target_include_directories(milsko_lazy PUBLIC "${_N8V_MILSKO_INCLUDE_DIR}")
   else()

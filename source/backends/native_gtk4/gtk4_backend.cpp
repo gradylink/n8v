@@ -1,5 +1,6 @@
 #include "gtk4_backend.hpp"
 
+#include "core/image_loader.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
 #include "core/ui_core_internal.hpp"
@@ -172,6 +173,18 @@ public:
         continue;
       }
 
+      if (command->commandType == CLAY_RENDER_COMMAND_TYPE_IMAGE) {
+        auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
+        if (!meta) continue;
+        WidgetKey key{meta->ordinal, -1};
+        seenKeys.insert(key);
+        GtkWidget *widget = ensureWidget(key, *meta);
+        positionWidget(widget, command->boundingBox);
+        ensureImageTexture(widget, *meta, (int)command->boundingBox.width, (int)command->boundingBox.height, command->renderData.image.cornerRadius);
+        pendingLabelTarget = nullptr;
+        continue;
+      }
+
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_TEXT) {
         auto *flags = static_cast<TextStyleFlags *>(command->userData);
         std::string text(command->renderData.text.stringContents.chars, (size_t)command->renderData.text.stringContents.length);
@@ -215,6 +228,7 @@ public:
         }
         dropdownStates_.erase(it->first.ordinal);
         sliderStates_.erase(it->first.ordinal);
+        imageTextureSources_.erase(it->second);
         it = widgets_.erase(it);
       } else {
         ++it;
@@ -452,6 +466,9 @@ private:
       state.onChange = toStdFunction(meta.onSliderChange, meta.onSliderChangeUserdata);
       if (meta.sliderValue) gtk_range_set_value(GTK_RANGE(widget), *meta.sliderValue);
       g_signal_connect_data(widget, "value-changed", G_CALLBACK(&Gtk4Backend::onSliderChanged), &sliderStates_[meta.ordinal], nullptr, (GConnectFlags)0);
+    } else if (meta.kind == NativeWidgetKind::Image) {
+      widget = gtk_picture_new();
+      gtk_picture_set_content_fit(GTK_PICTURE(widget), GTK_CONTENT_FIT_FILL);
     } else {
       widget = gtk_label_new("");
       gtk_label_set_use_markup(GTK_LABEL(widget), TRUE);
@@ -463,6 +480,22 @@ private:
     gtk_widget_set_visible(widget, TRUE);
     widgets_[key] = widget;
     return widget;
+  }
+
+  void ensureImageTexture(GtkWidget *widget, const NativeWidgetMeta &meta, int targetW, int targetH, const Clay_CornerRadius &corner) {
+    if (!meta.image) return;
+    const n8v::detail::DecodedImage *image =
+      n8v::detail::getOrBakeRoundedImage(meta.image, targetW, targetH, corner.topLeft, corner.topRight, corner.bottomLeft, corner.bottomRight);
+    auto it = imageTextureSources_.find(widget);
+    if (it != imageTextureSources_.end() && it->second == image) return;
+
+    gsize size = (gsize)image->width * (gsize)image->height * 4;
+    GBytes *bytes = g_bytes_new(image->rgba, size);
+    GdkTexture *texture = gdk_memory_texture_new(image->width, image->height, GDK_MEMORY_R8G8B8A8, bytes, (gsize)image->width * 4);
+    g_bytes_unref(bytes);
+    gtk_picture_set_paintable(GTK_PICTURE(widget), GDK_PAINTABLE(texture));
+    g_object_unref(texture);
+    imageTextureSources_[widget] = image;
   }
 
   GtkWidget *ensureLabel(const WidgetKey &key) {
@@ -503,6 +536,7 @@ private:
   std::unordered_map<int *, GtkWidget *> radioGroups_;
   std::unordered_map<int, DropdownState> dropdownStates_;
   std::unordered_map<int, SliderState> sliderStates_;
+  std::unordered_map<GtkWidget *, const void *> imageTextureSources_;
 };
 
 } // namespace

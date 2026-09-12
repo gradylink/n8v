@@ -80,6 +80,10 @@ struct DropdownPaint {
   float indicatorWidth = 0.0f;
 };
 
+struct ImagePaint {
+  CornerRadius cornerRadius;
+};
+
 struct SliderPaint {
   Color trackColor;
   Color fillColor;
@@ -101,6 +105,7 @@ struct Paint {
   virtual EntryPaint entry(bool focused, bool hasValue) const = 0;
   virtual DropdownPaint dropdown(bool open, bool hasSelection, bool hovered, bool pressed) const = 0;
   virtual SliderPaint slider(bool hovered, bool pressed) const = 0;
+  virtual ImagePaint image() const = 0;
 };
 
 const Paint &activePaint();

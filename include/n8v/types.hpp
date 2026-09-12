@@ -50,6 +50,7 @@ enum class NativeWidgetKind {
   Dropdown,
   Slider,
   DropdownChevron,
+  Image,
 };
 
 enum class SizingMode {
@@ -85,6 +86,22 @@ struct Padding {
 
 struct CornerRadius {
   float topLeft = 0, topRight = 0, bottomLeft = 0, bottomRight = 0;
+};
+
+enum class RoundingMode {
+  StyleDefault,
+  None,
+  Fixed,
+};
+
+struct Rounding {
+  RoundingMode mode = RoundingMode::StyleDefault;
+  CornerRadius radius{};
+
+  static Rounding styleDefault() { return {}; }
+  static Rounding none() { return {RoundingMode::None, {}}; }
+  static Rounding fixed(CornerRadius r) { return {RoundingMode::Fixed, r}; }
+  static Rounding fixed(float uniform) { return {RoundingMode::Fixed, {uniform, uniform, uniform, uniform}}; }
 };
 
 } // namespace n8v

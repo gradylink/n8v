@@ -2,6 +2,8 @@
 
 #include <n8v/types.hpp>
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -66,6 +68,26 @@ struct SliderOptions {
   float min = 0.0f;
   float max = 1.0f;
   std::function<void(float)> onChange = nullptr;
+};
+
+enum class ImageSource {
+  Path,
+  Bundle,
+  Encoded,
+  Rgba,
+};
+
+struct ImageOptions {
+  ImageSource source = ImageSource::Path;
+  std::string path;
+  const uint8_t *encodedData = nullptr;
+  size_t encodedSize = 0;
+  const uint8_t *pixels = nullptr;
+  int pixelWidth = 0;
+  int pixelHeight = 0;
+  Sizing width = Sizing::fit();
+  Sizing height = Sizing::fit();
+  Rounding rounding = Rounding::styleDefault();
 };
 
 } // namespace n8v

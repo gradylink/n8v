@@ -9,6 +9,7 @@ static bool password_input = false;
 static int favorite_color = 0;
 static int favorite_fruit = -1;
 static float volume = 0.5f;
+static const char *potato_path = N8V_EXAMPLE_ASSET_DIR "/potato.png";
 
 static void on_click(void *userdata) {
   (void)userdata;
@@ -70,6 +71,14 @@ int main(void) {
         });
 
         slider((slider_options){.value = &volume, .min = 0.0f, .max = 1.0f});
+
+        image((image_options){
+          .source_kind = N8V_IMAGE_SOURCE_PATH,
+          .path = potato_path,
+          .width = sizing_fixed(96),
+          .height = sizing_fixed(96),
+          .rounding = rounding_fixed(48, 48, 0, 0),
+        });
 
         flex(((flex_options){
           .direction = N8V_DIRECTION_HORIZONTAL,

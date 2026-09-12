@@ -179,6 +179,11 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
       drawText(*command);
       break;
     }
+    case CLAY_RENDER_COMMAND_TYPE_IMAGE: {
+      auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
+      if (meta) drawImage(*meta, command->boundingBox, command->renderData.image.cornerRadius);
+      break;
+    }
     case CLAY_RENDER_COMMAND_TYPE_BORDER: {
       const Clay_BorderRenderData &border = command->renderData.border;
       float width = (float)border.width.left;
@@ -218,6 +223,8 @@ void Sdl2Backend::setCursor(CursorKind cursor) {
 }
 
 void Sdl2Backend::shutdown() {
+  for (auto &[source, texture] : imageTextures_) SDL_DestroyTexture(texture);
+  imageTextures_.clear();
   if (pointerCursor_) {
     SDL_FreeCursor(pointerCursor_);
     pointerCursor_ = nullptr;

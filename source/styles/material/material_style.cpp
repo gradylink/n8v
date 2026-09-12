@@ -117,6 +117,12 @@ public:
     return paint;
   }
 
+  ImagePaint image() const override {
+    ImagePaint paint{};
+    paint.cornerRadius = {12, 12, 12, 12};
+    return paint;
+  }
+
 private:
   static constexpr float RoundRadius = 20.0f;
   static constexpr float PressedRadius = 8.0f;

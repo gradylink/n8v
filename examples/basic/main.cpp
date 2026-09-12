@@ -17,6 +17,7 @@ int main() {
   int favoriteColor = 0;
   int favoriteFruit = -1;
   float volume = 0.5f;
+  std::string potatoPath = N8V_EXAMPLE_ASSET_DIR "/potato.png";
 
   while (pumpEvents()) {
     UI() {
@@ -41,6 +42,14 @@ int main() {
         dropdown({.items = {"Apple", "Banana", "Cherry"}, .selected = &favoriteFruit, .placeholder = "Pick a fruit"});
 
         slider({.value = &volume, .min = 0.0f, .max = 1.0f});
+
+        image({
+          .source = ImageSource::Path,
+          .path = potatoPath,
+          .width = Sizing::fixed(96),
+          .height = Sizing::fixed(96),
+          .rounding = Rounding::fixed({24, 24, 0, 0}),
+        });
 
         flex({.direction = Direction::Horizontal, .gap = 8, .hAlign = Align::Center, .vAlign = Align::Center, .width = Sizing::grow()}) {
           button({.style = ButtonStyle::Secondary})("Secondary");

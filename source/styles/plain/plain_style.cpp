@@ -99,6 +99,12 @@ public:
     paint.thumbHeight = 18.0f;
     return paint;
   }
+
+  ImagePaint image() const override {
+    ImagePaint paint{};
+    paint.cornerRadius = {3, 3, 3, 3};
+    return paint;
+  }
 };
 
 } // namespace

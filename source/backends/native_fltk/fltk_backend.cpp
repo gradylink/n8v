@@ -1,5 +1,6 @@
 #include "fltk_backend.hpp"
 
+#include "core/image_loader.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
@@ -17,6 +18,7 @@
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Hor_Slider.H>
 #include <FL/Fl_Input.H>
+#include <FL/Fl_RGB_Image.H>
 #include <FL/Fl_Round_Button.H>
 #include <FL/fl_draw.H>
 
@@ -129,6 +131,18 @@ public:
         continue;
       }
 
+      if (command->commandType == CLAY_RENDER_COMMAND_TYPE_IMAGE) {
+        auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
+        if (!meta) continue;
+        WidgetKey key{meta->ordinal, -1};
+        seenKeys.insert(key);
+        Fl_Widget *widget = ensureWidget(key, *meta);
+        positionWidget(widget, command->boundingBox);
+        ensureImageScaled(static_cast<Fl_Box *>(widget), *meta, (int)command->boundingBox.width, (int)command->boundingBox.height, command->renderData.image.cornerRadius);
+        pendingLabelTarget = nullptr;
+        continue;
+      }
+
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_TEXT) {
         auto *flags = static_cast<TextStyleFlags *>(command->userData);
         std::string text(command->renderData.text.stringContents.chars, (size_t)command->renderData.text.stringContents.length);
@@ -157,6 +171,11 @@ public:
 
     for (auto it = widgets_.begin(); it != widgets_.end();) {
       if (!seenKeys.count(it->first)) {
+        auto imageIt = imageStates_.find(it->second);
+        if (imageIt != imageStates_.end()) {
+          delete imageIt->second.image;
+          imageStates_.erase(imageIt);
+        }
         window_->remove(it->second);
         delete it->second;
         actions_.erase(it->first.ordinal);
@@ -255,6 +274,32 @@ private:
     }
   }
 
+  struct ImageState {
+    Fl_RGB_Image *image = nullptr;
+    const void *source = nullptr;
+    int width = -1;
+    int height = -1;
+  };
+
+  void ensureImageScaled(Fl_Box *box, const NativeWidgetMeta &meta, int targetW, int targetH, const Clay_CornerRadius &corner) {
+    if (!meta.image) return;
+    const n8v::detail::DecodedImage *image =
+      n8v::detail::getOrBakeRoundedImage(meta.image, targetW, targetH, corner.topLeft, corner.topRight, corner.bottomLeft, corner.bottomRight);
+
+    ImageState &state = imageStates_[box];
+    if (state.source == image && state.width == targetW && state.height == targetH) return;
+
+    if (state.source != image) {
+      delete state.image;
+      state.image = new Fl_RGB_Image(image->rgba, image->width, image->height, 4);
+      state.source = image;
+    }
+    if (state.image && targetW > 0 && targetH > 0) state.image->scale(targetW, targetH, 0, 1);
+    state.width = targetW;
+    state.height = targetH;
+    box->image(state.image);
+  }
+
   struct WidgetKey {
     int ordinal;
     int subIndex; // -1 for a button/link. 0, 1, 2... per wrapped line of standalone text
@@ -350,6 +395,8 @@ private:
       sliderWidget->when(FL_WHEN_CHANGED);
       sliderWidget->callback(&FltkBackend::onSliderChanged, &action);
       widget = sliderWidget;
+    } else if (meta.kind == NativeWidgetKind::Image) {
+      widget = new Fl_Box(0, 0, 1, 1);
     } else {
       auto *button = new Fl_Button(0, 0, 1, 1);
       action.isLink = true;
@@ -386,6 +433,7 @@ private:
   std::map<WidgetKey, Fl_Widget *> widgets_;
   std::unordered_map<int, WidgetAction> actions_;
   std::unordered_map<int, EntryState> entryStates_;
+  std::unordered_map<Fl_Widget *, ImageState> imageStates_;
 };
 
 } // namespace

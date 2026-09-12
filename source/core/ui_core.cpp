@@ -80,6 +80,7 @@ void n8v_begin_frame(void) {
   resetEntryFrameState();
   resetDropdownFrameState();
   resetSliderFrameState();
+  resetImageFrameState();
 
   Clay_SetLayoutDimensions(backend.windowSize());
   Clay_BeginLayout();

@@ -105,6 +105,12 @@ public:
     paint.thumbBorderWidth = 4.0f;
     return paint;
   }
+
+  ImagePaint image() const override {
+    ImagePaint paint{};
+    paint.cornerRadius = {4, 4, 4, 4};
+    return paint;
+  }
 };
 
 } // namespace

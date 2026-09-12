@@ -48,6 +48,7 @@ if(NOT EMSCRIPTEN)
       SDL_DestroyTexture
       SDL_SetTextureBlendMode
       SDL_UpdateTexture
+      SDL_RenderCopy
       SDL_RenderGeometry
       SDL_RenderDrawLine
       SDL_CreateSystemCursor
@@ -128,12 +129,14 @@ set(N8V_SOURCES
   source/core/open_url.cpp
   source/core/ui_core.cpp
   source/core/ui_core_c_api.cpp
+  source/core/image_loader.cpp
   source/core/widgets/leaf.cpp
   source/core/widgets/checkbox.cpp
   source/core/widgets/radio.cpp
   source/core/widgets/entry.cpp
   source/core/widgets/dropdown.cpp
   source/core/widgets/slider.cpp
+  source/core/widgets/image.cpp
   source/styles/style_registry.cpp
   source/styles/plain/plain_style.cpp
   source/styles/material/material_style.cpp
@@ -154,6 +157,7 @@ if(EMSCRIPTEN)
     source/backends/clay_fallback/renderers/html/fonts.cpp
     source/backends/clay_fallback/renderers/html/text_measure.cpp
     source/backends/clay_fallback/renderers/html/js_bridge.cpp
+    source/backends/clay_fallback/renderers/html/image_field.cpp
   )
 else()
   list(APPEND N8V_SOURCES
@@ -162,6 +166,7 @@ else()
     source/backends/clay_fallback/renderers/sdl2/text_selection.cpp
     source/backends/clay_fallback/renderers/sdl2/indicators.cpp
     source/backends/clay_fallback/renderers/sdl2/draw_primitives.cpp
+    source/backends/clay_fallback/renderers/sdl2/image_field.cpp
   )
 endif()
 
@@ -186,6 +191,7 @@ foreach(_n8v_target ${_n8v_targets})
   target_link_libraries(${_n8v_target} PRIVATE n8v_fonts)
   cl_add_dep(${_n8v_target} clay PUBLIC)
   cl_add_dep(${_n8v_target} stb_truetype PRIVATE)
+  cl_add_dep(${_n8v_target} stb_image PRIVATE)
 
   if(NOT EMSCRIPTEN)
     target_link_libraries(${_n8v_target} PRIVATE sdl2_lazy)

@@ -1,5 +1,6 @@
 #include "milsko_backend.hpp"
 
+#include "core/image_loader.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
@@ -7,6 +8,7 @@
 
 #include <Mw/Milsko.h>
 
+typedef void (*MwLLDestroyPixmapFn)(MwLLPixmap);
 #include "milsko_lazy_vars.h"
 
 #include <cmath>
@@ -145,6 +147,18 @@ public:
         continue;
       }
 
+      if (command->commandType == CLAY_RENDER_COMMAND_TYPE_IMAGE) {
+        auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
+        if (!meta) continue;
+        WidgetKey key{meta->ordinal, -1};
+        seenKeys.insert(key);
+        MwWidget widget = ensureWidget(key, *meta);
+        positionWidget(widget, command->boundingBox);
+        ensureImagePixmap(widget, *meta, (int)command->boundingBox.width, (int)command->boundingBox.height, command->renderData.image.cornerRadius);
+        pendingLabelTarget = nullptr;
+        continue;
+      }
+
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_TEXT) {
         auto *flags = static_cast<TextStyleFlags *>(command->userData);
         std::string text(command->renderData.text.stringContents.chars, (size_t)command->renderData.text.stringContents.length);
@@ -199,6 +213,12 @@ public:
 
     for (auto it = widgets_.begin(); it != widgets_.end();) {
       if (!seenKeys.count(it->first)) {
+        auto pixmapIt = imagePixmapSources_.find(it->second);
+        if (pixmapIt != imagePixmapSources_.end()) {
+          MwLLPixmap pixmap = static_cast<MwLLPixmap>(MwGetVoid(it->second, MwNpixmap));
+          if (pixmap) MwLLDestroyPixmap(pixmap);
+          imagePixmapSources_.erase(pixmapIt);
+        }
         MwDestroyWidget(it->second);
         actions_.erase(it->first.ordinal);
         entryStates_.erase(it->first.ordinal);
@@ -301,6 +321,20 @@ private:
     }
   }
 
+  void ensureImagePixmap(MwWidget widget, const NativeWidgetMeta &meta, int targetW, int targetH, const Clay_CornerRadius &corner) {
+    if (!meta.image) return;
+    const n8v::detail::DecodedImage *image =
+      n8v::detail::getOrBakeRoundedImage(meta.image, targetW, targetH, corner.topLeft, corner.topRight, corner.bottomLeft, corner.bottomRight);
+    auto it = imagePixmapSources_.find(widget);
+    if (it != imagePixmapSources_.end() && it->second == image) return;
+
+    MwLLPixmap oldPixmap = static_cast<MwLLPixmap>(MwGetVoid(widget, MwNpixmap));
+    MwLLPixmap newPixmap = MwLoadRaw(widget, const_cast<unsigned char *>(image->rgba), image->width, image->height);
+    MwVaApply(widget, MwNpixmap, newPixmap, NULL);
+    if (oldPixmap) MwLLDestroyPixmap(oldPixmap);
+    imagePixmapSources_[widget] = image;
+  }
+
   struct WidgetKey {
     int ordinal;
     int subIndex; // -1 for a button/link. 0, 1, 2... per wrapped line of standalone text
@@ -381,6 +415,8 @@ private:
       MwVaApply(widget, MwNorientation, MwHORIZONTAL, MwNminValue, 0, MwNmaxValue, sliderSteps, MwNareaShown, sliderSteps / 30, NULL);
       if (meta.sliderValue) MwSetInteger(widget, MwNvalue, sliderPositionFor(*meta.sliderValue, meta.sliderMin, meta.sliderMax));
       MwAddUserHandler(widget, MwNchangedHandler, onSliderChanged, &action);
+    } else if (meta.kind == NativeWidgetKind::Image) {
+      widget = MwCreateWidget(MwImageClass, "n8v-image", window_, 0, 0, 1, 1);
     } else {
       if (action.isLink) {
         action.url = meta.url ? *meta.url : std::string();
@@ -419,6 +455,7 @@ private:
   std::map<WidgetKey, MwWidget> widgets_;
   std::unordered_map<int, ClickAction> actions_;
   std::unordered_map<int, EntryState> entryStates_;
+  std::unordered_map<MwWidget, const void *> imagePixmapSources_;
 };
 
 } // namespace

@@ -36,6 +36,15 @@ void dispatchLinkClick(Clay_ElementId /*elementId*/, Clay_PointerData pointerDat
   if (url) n8v::detail::openUrl(*url);
 }
 
+// n8v::TextOptions defaults `color` to opaque black, but the plain C n8v_text_options struct
+// has no such default - a zero-initialized (or partially designated-initializer) C caller gets
+// fully transparent, invisible text unless it explicitly sets .color. Treat alpha == 0 as "not
+// specified" and fall back to opaque black, matching the C++ wrapper's default.
+n8v::Color toTextColor(n8v_color c) {
+  if (c.a == 0.0f) return {0, 0, 0, 255};
+  return toColor(c);
+}
+
 } // namespace
 
 namespace n8v::detail::ui_internal {
@@ -130,7 +139,7 @@ void _n8v_text_commit(const char *label) {
     textOptions.bold = opts.bold;
     textOptions.italic = opts.italic;
     textOptions.url = urlView;
-    textOptions.color = toColor(opts.color);
+    textOptions.color = toTextColor(opts.color);
     const n8v::TextPaint textPaint = n8v::activePaint().text(textOptions);
 
     Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Link, labelView, textPaint.fontSize);
@@ -157,7 +166,7 @@ void _n8v_text_commit(const char *label) {
     n8v::TextOptions textOptions{};
     textOptions.bold = opts.bold;
     textOptions.italic = opts.italic;
-    textOptions.color = toColor(opts.color);
+    textOptions.color = toTextColor(opts.color);
     const n8v::TextPaint textPaint = n8v::activePaint().text(textOptions);
     textStyleStorage.push_back(n8v::detail::TextStyleFlags{textPaint.font, opts.bold, opts.italic, false, false, ordinal});
     Clay_TextElementConfig textConfig = {};

@@ -54,6 +54,22 @@ inline n8v::Color toColor(n8v_color c) { return n8v::Color{c.r, c.g, c.b, c.a}; 
 
 inline n8v::Padding toPadding(n8v_padding p) { return n8v::Padding{p.left, p.right, p.top, p.bottom}; }
 
+inline n8v::CornerRadius toCornerRadius(n8v_corner_radius r) { return n8v::CornerRadius{r.top_left, r.top_right, r.bottom_left, r.bottom_right}; }
+
+inline n8v::RoundingMode toRoundingMode(n8v_rounding_mode m) {
+  switch (m) {
+  case N8V_ROUNDING_STYLE_DEFAULT:
+    return n8v::RoundingMode::StyleDefault;
+  case N8V_ROUNDING_NONE:
+    return n8v::RoundingMode::None;
+  case N8V_ROUNDING_FIXED:
+    return n8v::RoundingMode::Fixed;
+  }
+  return n8v::RoundingMode::StyleDefault;
+}
+
+inline n8v::Rounding toRounding(n8v_rounding r) { return n8v::Rounding{toRoundingMode(r.mode), toCornerRadius(r.radius)}; }
+
 inline n8v::StyleFamily toStyleFamily(n8v_style_family f) {
   switch (f) {
   case N8V_STYLE_FAMILY_PLAIN:
@@ -161,5 +177,6 @@ void resetRadioFrameState();
 void resetEntryFrameState();
 void resetDropdownFrameState();
 void resetSliderFrameState();
+void resetImageFrameState();
 
 } // namespace n8v::detail::ui_internal

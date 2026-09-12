@@ -46,9 +46,39 @@ inline n8v_sizing_mode toC(SizingMode m) {
 
 inline n8v_sizing toC(Sizing s) { return n8v_sizing{toC(s.mode), s.value, s.min, s.max}; }
 
+inline n8v_image_source_kind toC(ImageSource s) {
+  switch (s) {
+  case ImageSource::Path:
+    return N8V_IMAGE_SOURCE_PATH;
+  case ImageSource::Bundle:
+    return N8V_IMAGE_SOURCE_BUNDLE;
+  case ImageSource::Encoded:
+    return N8V_IMAGE_SOURCE_ENCODED;
+  case ImageSource::Rgba:
+    return N8V_IMAGE_SOURCE_RGBA;
+  }
+  return N8V_IMAGE_SOURCE_PATH;
+}
+
 inline n8v_color toC(Color c) { return n8v_color{c.r, c.g, c.b, c.a}; }
 
 inline n8v_padding toC(Padding p) { return n8v_padding{p.left, p.right, p.top, p.bottom}; }
+
+inline n8v_corner_radius toC(CornerRadius r) { return n8v_corner_radius{r.topLeft, r.topRight, r.bottomLeft, r.bottomRight}; }
+
+inline n8v_rounding_mode toC(RoundingMode m) {
+  switch (m) {
+  case RoundingMode::StyleDefault:
+    return N8V_ROUNDING_STYLE_DEFAULT;
+  case RoundingMode::None:
+    return N8V_ROUNDING_NONE;
+  case RoundingMode::Fixed:
+    return N8V_ROUNDING_FIXED;
+  }
+  return N8V_ROUNDING_STYLE_DEFAULT;
+}
+
+inline n8v_rounding toC(Rounding r) { return n8v_rounding{toC(r.mode), toC(r.radius)}; }
 
 inline n8v_style_family toC(StyleFamily f) {
   switch (f) {
@@ -229,6 +259,22 @@ inline void slider(SliderOptions options) {
   n8v_slider(c_opts);
 }
 
+inline void image(ImageOptions options) {
+  n8v_image_options c_opts{};
+  c_opts.source_kind = toC(options.source);
+  c_opts.path = options.path.empty() ? nullptr : options.path.c_str();
+  c_opts.encoded_data = options.encodedData;
+  c_opts.encoded_size = options.encodedSize;
+  c_opts.pixels = options.pixels;
+  c_opts.pixel_width = options.pixelWidth;
+  c_opts.pixel_height = options.pixelHeight;
+  c_opts.width = toC(options.width);
+  c_opts.height = toC(options.height);
+  c_opts.rounding = toC(options.rounding);
+
+  n8v_image(c_opts);
+}
+
 } // namespace n8v::detail
 
 namespace n8v {
@@ -246,6 +292,8 @@ inline void entry(EntryOptions options) { detail::entry(std::move(options)); }
 inline void dropdown(DropdownOptions options) { detail::dropdown(std::move(options)); }
 
 inline void slider(SliderOptions options) { detail::slider(std::move(options)); }
+
+inline void image(ImageOptions options) { detail::image(std::move(options)); }
 
 inline bool initialize(int width, int height, std::string_view title) {
   std::string titleStorage(title);

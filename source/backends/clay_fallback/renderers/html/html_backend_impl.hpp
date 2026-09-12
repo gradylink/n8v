@@ -85,6 +85,7 @@ private:
   void renderRectangle(const Clay_RenderCommand &command, PendingState &pending);
   void renderBorder(const Clay_RenderCommand &command);
   void renderText(const Clay_RenderCommand &command, PendingState &pending);
+  void renderImage(const Clay_RenderCommand &command);
 
   void renderCheckboxOrRadioIndicator(NativeWidgetMeta &meta, const Clay_BoundingBox &labelBox, bool isRadio);
   void renderRadioIndicator(NativeWidgetMeta &meta, const Clay_BoundingBox &squareBox);
@@ -157,6 +158,8 @@ private:
   std::unordered_map<int, Clay_BoundingBox> indicatorLastBox_;
   std::unordered_map<int, IndicatorSignature> indicatorSig_;
   std::unordered_map<int, bool> touchedIndicatorThisFrame_;
+  std::unordered_map<const void *, std::string> imageDataUris_;
+  std::unordered_map<ElementKey, const void *> elementImageSource_;
 
   float pointerX_ = 0.0f, pointerY_ = 0.0f;
   bool pointerDown_ = false;

@@ -12,6 +12,8 @@ namespace n8v::detail {
 
 using n8v::NativeWidgetKind;
 
+struct DecodedImage;
+
 struct NativeWidgetMeta {
   NativeWidgetKind kind;
   int ordinal;
@@ -50,6 +52,7 @@ struct NativeWidgetMeta {
   float indicatorGlyphScale = 1.0f;                  // Radio only - eases 0->1 so the inner dot grows in rather than popping to full size
   n8v::Color chevronColor{};                         // DropdownChevron only
   bool chevronPointsUp = false;                      // DropdownChevron only
+  const DecodedImage *image = nullptr;               // Image only
 };
 
 inline std::function<void()> toStdFunction(n8v_click_fn fn, void *userdata) {
