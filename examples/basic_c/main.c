@@ -51,7 +51,7 @@ int main(void) {
           n8v_icon((icon_options){.name = "settings"});
           n8v_icon((icon_options){.name = "star", .tint = {230, 180, 20, 255}});
           n8v_icon((icon_options){.name = "heart", .tint = {220, 40, 60, 255}});
-          text(((text_options){0}))("standalone icons");
+          text("standalone icons");
         }
 
         checkbox(((checkbox_options){
@@ -99,7 +99,7 @@ int main(void) {
           .width = sizing_grow(0, 0),
         })) {
           button(((button_options){.style = N8V_BUTTON_STYLE_SECONDARY}))("Secondary");
-          text(((text_options){0}))("this text is a plain container, styled buttons above it, and a link below");
+          text("this text is a plain container, styled buttons above it, and a link below");
         }
 
         text(((text_options){.italic = true, .url = "https://example.com"}))("example.com");

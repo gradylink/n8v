@@ -291,9 +291,23 @@ N8V_API void _n8v_button_commit(const char *label);
 
 N8V_API void _n8v_set_text_opts(n8v_text_options opts);
 N8V_API void _n8v_text_commit(const char *label);
+
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__cplusplus)
+static inline void (*_n8v_text_dispatch_opts(n8v_text_options opts))(const char *) {
+  _n8v_set_text_opts(opts);
+  return _n8v_text_commit;
+}
+static inline void _n8v_text_dispatch_label(const char *label) {
+  n8v_text_options opts = {0};
+  _n8v_set_text_opts(opts);
+  _n8v_text_commit(label);
+}
+#define n8v_text(x) _Generic((x), n8v_text_options: _n8v_text_dispatch_opts, default: _n8v_text_dispatch_label)(x)
+#elif !defined(__cplusplus)
 #define n8v_text(opts)                                                                                                                                                        \
   _n8v_set_text_opts(opts);                                                                                                                                                   \
   _n8v_text_commit
+#endif
 
 N8V_API void _n8v_set_checkbox_opts(n8v_checkbox_options opts);
 N8V_API void _n8v_checkbox_commit(const char *label);
@@ -321,6 +335,16 @@ N8V_API void n8v_set_image_bundle_lookup(n8v_image_bundle_lookup_fn fn, void *us
 N8V_API void n8v_icon(n8v_icon_options options);
 
 #ifdef __cplusplus
+}
+
+inline void (*n8v_text(n8v_text_options opts))(const char *) {
+  _n8v_set_text_opts(opts);
+  return _n8v_text_commit;
+}
+inline void n8v_text(const char *label) {
+  n8v_text_options opts{};
+  _n8v_set_text_opts(opts);
+  _n8v_text_commit(label);
 }
 #endif
 

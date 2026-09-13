@@ -318,6 +318,9 @@ inline detail::LeafBuilder button(ButtonOptions options) { return detail::LeafBu
 
 inline detail::LeafBuilder text(TextOptions options) { return detail::LeafBuilder{false, {}, std::move(options)}; }
 
+/** Shorthand for text({})(label), for the common case of plain text with no styling options. */
+inline void text(std::string_view label) { text(TextOptions{})(label); }
+
 inline detail::CheckboxBuilder checkbox(CheckboxOptions options) { return detail::CheckboxBuilder{std::move(options)}; }
 
 inline detail::ToggleBuilder toggle(ToggleOptions options) { return detail::ToggleBuilder{std::move(options)}; }

@@ -34,7 +34,7 @@ int main() {
           icon({.name = "settings"});
           icon({.name = "star", .tint = {230, 180, 20, 255}});
           icon({.name = "heart", .tint = {220, 40, 60, 255}});
-          text({})("standalone icons");
+          text("standalone icons");
         }
 
         checkbox({.checked = &passwordInput})("Password mode.");
@@ -63,13 +63,13 @@ int main() {
 
         flex({.direction = Direction::Vertical, .gap = 4, .width = Sizing::grow(), .height = Sizing::fixed(120), .clipVertical = true}) {
           for (int i = 1; i <= 15; ++i) {
-            text({})("Scrollable row " + std::to_string(i));
+            text("Scrollable row " + std::to_string(i));
           }
         }
 
         flex({.direction = Direction::Horizontal, .gap = 8, .hAlign = Align::Center, .vAlign = Align::Center, .width = Sizing::grow()}) {
           button({.style = ButtonStyle::Secondary})("Secondary");
-          text({})("this text is a plain container, styled buttons above it, and a link below");
+          text("this text is a plain container, styled buttons above it, and a link below");
         }
 
         text({.italic = true, .url = "https://example.com"})("example.com");
