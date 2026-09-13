@@ -31,52 +31,40 @@ EMSCRIPTEN_KEEPALIVE void n8v_html_entry_input(int ordinal, const char *value) {
 
 } // extern "C"
 
+// clang-format off
 EM_JS(void, n8vHtmlInstallListeners, (), {
   function reportPos(e) {
-    var x = (e.clientX != = undefined) ? e.clientX : (e.touches && e.touches.length ? e.touches[0].clientX : 0);
-    var y = (e.clientY != = undefined) ? e.clientY : (e.touches && e.touches.length ? e.touches[0].clientY : 0);
-    Module.ccall('n8v_html_pointer_move', null, [ 'number', 'number' ], [ x, y ]);
+    var x = (e.clientX !== undefined) ? e.clientX : (e.touches && e.touches.length ? e.touches[0].clientX : 0);
+    var y = (e.clientY !== undefined) ? e.clientY : (e.touches && e.touches.length ? e.touches[0].clientY : 0);
+    Module.ccall('n8v_html_pointer_move', null, ['number', 'number'], [x, y]);
   }
-  window.addEventListener('mousemove', reportPos, {passive : true});
-  window.addEventListener(
-    'mousedown',
-    function(e) {
-      if (e.button != = 0) return;
-      reportPos(e);
-      Module.ccall('n8v_html_pointer_down', null, ['number'], [1]);
+  window.addEventListener('mousemove', reportPos, {passive: true});
+  window.addEventListener('mousedown', function(e) {
+    if (e.button !== 0) return;
+    reportPos(e);
+    Module.ccall('n8v_html_pointer_down', null, ['number'], [1]);
+  });
+  window.addEventListener('mouseup', function(e) {
+    if (e.button !== 0) return;
+    Module.ccall('n8v_html_pointer_down', null, ['number'], [0]);
+  });
+  window.addEventListener('touchstart', function(e) {
+    reportPos(e);
+    Module.ccall('n8v_html_pointer_down', null, ['number'], [1]);
+  }, {passive: true});
+  window.addEventListener('touchmove', reportPos, {passive: true});
+  window.addEventListener('touchend', function(e) {
+    Module.ccall('n8v_html_pointer_down', null, ['number'], [0]);
+  }, {passive: true});
+  document.addEventListener('input', function(e) {
+    var el = e.target;
+    if (el && el.tagName === 'INPUT' && el.hasAttribute('data-n8v-ordinal')) {
+      var ordinal = parseInt(el.getAttribute('data-n8v-ordinal'), 10);
+      Module.ccall('n8v_html_entry_input', null, ['number', 'string'], [ordinal, el.value]);
     }
-  );
-  window.addEventListener(
-    'mouseup',
-    function(e) {
-      if (e.button != = 0) return;
-      Module.ccall('n8v_html_pointer_down', null, ['number'], [0]);
-    }
-  );
-  window.addEventListener(
-    'touchstart',
-    function(e) {
-      reportPos(e);
-      Module.ccall('n8v_html_pointer_down', null, ['number'], [1]);
-    },
-    {passive : true}
-  );
-  window.addEventListener('touchmove', reportPos, {passive : true});
-  window.addEventListener('touchend', function(e) { Module.ccall('n8v_html_pointer_down', null, ['number'], [0]); }, {passive : true});
-  document.addEventListener(
-    'input',
-    function(e) {
-      var el = e.target;
-      if (el &&el.tagName == = 'INPUT' && el.hasAttribute('data-n8v-ordinal')) {
-        var ordinal = parseInt(el.getAttribute('data-n8v-ordinal'), 10);
-        Module.ccall('n8v_html_entry_input', null, [ 'number', 'string' ], [ ordinal, el.value ]);
-      }
-    }
-  );
-  document.addEventListener(
-    'click',
-    function(e) {
-      if (e.target.closest('a[data-n8v-link]')) e.preventDefault();
-    }
-  );
+  });
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('a[data-n8v-link]')) e.preventDefault();
+  });
 });
+// clang-format on

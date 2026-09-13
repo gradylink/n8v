@@ -1,5 +1,3 @@
-# Clay has had no tagged release since v0.14, which predates the transitions API. Pin a
-# main commit and skip the system stage so a stale distro-packaged clay.h can't shadow it.
 function(_recipe_clay_source)
   set(CLAY_REF "e6cc36941ab2af5d81107617039d6f527a1c660b")
   if(CL_REQ_VERSION)

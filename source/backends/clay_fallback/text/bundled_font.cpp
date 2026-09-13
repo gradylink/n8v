@@ -1,8 +1,7 @@
 #include "bundled_font.hpp"
 
-#include <cmrc/cmrc.hpp>
-
-CMRC_DECLARE(n8v_fonts);
+#include "bundle.hpp"
+#include "bundle_n8v_fonts.h"
 
 namespace n8v::detail {
 namespace {
@@ -35,9 +34,12 @@ const char *fileNameFor(FontFamily family, bool bold, bool italic) {
 std::string bundledFontKey(FontFamily family, bool bold, bool italic) { return fileNameFor(family, bold, italic); }
 
 std::vector<unsigned char> bundledFontBytes(FontFamily family, bool bold, bool italic) {
-  static auto fs = cmrc::n8v_fonts::get_filesystem();
-  auto file = fs.open(fileNameFor(family, bold, italic));
-  return std::vector<unsigned char>(file.begin(), file.end());
+  static const bundle::archive archive(bundle_n8v_fonts_archive());
+  auto entry = archive.find(fileNameFor(family, bold, italic));
+  if (!entry) return {};
+  std::vector<std::byte> bytes = archive.load(*entry);
+  const auto *begin = reinterpret_cast<const unsigned char *>(bytes.data());
+  return std::vector<unsigned char>(begin, begin + bytes.size());
 }
 
 } // namespace n8v::detail

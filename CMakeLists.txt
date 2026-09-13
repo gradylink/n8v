@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+set(CL_DISABLE_system_clay TRUE CACHE BOOL "" FORCE)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/cl-bootstrap.cmake)
 cl_repo()
 cl_repo("${CMAKE_CURRENT_SOURCE_DIR}/cmake/recipes")
@@ -67,12 +68,12 @@ if(NOT EMSCRIPTEN)
 endif()
 
 cl_import_source(
-  NAME cmrc
+  NAME bundle_cmake
   DOWNLOAD_ONLY
-  REPO https://github.com/vector-of-bool/cmrc.git
-  REF 952ffddba731fc110bd50409e8d2b8a06abbd237
+  REPO https://github.com/gradylink/bundle.cmake.git
+  REF 50814e22ed67c0069ed9826f84a6817e0fd56c2b
 )
-include("${CL_SOURCE_DIR}/CMakeRC.cmake")
+include("${CL_SOURCE_DIR}/cmake/bundle.cmake")
 
 set(_N8V_FONT_STAGE "${CMAKE_CURRENT_BINARY_DIR}/n8v_fonts")
 
@@ -111,12 +112,13 @@ cl_import_source(
 configure_file("${CL_SOURCE_DIR}/selawk.ttf" "${_N8V_FONT_STAGE}/Selawik-Regular.ttf" COPYONLY)
 configure_file("${CL_SOURCE_DIR}/selawkb.ttf" "${_N8V_FONT_STAGE}/Selawik-Bold.ttf" COPYONLY)
 
-file(GLOB _N8V_FONT_FILES "${_N8V_FONT_STAGE}/*.ttf")
-cmrc_add_resource_library(n8v_fonts
-  NAMESPACE n8v_fonts
-  WHENCE "${_N8V_FONT_STAGE}"
-  ${_N8V_FONT_FILES}
+bundle_add(n8v_fonts
+  BASE_DIR "${_N8V_FONT_STAGE}"
+  DIRECTORIES "${_N8V_FONT_STAGE}"
 )
+
+# Fixes bundle_add recipe override
+cl_repo("${CMAKE_CURRENT_SOURCE_DIR}/cmake/recipes")
 
 if(NOT EMSCRIPTEN)
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/backends/gtk4.cmake")
