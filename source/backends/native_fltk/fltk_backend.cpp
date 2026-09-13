@@ -72,12 +72,22 @@ public:
 
   bool initialize(int width, int height, std::string_view title) override {
     titleStr_ = title;
+    if (const char *scheme = std::getenv("N8V_STYLE")) Fl::scheme(scheme);
     window_ = new Fl_Double_Window(width, height, titleStr_.c_str());
     window_->resizable(window_);
     window_->size_range(1, 1);
     window_->end();
     window_->callback(&FltkBackend::onCloseRequest, this);
     window_->show();
+
+    // Needed for some tiling compositors like hyprland
+    int prevW = -1, prevH = -1;
+    for (int i = 0; i < 100; ++i) {
+      Fl::wait(0.02);
+      if (window_->w() == prevW && window_->h() == prevH) break;
+      prevW = window_->w();
+      prevH = window_->h();
+    }
     return true;
   }
 
@@ -111,6 +121,13 @@ public:
       float textWidth = fl_width(std::string(text).c_str());
       return {textWidth + 32.0f + fontSize + fontSize / 2, (float)fl_height() + 14.0f};
     }
+    if (kind == NativeWidgetKind::Checkbox || kind == NativeWidgetKind::Radio) {
+      fl_font(FL_HELVETICA, fontSize);
+      float textWidth = fl_width(std::string(text).c_str());
+      float indicatorSize = (float)fl_height();
+      float indicatorGap = indicatorSize * 0.4f;
+      return {textWidth + indicatorSize + indicatorGap + 4.0f, indicatorSize + 4.0f};
+    }
     return {0, 0};
   }
 
@@ -121,6 +138,7 @@ public:
     std::set<WidgetKey> seenKeys;
     Fl_Widget *pendingLabelTarget = nullptr;
     NativeWidgetKind pendingKind = NativeWidgetKind::Button;
+    bool pendingIconTrailing = false;
     containerStack_.clear();
     touchedScrollContainers_.clear();
 
@@ -136,9 +154,10 @@ public:
         WidgetKey key{meta->ordinal, -1};
         seenKeys.insert(key);
         Fl_Widget *widget = ensureWidget(key, *meta);
-        positionWidget(widget, command->boundingBox);
+        positionWidget(widget, command->boundingBox, !containerStack_.empty());
         pendingLabelTarget = widget;
         pendingKind = meta->kind;
+        pendingIconTrailing = meta->iconTrailing;
         if (meta->kind == NativeWidgetKind::Button) ensureButtonIcon(widget, *meta);
         continue;
       }
@@ -149,7 +168,7 @@ public:
         WidgetKey key{meta->ordinal, -1};
         seenKeys.insert(key);
         Fl_Widget *widget = ensureWidget(key, *meta);
-        positionWidget(widget, command->boundingBox);
+        positionWidget(widget, command->boundingBox, !containerStack_.empty());
         if (meta->kind == NativeWidgetKind::Icon) {
           ensureIconImage(static_cast<Fl_Box *>(widget), *meta);
         } else {
@@ -177,7 +196,9 @@ public:
 
         if (flags && flags->ownedByWidget) {
           if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry && pendingKind != NativeWidgetKind::Dropdown) {
-            pendingLabelTarget->copy_label(text.c_str());
+            bool hasIcon = pendingKind == NativeWidgetKind::Button && pendingLabelTarget->image() != nullptr;
+            std::string padded = hasIcon ? (pendingIconTrailing ? text + " " : " " + text) : text;
+            pendingLabelTarget->copy_label(padded.c_str());
           }
           pendingLabelTarget = nullptr;
           continue;
@@ -189,7 +210,7 @@ public:
         seenKeys.insert(key);
         Fl_Box *label = ensureLabel(key);
         label->copy_label(text.c_str());
-        positionWidget(label, command->boundingBox);
+        positionWidget(label, command->boundingBox, !containerStack_.empty());
         pendingLabelTarget = nullptr;
         continue;
       }
@@ -204,6 +225,7 @@ public:
           delete imageIt->second.image;
           imageStates_.erase(imageIt);
         }
+        lastBox_.erase(it->second);
         delete it->second;
         actions_.erase(it->first.ordinal);
         entryStates_.erase(it->first.ordinal);
@@ -349,7 +371,7 @@ private:
     state.width = icon->width;
     state.height = icon->height;
     widget->image(state.image);
-    widget->align(FL_ALIGN_IMAGE_NEXT_TO_TEXT | FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
+    widget->align(meta.iconTrailing ? FL_ALIGN_TEXT_NEXT_TO_IMAGE : FL_ALIGN_IMAGE_NEXT_TO_TEXT);
   }
 
   void ensureIconImage(Fl_Box *box, const NativeWidgetMeta &meta) {
@@ -541,7 +563,16 @@ private:
     return label;
   }
 
-  void positionWidget(Fl_Widget *widget, const Clay_BoundingBox &box) { widget->resize((int)box.x, (int)box.y, (int)box.width, (int)box.height); }
+  void positionWidget(Fl_Widget *widget, const Clay_BoundingBox &box, bool insideScroll) {
+    if (insideScroll) {
+      Clay_BoundingBox &last = lastBox_[widget];
+      if (last.x == box.x && last.y == box.y && last.width == box.width && last.height == box.height) return;
+      last = box;
+    } else {
+      lastBox_.erase(widget);
+    }
+    widget->resize((int)box.x, (int)box.y, (int)box.width, (int)box.height);
+  }
 
   std::string titleStr_;
   Fl_Double_Window *window_ = nullptr;
@@ -551,6 +582,7 @@ private:
   std::unordered_map<int, WidgetAction> actions_;
   std::unordered_map<int, EntryState> entryStates_;
   std::unordered_map<Fl_Widget *, ImageState> imageStates_;
+  std::unordered_map<Fl_Widget *, Clay_BoundingBox> lastBox_;
   std::unordered_map<uint32_t, ContainerFrame> scrollContainers_;
   std::vector<ContainerFrame> containerStack_;
   std::set<uint32_t> touchedScrollContainers_;
