@@ -1,5 +1,7 @@
 #include "gtk4_backend.hpp"
 
+#include "core/icon_loader.hpp"
+#include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
@@ -104,7 +106,7 @@ public:
     return {(float)natW, (float)natH};
   }
 
-  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view text, uint16_t) const override {
+  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view text, uint16_t fontSize, bool hasIcon) const override {
     if (kind == NativeWidgetKind::Entry) {
       int minW = 0, natW = 0, minH = 0, natH = 0;
       gtk_widget_measure(measureEntry_, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
@@ -142,6 +144,7 @@ public:
     int minW = 0, natW = 0, minH = 0, natH = 0;
     gtk_widget_measure(measureButton_, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
     gtk_widget_measure(measureButton_, GTK_ORIENTATION_VERTICAL, -1, &minH, &natH, nullptr, nullptr);
+    if (hasIcon) natW += fontSize * 1.5;
     return {(float)natW, (float)natH};
   }
 
@@ -151,6 +154,7 @@ public:
     std::map<int, int> wrapLineCounts;
     std::set<WidgetKey> seenKeys;
     GtkWidget *pendingLabelTarget = nullptr;
+    GtkWidget *pendingButtonIconLabel = nullptr;
     NativeWidgetKind pendingKind = NativeWidgetKind::Button;
     std::string pendingLinkUrl;
     containerStack_.clear();
@@ -163,6 +167,7 @@ public:
         auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
         if (!meta) {
           pendingLabelTarget = nullptr;
+          pendingButtonIconLabel = nullptr;
           continue;
         }
         WidgetKey key{meta->ordinal, -1};
@@ -172,6 +177,7 @@ public:
         pendingLabelTarget = widget;
         pendingKind = meta->kind;
         pendingLinkUrl = meta->kind == NativeWidgetKind::Link && meta->url ? *meta->url : std::string();
+        pendingButtonIconLabel = meta->kind == NativeWidgetKind::Button ? ensureButtonIcon(widget, *meta) : nullptr;
         continue;
       }
 
@@ -182,20 +188,27 @@ public:
         seenKeys.insert(key);
         GtkWidget *widget = ensureWidget(key, *meta);
         positionWidget(widget, command->boundingBox);
-        ensureImageTexture(widget, *meta, (int)command->boundingBox.width, (int)command->boundingBox.height, command->renderData.image.cornerRadius);
+        if (meta->kind == NativeWidgetKind::Icon) {
+          ensureIconImage(widget, *meta);
+        } else {
+          ensureImageTexture(widget, *meta, (int)command->boundingBox.width, (int)command->boundingBox.height, command->renderData.image.cornerRadius);
+        }
         pendingLabelTarget = nullptr;
+        pendingButtonIconLabel = nullptr;
         continue;
       }
 
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_SCISSOR_START) {
         ensureScrollContainer(command->id, command->boundingBox, command->renderData.clip);
         pendingLabelTarget = nullptr;
+        pendingButtonIconLabel = nullptr;
         continue;
       }
 
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_SCISSOR_END) {
         closeScrollContainer();
         pendingLabelTarget = nullptr;
+        pendingButtonIconLabel = nullptr;
         continue;
       }
 
@@ -208,10 +221,13 @@ public:
             gtk_check_button_set_label(GTK_CHECK_BUTTON(pendingLabelTarget), text.c_str());
           } else if (pendingLabelTarget && pendingKind == NativeWidgetKind::Link) {
             gtk_label_set_markup(GTK_LABEL(pendingLabelTarget), linkMarkup(text, pendingLinkUrl).c_str());
+          } else if (pendingButtonIconLabel) {
+            gtk_label_set_text(GTK_LABEL(pendingButtonIconLabel), text.c_str());
           } else if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry && pendingKind != NativeWidgetKind::Dropdown) {
             gtk_button_set_label(GTK_BUTTON(pendingLabelTarget), text.c_str());
           }
           pendingLabelTarget = nullptr;
+          pendingButtonIconLabel = nullptr;
           continue;
         }
 
@@ -223,10 +239,12 @@ public:
         gtk_label_set_text(GTK_LABEL(widget), text.c_str());
         positionWidget(widget, command->boundingBox);
         pendingLabelTarget = nullptr;
+        pendingButtonIconLabel = nullptr;
         continue;
       }
 
       pendingLabelTarget = nullptr;
+      pendingButtonIconLabel = nullptr;
     }
 
     for (auto it = widgets_.begin(); it != widgets_.end();) {
@@ -492,6 +510,8 @@ private:
     } else if (meta.kind == NativeWidgetKind::Image) {
       widget = gtk_picture_new();
       gtk_picture_set_content_fit(GTK_PICTURE(widget), GTK_CONTENT_FIT_FILL);
+    } else if (meta.kind == NativeWidgetKind::Icon) {
+      widget = gtk_image_new();
     } else {
       widget = gtk_label_new("");
       gtk_label_set_use_markup(GTK_LABEL(widget), TRUE);
@@ -503,6 +523,86 @@ private:
     gtk_widget_set_visible(widget, TRUE);
     widgets_[key] = widget;
     return widget;
+  }
+
+  GtkWidget *ensureButtonIcon(GtkWidget *button, const NativeWidgetMeta &meta) {
+    ButtonIconState &state = buttonIconStates_[meta.ordinal];
+    bool wantIcon = meta.iconName != nullptr || meta.image != nullptr;
+    if (!wantIcon) {
+      if (state.hasIcon) buttonIconStates_.erase(meta.ordinal);
+      return nullptr;
+    }
+
+    if (!state.hasIcon) {
+      state.box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+      state.image = gtk_image_new();
+      state.label = gtk_label_new("");
+      if (meta.iconTrailing) {
+        gtk_box_append(GTK_BOX(state.box), state.label);
+        gtk_box_append(GTK_BOX(state.box), state.image);
+      } else {
+        gtk_box_append(GTK_BOX(state.box), state.image);
+        gtk_box_append(GTK_BOX(state.box), state.label);
+      }
+      gtk_button_set_child(GTK_BUTTON(button), state.box);
+      state.hasIcon = true;
+    }
+
+    // meta.iconName is n8v's canonical name (e.g. "settings") - resolve it to the real
+    // freedesktop icon-theme name before querying the theme; passing the canonical name straight
+    // through here always missed, silently forcing every button onto the bundled fallback.
+    const char *freedesktopName = meta.iconName ? n8v::detail::resolveFreedesktopIconName(meta.iconName) : nullptr;
+    GtkIconTheme *theme = gtk_icon_theme_get_for_display(gtk_widget_get_display(button));
+    if (freedesktopName && gtk_icon_theme_has_icon(theme, freedesktopName)) {
+      // All of icon_registry.cpp's freedesktop names are "-symbolic" variants, which recolor to
+      // match the current foreground color via CSS automatically - no manual tinting needed here.
+      gtk_image_set_from_icon_name(GTK_IMAGE(state.image), freedesktopName);
+      state.fallbackSource = nullptr;
+    } else if (meta.iconName && meta.image) {
+      // meta.image was decoded by core using the *style's* text color, but this button's real
+      // (system-default) text color may differ - re-decode with the button's actual foreground
+      // color so the fallback icon visually matches what's really on screen.
+      GdkRGBA fg;
+      gtk_widget_get_color(button, &fg);
+      const n8v::detail::DecodedImage *icon =
+        n8v::detail::getOrDecodeIcon(meta.iconName, (uint16_t)meta.image->width, n8v::Color{fg.red * 255.0f, fg.green * 255.0f, fg.blue * 255.0f, 255.0f});
+      if (icon && state.fallbackSource != icon) {
+        gsize size = (gsize)icon->width * (gsize)icon->height * 4;
+        GBytes *bytes = g_bytes_new(icon->rgba, size);
+        GdkTexture *texture = gdk_memory_texture_new(icon->width, icon->height, GDK_MEMORY_R8G8B8A8, bytes, (gsize)icon->width * 4);
+        g_bytes_unref(bytes);
+        gtk_image_set_from_paintable(GTK_IMAGE(state.image), GDK_PAINTABLE(texture));
+        g_object_unref(texture);
+        state.fallbackSource = icon;
+      }
+    }
+    return state.label;
+  }
+
+  // The standalone icon() widget - unlike image(), which always shows a fixed raster, this tries
+  // the OS icon theme first (same as ensureButtonIcon) since it's backed by a real GtkImage
+  // rather than a GtkPicture. No re-tinting on the bundled-fallback path: icon() lets the caller
+  // (or the active style's default) pick the tint explicitly, so core's decode is already final.
+  void ensureIconImage(GtkWidget *widget, const NativeWidgetMeta &meta) {
+    const char *freedesktopName = meta.iconName ? n8v::detail::resolveFreedesktopIconName(meta.iconName) : nullptr;
+    GtkIconTheme *theme = gtk_icon_theme_get_for_display(gtk_widget_get_display(widget));
+    if (freedesktopName && gtk_icon_theme_has_icon(theme, freedesktopName)) {
+      gtk_image_set_from_icon_name(GTK_IMAGE(widget), freedesktopName);
+      imageTextureSources_.erase(widget);
+      return;
+    }
+
+    if (!meta.image) return;
+    auto it = imageTextureSources_.find(widget);
+    if (it != imageTextureSources_.end() && it->second == meta.image) return;
+
+    gsize size = (gsize)meta.image->width * (gsize)meta.image->height * 4;
+    GBytes *bytes = g_bytes_new(meta.image->rgba, size);
+    GdkTexture *texture = gdk_memory_texture_new(meta.image->width, meta.image->height, GDK_MEMORY_R8G8B8A8, bytes, (gsize)meta.image->width * 4);
+    g_bytes_unref(bytes);
+    gtk_image_set_from_paintable(GTK_IMAGE(widget), GDK_PAINTABLE(texture));
+    g_object_unref(texture);
+    imageTextureSources_[widget] = meta.image;
   }
 
   void ensureImageTexture(GtkWidget *widget, const NativeWidgetMeta &meta, int targetW, int targetH, const Clay_CornerRadius &corner) {
@@ -613,6 +713,14 @@ private:
   std::unordered_map<int, DropdownState> dropdownStates_;
   std::unordered_map<int, SliderState> sliderStates_;
   std::unordered_map<GtkWidget *, const void *> imageTextureSources_;
+  struct ButtonIconState {
+    bool hasIcon = false;
+    GtkWidget *box = nullptr;
+    GtkWidget *image = nullptr;
+    GtkWidget *label = nullptr;
+    const void *fallbackSource = nullptr;
+  };
+  std::unordered_map<int, ButtonIconState> buttonIconStates_;
   std::unordered_map<uint32_t, ContainerFrame> scrollContainers_;
   std::vector<ContainerFrame> containerStack_;
   std::set<uint32_t> touchedScrollContainers_;

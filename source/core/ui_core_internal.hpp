@@ -34,6 +34,10 @@ inline n8v::Align toAlign(n8v_align a) {
 
 inline n8v::ButtonStyle toButtonStyle(n8v_button_style s) { return s == N8V_BUTTON_STYLE_SECONDARY ? n8v::ButtonStyle::Secondary : n8v::ButtonStyle::Primary; }
 
+inline n8v::IconVariant toIconVariant(n8v_icon_variant v) { return v == N8V_ICON_VARIANT_FILLED ? n8v::IconVariant::Filled : n8v::IconVariant::Outline; }
+
+inline n8v::IconPosition toIconPosition(n8v_icon_position p) { return p == N8V_ICON_POSITION_TRAILING ? n8v::IconPosition::Trailing : n8v::IconPosition::Leading; }
+
 inline n8v::SizingMode toSizingMode(n8v_sizing_mode m) {
   switch (m) {
   case N8V_SIZING_FIT:
@@ -169,6 +173,11 @@ inline Clay_String internString(std::string_view text) {
   textStorage.emplace_back(text);
   const std::string &stored = textStorage.back();
   return Clay_String{false, (int32_t)stored.size(), stored.data()};
+}
+
+inline const char *internCString(std::string_view text) {
+  textStorage.emplace_back(text);
+  return textStorage.back().c_str();
 }
 
 void resetLeafFrameState();

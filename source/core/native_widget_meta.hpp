@@ -52,7 +52,11 @@ struct NativeWidgetMeta {
   float indicatorGlyphScale = 1.0f;                  // Radio only - eases 0->1 so the inner dot grows in rather than popping to full size
   n8v::Color chevronColor{};                         // DropdownChevron only
   bool chevronPointsUp = false;                      // DropdownChevron only
-  const DecodedImage *image = nullptr;               // Image only
+  const DecodedImage *image = nullptr;               // Image/Icon - the bundled-fallback raster, always decoded eagerly by core
+  const char *iconName = nullptr;                     // Icon widget, and Button when an icon was requested - canonical name, for backends with a native icon theme/set
+  n8v::IconVariant iconVariant = n8v::IconVariant::Outline; // Icon/Button only
+  bool iconTrailing = false;                          // Button only
+  n8v::Color iconTint{};                              // Icon widget only - the tint used to decode `image`, so backends can re-decode a freedesktop-theme file (found on disk, not in the bundle) with the same color
 };
 
 inline std::function<void()> toStdFunction(n8v_click_fn fn, void *userdata) {

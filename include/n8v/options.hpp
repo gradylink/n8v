@@ -36,6 +36,9 @@ struct ButtonOptions {
   ButtonStyle style = ButtonStyle::Primary;
   /** Fires on press, not release. */
   std::function<void()> onClick = nullptr;
+  std::string icon;
+  IconVariant iconVariant = IconVariant::Outline;
+  IconPosition iconPosition = IconPosition::Leading;
 };
 
 struct CheckboxOptions {
@@ -90,6 +93,15 @@ struct ImageOptions {
   Sizing width = Sizing::fit();
   Sizing height = Sizing::fit();
   Rounding rounding = Rounding::styleDefault();
+};
+
+struct IconOptions {
+  std::string name;
+  IconVariant variant = IconVariant::Outline;
+  Sizing width = Sizing::fit();
+  Sizing height = Sizing::fit();
+  /** Zero-alpha (default) means "use default icon tint". */
+  Color tint = {0, 0, 0, 0};
 };
 
 } // namespace n8v

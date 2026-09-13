@@ -4,6 +4,7 @@
 #include "core/style.hpp"
 
 #include "core/clay_convert.hpp"
+#include "core/icon_loader.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
@@ -36,10 +37,6 @@ void dispatchLinkClick(Clay_ElementId /*elementId*/, Clay_PointerData pointerDat
   if (url) n8v::detail::openUrl(*url);
 }
 
-// n8v::TextOptions defaults `color` to opaque black, but the plain C n8v_text_options struct
-// has no such default - a zero-initialized (or partially designated-initializer) C caller gets
-// fully transparent, invisible text unless it explicitly sets .color. Treat alpha == 0 as "not
-// specified" and fall back to opaque black, matching the C++ wrapper's default.
 n8v::Color toTextColor(n8v_color c) {
   if (c.a == 0.0f) return {0, 0, 0, 255};
   return toColor(c);
@@ -60,6 +57,8 @@ void _n8v_set_button_opts(n8v_button_options opts) { pendingButtonOpts = opts; }
 void _n8v_button_commit(const char *label) {
   n8v_button_options opts = pendingButtonOpts;
   std::string_view labelView = toView(label);
+  std::string_view iconView = toView(opts.icon);
+  bool hasIcon = !iconView.empty();
 
   Clay__OpenElement();
 
@@ -68,9 +67,17 @@ void _n8v_button_commit(const char *label) {
   const bool pressed = hovered && n8v::activeBackend().pointerDown();
   const n8v::ButtonPaint paint = n8v::activePaint().button(toButtonStyle(opts.style), hovered, pressed);
 
+  const n8v::detail::DecodedImage *iconImage = hasIcon ? n8v::detail::getOrDecodeIcon(iconView, paint.fontSize, paint.textColor) : nullptr;
+  bool iconTrailing = opts.icon_position == N8V_ICON_POSITION_TRAILING;
+
   Clay_ElementDeclaration decl = {};
   decl.layout.padding = n8v::detail::toClay(paint.padding);
   decl.backgroundColor = n8v::detail::toClay(paint.background);
+  if (iconImage) {
+    decl.layout.layoutDirection = CLAY_LEFT_TO_RIGHT;
+    decl.layout.childGap = paint.fontSize / 2;
+    decl.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
+  }
 
   float radius = easeValue(animKey(ordinal, 0), paint.cornerRadius.topLeft, paint.transitionSeconds);
   decl.cornerRadius = {radius, radius, radius, radius};
@@ -80,7 +87,7 @@ void _n8v_button_commit(const char *label) {
     decl.transition.properties = CLAY_TRANSITION_PROPERTY_BACKGROUND_COLOR;
   }
 
-  Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Button, labelView, paint.fontSize);
+  Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Button, labelView, paint.fontSize, iconImage != nullptr);
   if (nativeSize.width > 0 && nativeSize.height > 0) {
     decl.layout.sizing.width = CLAY_SIZING_FIXED(nativeSize.width);
     decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
@@ -92,6 +99,10 @@ void _n8v_button_commit(const char *label) {
   meta.ordinal = ordinal;
   meta.onClick = opts.on_click;
   meta.onClickUserdata = opts.on_click_userdata;
+  meta.image = iconImage;
+  meta.iconName = hasIcon ? internCString(iconView) : nullptr;
+  meta.iconVariant = toIconVariant(opts.icon_variant);
+  meta.iconTrailing = iconTrailing;
   decl.userData = &meta;
 
   Clay__ConfigureOpenElement(decl);
@@ -100,6 +111,25 @@ void _n8v_button_commit(const char *label) {
     Clay_OnHover(dispatchClick, &meta);
   }
 
+  bool drawIconAsClayChild = iconImage && !n8v::activeBackend().rendersNativeChrome();
+  auto openIconChild = [&] {
+    Clay__OpenElement();
+    Clay_ElementDeclaration iconDecl = {};
+    iconDecl.image.imageData = const_cast<n8v::detail::DecodedImage *>(iconImage);
+    iconDecl.layout.sizing.width = CLAY_SIZING_FIXED((float)paint.fontSize);
+    iconDecl.layout.sizing.height = CLAY_SIZING_FIXED((float)paint.fontSize);
+    widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
+    n8v::detail::NativeWidgetMeta &iconMeta = widgetMetaStorage.back();
+    iconMeta.kind = n8v::NativeWidgetKind::Icon;
+    iconMeta.ordinal = widgetOrdinal++;
+    iconMeta.image = iconImage;
+    iconDecl.userData = &iconMeta;
+    Clay__ConfigureOpenElement(iconDecl);
+    Clay__CloseElement();
+  };
+
+  if (drawIconAsClayChild && !iconTrailing) openIconChild();
+
   textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
   Clay_TextElementConfig textConfig = {};
   textConfig.textColor = n8v::detail::toClay(paint.textColor);
@@ -107,6 +137,8 @@ void _n8v_button_commit(const char *label) {
   textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
   textConfig.userData = &textStyleStorage.back();
   CLAY_TEXT(internString(labelView), textConfig);
+
+  if (drawIconAsClayChild && iconTrailing) openIconChild();
 
   Clay__CloseElement();
 }

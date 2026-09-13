@@ -32,9 +32,14 @@ struct Backend {
    */
   virtual Clay_Dimensions measureText(std::string_view text, FontFamily family, uint16_t fontSize, bool bold, bool italic) const = 0;
 
-  virtual Clay_Dimensions measureNativeChrome(NativeWidgetKind, std::string_view, uint16_t) const { return {0, 0}; }
+  virtual Clay_Dimensions measureNativeChrome(NativeWidgetKind, std::string_view, uint16_t, bool hasIcon = false) const {
+    (void)hasIcon;
+    return {0, 0};
+  }
 
   virtual bool isEntryFocused(int) const { return false; }
+
+  virtual bool rendersNativeChrome() const { return true; }
 
   virtual Clay_Vector2 consumeScrollDelta() { return {0, 0}; }
   virtual bool ownsScrollMath() const { return false; }

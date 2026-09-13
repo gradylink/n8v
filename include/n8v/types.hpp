@@ -51,6 +51,17 @@ enum class NativeWidgetKind {
   Slider,
   DropdownChevron,
   Image,
+  Icon,
+};
+
+enum class IconVariant {
+  Outline,
+  Filled,
+};
+
+enum class IconPosition {
+  Leading,
+  Trailing,
 };
 
 enum class SizingMode {

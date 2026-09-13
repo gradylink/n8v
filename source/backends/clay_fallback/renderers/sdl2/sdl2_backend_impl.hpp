@@ -32,6 +32,7 @@ public:
     return delta;
   }
   bool ownsScrollMath() const override { return true; }
+  bool rendersNativeChrome() const override { return false; }
   Clay_Dimensions windowSize() const override;
   Clay_Dimensions measureText(std::string_view text, FontFamily family, uint16_t fontSize, bool bold, bool italic) const override;
   void beginFrame() override;

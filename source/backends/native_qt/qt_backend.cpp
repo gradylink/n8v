@@ -1,5 +1,8 @@
 #include "qt_backend.hpp"
 
+#include "core/freedesktop_icon_theme.hpp"
+#include "core/icon_loader.hpp"
+#include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/open_url.hpp"
@@ -11,6 +14,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFontMetrics>
+#include <QIcon>
 #include <QImage>
 #include <QLabel>
 #include <QLineEdit>
@@ -21,6 +25,7 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QSlider>
+#include <QStyle>
 #include <QWidget>
 
 #include <functional>
@@ -152,12 +157,13 @@ public:
     return {(float)size.width(), (float)size.height()};
   }
 
-  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view text, uint16_t) const override {
+  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view text, uint16_t fontSize, bool hasIcon) const override {
     QString qtext = QString::fromUtf8(text.data(), (int)text.size());
     if (kind == NativeWidgetKind::Button) {
       measureButton_->setText(qtext);
       QSize hint = measureButton_->sizeHint();
-      return {(float)hint.width(), (float)hint.height()};
+      int width = hint.width() + (hasIcon ? fontSize + fontSize / 2 : 0);
+      return {(float)width, (float)hint.height()};
     }
     if (kind == NativeWidgetKind::Checkbox) {
       measureCheckbox_->setText(qtext);
@@ -213,6 +219,7 @@ public:
         pendingLabelTarget = widget;
         pendingKind = meta->kind;
         pendingLinkUrl = meta->kind == NativeWidgetKind::Link && meta->url ? *meta->url : std::string();
+        if (meta->kind == NativeWidgetKind::Button) ensureButtonIcon(widget, *meta);
         continue;
       }
 
@@ -223,7 +230,11 @@ public:
         seenKeys.insert(key);
         QWidget *widget = ensureWidget(key, *meta);
         positionWidget(widget, command->boundingBox);
-        ensureImagePixmap(static_cast<QLabel *>(widget), *meta, (int)command->boundingBox.width, (int)command->boundingBox.height, command->renderData.image.cornerRadius);
+        if (meta->kind == NativeWidgetKind::Icon) {
+          ensureIconPixmap(static_cast<QLabel *>(widget), *meta, (int)command->boundingBox.width);
+        } else {
+          ensureImagePixmap(static_cast<QLabel *>(widget), *meta, (int)command->boundingBox.width, (int)command->boundingBox.height, command->renderData.image.cornerRadius);
+        }
         pendingLabelTarget = nullptr;
         continue;
       }
@@ -281,6 +292,7 @@ public:
         dropdownStates_.erase(it->first.ordinal);
         sliderStates_.erase(it->first.ordinal);
         imagePixmapSources_.erase(static_cast<QLabel *>(it->second));
+        buttonIconSources_.erase(it->second);
         it = widgets_.erase(it);
       } else {
         ++it;
@@ -404,6 +416,104 @@ private:
       widget->setText(QString::fromStdString(*state.value));
       state.lastSynced = *state.value;
     }
+  }
+
+  static bool resolveStandardPixmap(std::string_view name, QStyle::StandardPixmap &out) {
+    static const std::unordered_map<std::string_view, QStyle::StandardPixmap> table = {
+      {"check", QStyle::SP_DialogApplyButton},
+      {"close", QStyle::SP_DialogCloseButton},
+      {"delete", QStyle::SP_TrashIcon},
+      {"refresh", QStyle::SP_BrowserReload},
+      {"home", QStyle::SP_DirHomeIcon},
+      {"folder", QStyle::SP_DirIcon},
+      {"file", QStyle::SP_FileIcon},
+      {"warning", QStyle::SP_MessageBoxWarning},
+      {"error", QStyle::SP_MessageBoxCritical},
+      {"info", QStyle::SP_MessageBoxInformation},
+      {"volume", QStyle::SP_MediaVolume},
+      {"mute", QStyle::SP_MediaVolumeMuted},
+      {"menu", QStyle::SP_TitleBarMenuButton},
+      {"chevron-left", QStyle::SP_ArrowLeft},
+      {"chevron-right", QStyle::SP_ArrowRight},
+      {"chevron-up", QStyle::SP_ArrowUp},
+      {"chevron-down", QStyle::SP_ArrowDown},
+      {"arrow-left", QStyle::SP_ArrowLeft},
+      {"arrow-right", QStyle::SP_ArrowRight},
+      {"arrow-up", QStyle::SP_ArrowUp},
+      {"arrow-down", QStyle::SP_ArrowDown},
+    };
+    auto it = table.find(name);
+    if (it == table.end()) return false;
+    out = it->second;
+    return true;
+  }
+
+  void ensureButtonIcon(QWidget *widget, const NativeWidgetMeta &meta) {
+    auto *button = static_cast<QPushButton *>(widget);
+    ButtonIconSource &cached = buttonIconSources_[button];
+    std::string_view nameView = meta.iconName ? std::string_view(meta.iconName) : std::string_view{};
+    if (cached.name == nameView && cached.image == meta.image) return;
+    cached.name = nameView;
+    cached.image = meta.image;
+
+    const char *freedesktopName = meta.iconName ? n8v::detail::resolveFreedesktopIconName(meta.iconName) : nullptr;
+    QColor textColor = button->palette().color(QPalette::ButtonText);
+    n8v::Color nativeTint{(float)textColor.red(), (float)textColor.green(), (float)textColor.blue(), 255.0f};
+
+    QIcon icon;
+    if (freedesktopName) icon = QIcon::fromTheme(QString::fromUtf8(freedesktopName));
+    if (icon.isNull() && freedesktopName && meta.image) {
+      std::string path = n8v::detail::findFreedesktopIconFile(freedesktopName);
+      if (!path.empty()) {
+        const n8v::detail::DecodedImage *themed = n8v::detail::getOrDecodeIconFromFile(path, (uint16_t)meta.image->width, nativeTint);
+        if (themed) {
+          QImage qImage(themed->rgba, themed->width, themed->height, themed->width * 4, QImage::Format_RGBA8888);
+          icon = QIcon(QPixmap::fromImage(qImage));
+        }
+      }
+    }
+    QStyle::StandardPixmap standardPixmap;
+    if (icon.isNull() && meta.iconName && resolveStandardPixmap(meta.iconName, standardPixmap)) {
+      icon = button->style()->standardIcon(standardPixmap);
+    }
+    if (icon.isNull() && meta.iconName && meta.image) {
+      const n8v::detail::DecodedImage *tinted = n8v::detail::getOrDecodeIcon(meta.iconName, (uint16_t)meta.image->width, nativeTint);
+      if (tinted) {
+        QImage qImage(tinted->rgba, tinted->width, tinted->height, tinted->width * 4, QImage::Format_RGBA8888);
+        icon = QIcon(QPixmap::fromImage(qImage));
+      }
+    }
+    button->setIcon(icon);
+  }
+
+  void ensureIconPixmap(QLabel *label, const NativeWidgetMeta &meta, int targetSize) {
+    const char *freedesktopName = meta.iconName ? n8v::detail::resolveFreedesktopIconName(meta.iconName) : nullptr;
+    QIcon icon;
+    if (freedesktopName) icon = QIcon::fromTheme(QString::fromUtf8(freedesktopName));
+    if (!icon.isNull()) {
+      label->setPixmap(icon.pixmap(targetSize, targetSize));
+      imagePixmapSources_.erase(label);
+      return;
+    }
+
+    if (freedesktopName && meta.image) {
+      std::string path = n8v::detail::findFreedesktopIconFile(freedesktopName);
+      if (!path.empty()) {
+        if (const n8v::detail::DecodedImage *themed = n8v::detail::getOrDecodeIconFromFile(path, (uint16_t)meta.image->width, meta.iconTint)) {
+          QImage qImage(themed->rgba, themed->width, themed->height, themed->width * 4, QImage::Format_RGBA8888);
+          label->setPixmap(QPixmap::fromImage(qImage));
+          imagePixmapSources_.erase(label);
+          return;
+        }
+      }
+    }
+
+    if (!meta.image) return;
+    auto it = imagePixmapSources_.find(label);
+    if (it != imagePixmapSources_.end() && it->second == meta.image) return;
+    QImage qImage(meta.image->rgba, meta.image->width, meta.image->height, meta.image->width * 4, QImage::Format_RGBA8888);
+    label->setPixmap(QPixmap::fromImage(qImage));
+    imagePixmapSources_[label] = meta.image;
   }
 
   void ensureImagePixmap(QLabel *label, const NativeWidgetMeta &meta, int targetW, int targetH, const Clay_CornerRadius &corner) {
@@ -547,7 +657,7 @@ private:
       state.lastSynced = initialPos;
       syncSlider(sliderWidget, meta, state);
       widget = sliderWidget;
-    } else if (meta.kind == NativeWidgetKind::Image) {
+    } else if (meta.kind == NativeWidgetKind::Image || meta.kind == NativeWidgetKind::Icon) {
       auto *label = new QLabel(currentParent());
       label->setScaledContents(true);
       widget = label;
@@ -601,6 +711,11 @@ private:
   std::unordered_map<int, DropdownState> dropdownStates_;
   std::unordered_map<int, SliderState> sliderStates_;
   std::unordered_map<QLabel *, const void *> imagePixmapSources_;
+  struct ButtonIconSource {
+    std::string name;
+    const void *image = nullptr;
+  };
+  std::unordered_map<QWidget *, ButtonIconSource> buttonIconSources_;
   std::unordered_map<uint32_t, ContainerFrame> scrollContainers_;
   std::vector<ContainerFrame> containerStack_;
   std::set<uint32_t> touchedScrollContainers_;

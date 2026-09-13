@@ -30,6 +30,10 @@ inline n8v_align toC(Align a) {
 
 inline n8v_button_style toC(ButtonStyle s) { return s == ButtonStyle::Primary ? N8V_BUTTON_STYLE_PRIMARY : N8V_BUTTON_STYLE_SECONDARY; }
 
+inline n8v_icon_variant toC(IconVariant v) { return v == IconVariant::Outline ? N8V_ICON_VARIANT_OUTLINE : N8V_ICON_VARIANT_FILLED; }
+
+inline n8v_icon_position toC(IconPosition p) { return p == IconPosition::Leading ? N8V_ICON_POSITION_LEADING : N8V_ICON_POSITION_TRAILING; }
+
 inline n8v_sizing_mode toC(SizingMode m) {
   switch (m) {
   case SizingMode::Fit:
@@ -139,9 +143,13 @@ struct LeafBuilder {
   void operator()(std::string_view label) && {
     std::string labelStorage(label);
     if (isButton) {
+      std::string iconStorage(buttonOptions.icon);
       n8v_button_options c_opts{};
       c_opts.style = toC(buttonOptions.style);
       if (buttonOptions.onClick) callback_bridge::bridge(callback_bridge::clickClosures, std::move(buttonOptions.onClick), c_opts.on_click, c_opts.on_click_userdata);
+      c_opts.icon = iconStorage.empty() ? nullptr : iconStorage.c_str();
+      c_opts.icon_variant = toC(buttonOptions.iconVariant);
+      c_opts.icon_position = toC(buttonOptions.iconPosition);
       _n8v_set_button_opts(c_opts);
       _n8v_button_commit(labelStorage.c_str());
     } else {
@@ -277,6 +285,18 @@ inline void image(ImageOptions options) {
   n8v_image(c_opts);
 }
 
+inline void icon(IconOptions options) {
+  std::string nameStorage(options.name);
+  n8v_icon_options c_opts{};
+  c_opts.name = nameStorage.empty() ? nullptr : nameStorage.c_str();
+  c_opts.variant = toC(options.variant);
+  c_opts.width = toC(options.width);
+  c_opts.height = toC(options.height);
+  c_opts.tint = toC(options.tint);
+
+  n8v_icon(c_opts);
+}
+
 } // namespace n8v::detail
 
 namespace n8v {
@@ -296,6 +316,8 @@ inline void dropdown(DropdownOptions options) { detail::dropdown(std::move(optio
 inline void slider(SliderOptions options) { detail::slider(std::move(options)); }
 
 inline void image(ImageOptions options) { detail::image(std::move(options)); }
+
+inline void icon(IconOptions options) { detail::icon(std::move(options)); }
 
 inline bool initialize(int width, int height, std::string_view title) {
   std::string titleStorage(title);

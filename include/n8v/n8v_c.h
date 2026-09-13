@@ -174,10 +174,23 @@ typedef struct n8v_text_options {
   n8v_color color;
 } n8v_text_options;
 
+typedef enum n8v_icon_variant {
+  N8V_ICON_VARIANT_OUTLINE,
+  N8V_ICON_VARIANT_FILLED,
+} n8v_icon_variant;
+
+typedef enum n8v_icon_position {
+  N8V_ICON_POSITION_LEADING,
+  N8V_ICON_POSITION_TRAILING,
+} n8v_icon_position;
+
 typedef struct n8v_button_options {
   n8v_button_style style;
   n8v_click_fn on_click;
   void *on_click_userdata;
+  const char *icon;
+  n8v_icon_variant icon_variant;
+  n8v_icon_position icon_position;
 } n8v_button_options;
 
 typedef struct n8v_checkbox_options {
@@ -240,6 +253,14 @@ typedef struct n8v_image_options {
 
 typedef bool (*n8v_image_bundle_lookup_fn)(const char *virtual_path, const void **out_data, size_t *out_size, void *userdata);
 
+typedef struct n8v_icon_options {
+  const char *name;
+  n8v_icon_variant variant;
+  n8v_sizing width;
+  n8v_sizing height;
+  n8v_color tint;
+} n8v_icon_options;
+
 N8V_API bool n8v_initialize(int width, int height, const char *title);
 N8V_API bool n8v_pump_events(void);
 N8V_API void n8v_shutdown(void);
@@ -285,6 +306,7 @@ N8V_API void n8v_dropdown(n8v_dropdown_options options);
 N8V_API void n8v_slider(n8v_slider_options options);
 N8V_API void n8v_image(n8v_image_options options);
 N8V_API void n8v_set_image_bundle_lookup(n8v_image_bundle_lookup_fn fn, void *userdata);
+N8V_API void n8v_icon(n8v_icon_options options);
 
 #ifdef __cplusplus
 }
@@ -331,6 +353,7 @@ N8V_API void n8v_set_image_bundle_lookup(n8v_image_bundle_lookup_fn fn, void *us
 #define slider_options n8v_slider_options
 #define image_options n8v_image_options
 #define image_source_kind n8v_image_source_kind
+#define icon_options n8v_icon_options
 
 #endif
 

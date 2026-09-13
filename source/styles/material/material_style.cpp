@@ -123,6 +123,13 @@ public:
     return paint;
   }
 
+  IconPaint icon() const override {
+    IconPaint paint{};
+    paint.tint = {28, 27, 31, 255};
+    paint.defaultSize = 24.0f;
+    return paint;
+  }
+
 private:
   static constexpr float RoundRadius = 20.0f;
   static constexpr float PressedRadius = 8.0f;

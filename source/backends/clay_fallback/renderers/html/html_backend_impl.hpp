@@ -38,6 +38,7 @@ public:
   bool initialize(int width, int height, std::string_view title) override;
   bool pumpEvents() override;
   bool pointerDown() const override { return pointerDown_; }
+  bool rendersNativeChrome() const override { return false; }
   bool isEntryFocused(int ordinal) const override;
   Clay_Dimensions windowSize() const override;
   Clay_Dimensions measureText(std::string_view text, FontFamily family, uint16_t fontSize, bool bold, bool italic) const override;

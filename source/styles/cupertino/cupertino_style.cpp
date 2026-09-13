@@ -107,6 +107,13 @@ public:
     paint.cornerRadius = {12, 12, 12, 12};
     return paint;
   }
+
+  IconPaint icon() const override {
+    IconPaint paint{};
+    paint.tint = {0, 122, 255, 255};
+    paint.defaultSize = 24.0f;
+    return paint;
+  }
 };
 
 } // namespace

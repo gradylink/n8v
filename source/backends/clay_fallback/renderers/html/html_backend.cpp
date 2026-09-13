@@ -70,10 +70,10 @@ bool HtmlBackend::initialize(int width, int height, std::string_view title) {
 }
 
 bool HtmlBackend::pumpEvents() {
-  constexpr double kTargetFrameMs = 1000.0 / 60.0;
+  constexpr double targetFrameMs = 1000.0 / 60.0;
   double now = emscripten_get_now();
-  double elapsed = lastFrameTime_ > 0.0 ? now - lastFrameTime_ : kTargetFrameMs;
-  double remaining = kTargetFrameMs - elapsed;
+  double elapsed = lastFrameTime_ > 0.0 ? now - lastFrameTime_ : targetFrameMs;
+  double remaining = targetFrameMs - elapsed;
   emscripten_sleep(remaining > 0.0 ? (unsigned int)remaining : 0);
   lastFrameTime_ = emscripten_get_now();
 

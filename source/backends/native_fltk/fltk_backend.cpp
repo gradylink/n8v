@@ -1,5 +1,8 @@
 #include "fltk_backend.hpp"
 
+#include "core/freedesktop_icon_theme.hpp"
+#include "core/icon_loader.hpp"
+#include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/open_url.hpp"
@@ -95,13 +98,18 @@ public:
     return {(float)w, (float)h};
   }
 
-  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view, uint16_t fontSize) const override {
+  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view text, uint16_t fontSize, bool hasIcon) const override {
     if (kind == NativeWidgetKind::Dropdown) {
       fl_font(FL_HELVETICA, fontSize);
       return {0, (float)fl_height() + 14.0f};
     }
     if (kind == NativeWidgetKind::Slider) {
       return {0, 20.0f};
+    }
+    if (kind == NativeWidgetKind::Button && hasIcon) {
+      fl_font(FL_HELVETICA, fontSize);
+      float textWidth = fl_width(std::string(text).c_str());
+      return {textWidth + 32.0f + fontSize + fontSize / 2, (float)fl_height() + 14.0f};
     }
     return {0, 0};
   }
@@ -131,6 +139,7 @@ public:
         positionWidget(widget, command->boundingBox);
         pendingLabelTarget = widget;
         pendingKind = meta->kind;
+        if (meta->kind == NativeWidgetKind::Button) ensureButtonIcon(widget, *meta);
         continue;
       }
 
@@ -141,7 +150,11 @@ public:
         seenKeys.insert(key);
         Fl_Widget *widget = ensureWidget(key, *meta);
         positionWidget(widget, command->boundingBox);
-        ensureImageScaled(static_cast<Fl_Box *>(widget), *meta, (int)command->boundingBox.width, (int)command->boundingBox.height, command->renderData.image.cornerRadius);
+        if (meta->kind == NativeWidgetKind::Icon) {
+          ensureIconImage(static_cast<Fl_Box *>(widget), *meta);
+        } else {
+          ensureImageScaled(static_cast<Fl_Box *>(widget), *meta, (int)command->boundingBox.width, (int)command->boundingBox.height, command->renderData.image.cornerRadius);
+        }
         pendingLabelTarget = nullptr;
         continue;
       }
@@ -304,6 +317,62 @@ private:
     int height = -1;
   };
 
+  void ensureButtonIcon(Fl_Widget *widget, const NativeWidgetMeta &meta) {
+    if (!meta.iconName || !meta.image) {
+      auto it = imageStates_.find(widget);
+      if (it != imageStates_.end()) {
+        delete it->second.image;
+        imageStates_.erase(it);
+        widget->image(nullptr);
+      }
+      return;
+    }
+
+    uchar r, g, b;
+    Fl::get_color(widget->labelcolor(), r, g, b);
+    n8v::Color tint{(float)r, (float)g, (float)b, 255.0f};
+    auto targetSize = (uint16_t)meta.image->width;
+
+    const n8v::detail::DecodedImage *icon = nullptr;
+    if (const char *freedesktopName = n8v::detail::resolveFreedesktopIconName(meta.iconName)) {
+      std::string path = n8v::detail::findFreedesktopIconFile(freedesktopName);
+      if (!path.empty()) icon = n8v::detail::getOrDecodeIconFromFile(path, targetSize, tint);
+    }
+    if (!icon) icon = n8v::detail::getOrDecodeIcon(meta.iconName, targetSize, tint);
+    if (!icon) return;
+
+    ImageState &state = imageStates_[widget];
+    if (state.source == icon) return;
+    delete state.image;
+    state.image = new Fl_RGB_Image(icon->rgba, icon->width, icon->height, 4);
+    state.source = icon;
+    state.width = icon->width;
+    state.height = icon->height;
+    widget->image(state.image);
+    widget->align(FL_ALIGN_IMAGE_NEXT_TO_TEXT | FL_ALIGN_INSIDE | FL_ALIGN_LEFT);
+  }
+
+  void ensureIconImage(Fl_Box *box, const NativeWidgetMeta &meta) {
+    if (!meta.iconName || !meta.image) return;
+    auto targetSize = (uint16_t)meta.image->width;
+
+    const n8v::detail::DecodedImage *icon = nullptr;
+    if (const char *freedesktopName = n8v::detail::resolveFreedesktopIconName(meta.iconName)) {
+      std::string path = n8v::detail::findFreedesktopIconFile(freedesktopName);
+      if (!path.empty()) icon = n8v::detail::getOrDecodeIconFromFile(path, targetSize, meta.iconTint);
+    }
+    if (!icon) icon = meta.image;
+
+    ImageState &state = imageStates_[box];
+    if (state.source == icon) return;
+    delete state.image;
+    state.image = new Fl_RGB_Image(icon->rgba, icon->width, icon->height, 4);
+    state.source = icon;
+    state.width = icon->width;
+    state.height = icon->height;
+    box->image(state.image);
+  }
+
   void ensureImageScaled(Fl_Box *box, const NativeWidgetMeta &meta, int targetW, int targetH, const Clay_CornerRadius &corner) {
     if (!meta.image) return;
     const n8v::detail::DecodedImage *image =
@@ -443,7 +512,7 @@ private:
       sliderWidget->when(FL_WHEN_CHANGED);
       sliderWidget->callback(&FltkBackend::onSliderChanged, &action);
       widget = sliderWidget;
-    } else if (meta.kind == NativeWidgetKind::Image) {
+    } else if (meta.kind == NativeWidgetKind::Image || meta.kind == NativeWidgetKind::Icon) {
       widget = new Fl_Box(0, 0, 1, 1);
     } else {
       auto *button = new Fl_Button(0, 0, 1, 1);

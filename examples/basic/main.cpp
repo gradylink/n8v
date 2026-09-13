@@ -27,7 +27,14 @@ int main() {
         button({.style = ButtonStyle::Primary, .onClick = [&clickCount] {
                   ++clickCount;
                   std::cout << std::to_string(clickCount) << std::endl;
-                }})("Click me");
+                }, .icon = "check"})("Click me");
+
+        flex({.direction = Direction::Horizontal, .gap = 8, .vAlign = Align::Center}) {
+          icon({.name = "settings"});
+          icon({.name = "star", .tint = {230, 180, 20, 255}});
+          icon({.name = "heart", .tint = {220, 40, 60, 255}});
+          text({})("standalone icons");
+        }
 
         checkbox({.checked = &passwordInput})("Password mode.");
 

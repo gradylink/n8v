@@ -1,5 +1,8 @@
 #include "milsko_backend.hpp"
 
+#include "core/freedesktop_icon_theme.hpp"
+#include "core/icon_loader.hpp"
+#include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/open_url.hpp"
@@ -83,7 +86,7 @@ public:
 
   Clay_Dimensions windowSize() const override { return {(float)MwGetInteger(window_, MwNwidth), (float)MwGetInteger(window_, MwNheight)}; }
 
-  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view, uint16_t) const override {
+  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view, uint16_t, bool) const override {
     if (kind == NativeWidgetKind::Dropdown) {
       return {0, (float)MwTextHeight(measureLabel_, nullptr, "Xg") + 14.0f};
     }
@@ -157,7 +160,11 @@ public:
         seenKeys.insert(key);
         MwWidget widget = ensureWidget(key, *meta);
         positionWidget(widget, command->boundingBox);
-        ensureImagePixmap(widget, *meta, (int)command->boundingBox.width, (int)command->boundingBox.height, command->renderData.image.cornerRadius);
+        if (meta->kind == NativeWidgetKind::Icon) {
+          ensureIconPixmap(widget, *meta);
+        } else {
+          ensureImagePixmap(widget, *meta, (int)command->boundingBox.width, (int)command->boundingBox.height, command->renderData.image.cornerRadius);
+        }
         pendingLabelTarget = nullptr;
         continue;
       }
@@ -335,6 +342,27 @@ private:
     }
   }
 
+  void ensureIconPixmap(MwWidget widget, const NativeWidgetMeta &meta) {
+    if (!meta.iconName || !meta.image) return;
+    auto targetSize = (uint16_t)meta.image->width;
+
+    const n8v::detail::DecodedImage *icon = nullptr;
+    if (const char *freedesktopName = n8v::detail::resolveFreedesktopIconName(meta.iconName)) {
+      std::string path = n8v::detail::findFreedesktopIconFile(freedesktopName);
+      if (!path.empty()) icon = n8v::detail::getOrDecodeIconFromFile(path, targetSize, meta.iconTint);
+    }
+    if (!icon) icon = meta.image;
+
+    auto it = imagePixmapSources_.find(widget);
+    if (it != imagePixmapSources_.end() && it->second == icon) return;
+
+    MwLLPixmap oldPixmap = static_cast<MwLLPixmap>(MwGetVoid(widget, MwNpixmap));
+    MwLLPixmap newPixmap = MwLoadRaw(widget, const_cast<unsigned char *>(icon->rgba), icon->width, icon->height);
+    MwVaApply(widget, MwNpixmap, newPixmap, NULL);
+    if (oldPixmap) MwLLDestroyPixmap(oldPixmap);
+    imagePixmapSources_[widget] = icon;
+  }
+
   void ensureImagePixmap(MwWidget widget, const NativeWidgetMeta &meta, int targetW, int targetH, const Clay_CornerRadius &corner) {
     if (!meta.image) return;
     const n8v::detail::DecodedImage *image =
@@ -429,7 +457,7 @@ private:
       MwVaApply(widget, MwNorientation, MwHORIZONTAL, MwNminValue, 0, MwNmaxValue, sliderSteps, MwNareaShown, sliderSteps / 30, NULL);
       if (meta.sliderValue) MwSetInteger(widget, MwNvalue, sliderPositionFor(*meta.sliderValue, meta.sliderMin, meta.sliderMax));
       MwAddUserHandler(widget, MwNchangedHandler, onSliderChanged, &action);
-    } else if (meta.kind == NativeWidgetKind::Image) {
+    } else if (meta.kind == NativeWidgetKind::Image || meta.kind == NativeWidgetKind::Icon) {
       widget = MwCreateWidget(MwImageClass, "n8v-image", currentParent(), 0, 0, 1, 1);
     } else {
       if (action.isLink) {

@@ -120,6 +120,130 @@ bundle_add(n8v_fonts
 # Fixes bundle_add recipe override
 cl_repo("${CMAKE_CURRENT_SOURCE_DIR}/cmake/recipes")
 
+set(_N8V_ICON_STAGE "${CMAKE_CURRENT_BINARY_DIR}/n8v_icons")
+
+cl_import_source(
+  NAME lucide_icons
+  DOWNLOAD_ONLY
+  REPO https://github.com/lucide-icons/lucide.git
+  REF main
+)
+set(_N8V_PLAIN_ICONS
+  "settings:settings" "search:search" "check:check" "close:x" "menu:menu"
+  "add:plus" "remove:minus" "delete:trash" "edit:pencil" "copy:copy"
+  "download:download" "upload:upload" "refresh:refresh-cw" "share:share-2"
+  "star:star" "heart:heart" "home:house" "info:info" "warning:triangle-alert"
+  "error:circle-alert" "notification:bell" "calendar:calendar" "clock:clock"
+  "mail:mail" "folder:folder" "file:file" "image:image" "link:link" "lock:lock"
+  "unlock:lock-open" "visibility:eye" "visibility-off:eye-off" "wifi:wifi"
+  "volume:volume-2" "mute:volume-x" "chevron-left:chevron-left" "chevron-right:chevron-right"
+  "chevron-up:chevron-up" "chevron-down:chevron-down" "arrow-left:arrow-left"
+  "arrow-right:arrow-right" "arrow-up:arrow-up" "arrow-down:arrow-down"
+  "external-link:external-link" "user:user"
+)
+foreach(_pair ${_N8V_PLAIN_ICONS})
+  string(REPLACE ":" ";" _pair "${_pair}")
+  list(GET _pair 0 _name)
+  list(GET _pair 1 _src)
+  configure_file("${CL_SOURCE_DIR}/icons/${_src}.svg" "${_N8V_ICON_STAGE}/plain/${_name}.svg" COPYONLY)
+endforeach()
+
+cl_import_source(
+  NAME tabler_icons
+  DOWNLOAD_ONLY
+  REPO https://github.com/tabler/tabler-icons.git
+  REF main
+)
+set(_N8V_CUPERTINO_ICONS
+  "settings:settings" "search:search" "check:check" "close:x" "menu:menu"
+  "add:plus" "remove:minus" "delete:trash" "edit:pencil" "copy:copy"
+  "download:download" "upload:upload" "refresh:refresh" "share:share-2"
+  "star:star" "heart:heart" "home:home" "info:info-circle" "warning:alert-triangle"
+  "error:alert-circle" "notification:bell" "calendar:calendar" "clock:clock"
+  "mail:mail" "folder:folder" "file:file" "image:photo" "link:link" "lock:lock"
+  "unlock:lock-open" "visibility:eye" "visibility-off:eye-off" "wifi:wifi"
+  "volume:volume-2" "mute:volume-off" "chevron-left:chevron-left" "chevron-right:chevron-right"
+  "chevron-up:chevron-up" "chevron-down:chevron-down" "arrow-left:arrow-left"
+  "arrow-right:arrow-right" "arrow-up:arrow-up" "arrow-down:arrow-down"
+  "external-link:external-link" "user:user"
+)
+foreach(_pair ${_N8V_CUPERTINO_ICONS})
+  string(REPLACE ":" ";" _pair "${_pair}")
+  list(GET _pair 0 _name)
+  list(GET _pair 1 _src)
+  configure_file("${CL_SOURCE_DIR}/icons/outline/${_src}.svg" "${_N8V_ICON_STAGE}/cupertino/${_name}.svg" COPYONLY)
+endforeach()
+
+cl_import_source(
+  NAME material_icons
+  DOWNLOAD_ONLY
+  REPO https://github.com/google/material-design-icons.git
+  REF master
+)
+set(_N8V_MATERIAL_ICONS
+  "settings:settings" "search:search" "check:check" "close:close" "menu:menu"
+  "add:add" "remove:remove" "delete:delete" "edit:edit" "copy:content_copy"
+  "download:download" "upload:upload" "refresh:refresh" "share:share"
+  "star:star" "heart:favorite" "home:home" "info:info" "warning:warning"
+  "error:error" "notification:notifications" "calendar:calendar_today" "clock:schedule"
+  "mail:mail" "folder:folder" "file:description" "image:image" "link:link" "lock:lock"
+  "unlock:lock_open" "visibility:visibility" "visibility-off:visibility_off" "wifi:wifi"
+  "volume:volume_up" "mute:volume_off" "chevron-left:chevron_left" "chevron-right:chevron_right"
+  "chevron-up:expand_less" "chevron-down:expand_more" "arrow-left:arrow_back"
+  "arrow-right:arrow_forward" "arrow-up:arrow_upward" "arrow-down:arrow_downward"
+  "external-link:open_in_new" "user:person"
+)
+foreach(_pair ${_N8V_MATERIAL_ICONS})
+  string(REPLACE ":" ";" _pair "${_pair}")
+  list(GET _pair 0 _name)
+  list(GET _pair 1 _src)
+  configure_file(
+    "${CL_SOURCE_DIR}/symbols/web/${_src}/materialsymbolsoutlined/${_src}_24px.svg"
+    "${_N8V_ICON_STAGE}/material/${_name}.svg"
+    COPYONLY
+  )
+endforeach()
+
+cl_import_source(
+  NAME fluent_icons
+  DOWNLOAD_ONLY
+  REPO https://github.com/microsoft/fluentui-system-icons.git
+  REF main
+)
+set(_N8V_FLUENT_ICONS
+  "settings:Settings:settings" "search:Search:search" "check:Checkmark:checkmark"
+  "close:Dismiss:dismiss" "menu:Line Horizontal 3:line_horizontal_3" "add:Add:add"
+  "remove:Subtract:subtract" "delete:Delete:delete" "edit:Edit:edit" "copy:Copy:copy"
+  "download:Arrow Download:arrow_download" "upload:Arrow Upload:arrow_upload"
+  "refresh:Arrow Sync:arrow_sync" "share:Share:share" "star:Star:star" "heart:Heart:heart"
+  "home:Home:home" "info:Info:info" "warning:Warning:warning" "error:Error Circle:error_circle"
+  "notification:Alert:alert" "calendar:Calendar:calendar" "clock:Clock:clock" "mail:Mail:mail"
+  "folder:Folder:folder" "file:Document:document" "image:Image:image" "link:Link:link"
+  "lock:Lock Closed:lock_closed" "unlock:Lock Open:lock_open" "visibility:Eye:eye"
+  "visibility-off:Eye Off:eye_off" "wifi:WiFi 1:wifi_1" "volume:Speaker 2:speaker_2" "mute:Speaker Mute:speaker_mute"
+  "chevron-left:Chevron Left:chevron_left" "chevron-right:Chevron Right:chevron_right"
+  "chevron-up:Chevron Up:chevron_up" "chevron-down:Chevron Down:chevron_down"
+  "arrow-left:Arrow Left:arrow_left" "arrow-right:Arrow Right:arrow_right"
+  "arrow-up:Arrow Up:arrow_up" "arrow-down:Arrow Down:arrow_down" "external-link:Open:open"
+  "user:Person:person"
+)
+foreach(_triple ${_N8V_FLUENT_ICONS})
+  string(REPLACE ":" ";" _triple "${_triple}")
+  list(GET _triple 0 _name)
+  list(GET _triple 1 _dir)
+  list(GET _triple 2 _src)
+  configure_file(
+    "${CL_SOURCE_DIR}/assets/${_dir}/SVG/ic_fluent_${_src}_24_regular.svg"
+    "${_N8V_ICON_STAGE}/fluent/${_name}.svg"
+    COPYONLY
+  )
+endforeach()
+
+bundle_add(n8v_icons
+  BASE_DIR "${_N8V_ICON_STAGE}"
+  DIRECTORIES "${_N8V_ICON_STAGE}"
+)
+
 if(NOT EMSCRIPTEN)
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/backends/gtk4.cmake")
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/backends/qt.cmake")
@@ -134,6 +258,8 @@ set(N8V_SOURCES
   source/core/ui_core.cpp
   source/core/ui_core_c_api.cpp
   source/core/image_loader.cpp
+  source/core/icon_registry.cpp
+  source/core/icon_loader.cpp
   source/core/widgets/leaf.cpp
   source/core/widgets/checkbox.cpp
   source/core/widgets/radio.cpp
@@ -141,6 +267,7 @@ set(N8V_SOURCES
   source/core/widgets/dropdown.cpp
   source/core/widgets/slider.cpp
   source/core/widgets/image.cpp
+  source/core/widgets/icon.cpp
   source/styles/style_registry.cpp
   source/styles/plain/plain_style.cpp
   source/styles/material/material_style.cpp
@@ -165,6 +292,7 @@ if(EMSCRIPTEN)
   )
 else()
   list(APPEND N8V_SOURCES
+    source/core/freedesktop_icon_theme.cpp
     source/backends/clay_fallback/renderers/sdl2/sdl2_backend.cpp
     source/backends/clay_fallback/renderers/sdl2/entry_field.cpp
     source/backends/clay_fallback/renderers/sdl2/text_selection.cpp
@@ -192,10 +320,11 @@ foreach(_n8v_target ${_n8v_targets})
   set_target_properties(${_n8v_target} PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
   target_include_directories(${_n8v_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_include_directories(${_n8v_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/source)
-  target_link_libraries(${_n8v_target} PRIVATE n8v_fonts)
+  target_link_libraries(${_n8v_target} PRIVATE n8v_fonts n8v_icons)
   cl_add_dep(${_n8v_target} clay PUBLIC)
   cl_add_dep(${_n8v_target} stb_truetype PRIVATE)
   cl_add_dep(${_n8v_target} stb_image PRIVATE)
+  cl_add_dep(${_n8v_target} plutosvg PRIVATE)
 
   if(NOT EMSCRIPTEN)
     target_link_libraries(${_n8v_target} PRIVATE sdl2_lazy)

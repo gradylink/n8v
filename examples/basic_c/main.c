@@ -43,7 +43,15 @@ int main(void) {
         button(((button_options){
           .style = N8V_BUTTON_STYLE_PRIMARY,
           .on_click = on_click,
+          .icon = "check",
         }))("Click me");
+
+        flex(((flex_options){.direction = N8V_DIRECTION_HORIZONTAL, .gap = 8, .v_align = N8V_ALIGN_CENTER})) {
+          n8v_icon((icon_options){.name = "settings"});
+          n8v_icon((icon_options){.name = "star", .tint = {230, 180, 20, 255}});
+          n8v_icon((icon_options){.name = "heart", .tint = {220, 40, 60, 255}});
+          text(((text_options){0}))("standalone icons");
+        }
 
         checkbox(((checkbox_options){
           .checked = &password_input,

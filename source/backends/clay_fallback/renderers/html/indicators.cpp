@@ -7,10 +7,10 @@ namespace n8v::detail {
 
 namespace {
 
-constexpr const char *kSvgNs = "http://www.w3.org/2000/svg";
+constexpr const char *svgNs = "http://www.w3.org/2000/svg";
 
 emscripten::val createSvg(emscripten::val &doc) {
-  emscripten::val svg = doc.call<emscripten::val>("createElementNS", std::string(kSvgNs), std::string("svg"));
+  emscripten::val svg = doc.call<emscripten::val>("createElementNS", std::string(svgNs), std::string("svg"));
   svg.call<void>("setAttribute", std::string("viewBox"), std::string("0 0 100 100"));
   return svg;
 }
