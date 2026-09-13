@@ -52,6 +52,7 @@ enum class NativeWidgetKind {
   DropdownChevron,
   Image,
   Icon,
+  Switch,
 };
 
 enum class IconVariant {

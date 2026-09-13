@@ -133,7 +133,8 @@ void HtmlBackend::renderRectangle(const Clay_RenderCommand &command, PendingStat
 
   pending.isCheckbox = meta && meta->kind == NativeWidgetKind::Checkbox;
   pending.isRadio = meta && meta->kind == NativeWidgetKind::Radio;
-  if (pending.isCheckbox || pending.isRadio) {
+  pending.isSwitch = meta && meta->kind == NativeWidgetKind::Switch;
+  if (pending.isCheckbox || pending.isRadio || pending.isSwitch) {
     pending.indicatorMeta = meta;
     return;
   }
@@ -168,6 +169,9 @@ void HtmlBackend::renderRectangle(const Clay_RenderCommand &command, PendingStat
 void HtmlBackend::renderText(const Clay_RenderCommand &command, PendingState &pending) {
   if ((pending.isCheckbox || pending.isRadio) && pending.indicatorMeta) {
     renderCheckboxOrRadioIndicator(*pending.indicatorMeta, command.boundingBox, pending.isRadio);
+  }
+  if (pending.isSwitch && pending.indicatorMeta) {
+    renderSwitchIndicator(*pending.indicatorMeta, command.boundingBox);
   }
 
   if (pending.entryMeta) {

@@ -46,6 +46,11 @@ struct CheckboxOptions {
   std::function<void(bool)> onChange = nullptr;
 };
 
+struct ToggleOptions {
+  bool *checked = nullptr;
+  std::function<void(bool)> onChange = nullptr;
+};
+
 struct RadioOptions {
   /** Shared by every radio button in the same group - selecting one sets *selected to its value. */
   int *selected = nullptr;

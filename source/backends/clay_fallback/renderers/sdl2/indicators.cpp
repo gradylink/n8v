@@ -48,6 +48,36 @@ void Sdl2Backend::drawRadioDot(const Clay_BoundingBox &box, const Clay_Color &co
   drawRoundedRect(dotBox, color, {dotSize * 0.5f, dotSize * 0.5f, dotSize * 0.5f, dotSize * 0.5f});
 }
 
+void Sdl2Backend::renderSwitchIndicator(NativeWidgetMeta &meta, const Clay_BoundingBox &labelBox) {
+  float trackW = meta.switchTrackWidth, trackH = meta.switchTrackHeight;
+  float gap = trackH * 0.5f;
+  Clay_BoundingBox trackBox{labelBox.x - trackW - gap, labelBox.y + (labelBox.height - trackH) * 0.5f, trackW, trackH};
+  Clay_CornerRadius pillRadius{trackH / 2, trackH / 2, trackH / 2, trackH / 2};
+
+  Clay_Color trackColor{meta.switchTrackColor.r, meta.switchTrackColor.g, meta.switchTrackColor.b, meta.switchTrackColor.a};
+  if (trackColor.a > 0.0f) drawRoundedRect(trackBox, trackColor, pillRadius);
+  if (meta.switchTrackBorderWidth > 0.0f) {
+    Clay_Color borderColor{meta.switchTrackBorderColor.r, meta.switchTrackBorderColor.g, meta.switchTrackBorderColor.b, meta.switchTrackBorderColor.a};
+    drawRoundedRectBorder(trackBox, borderColor, pillRadius, meta.switchTrackBorderWidth);
+  }
+
+  float knobInset = std::max((trackH - meta.switchKnobSize) * 0.5f, 0.0f);
+  float leftX = meta.switchKnobSize * 0.5f + knobInset;
+  float rightX = trackW - meta.switchKnobSize * 0.5f - knobInset;
+  float knobCx = trackBox.x + leftX + (rightX - leftX) * std::clamp(meta.switchKnobPosition, 0.0f, 1.0f);
+  float knobCy = trackBox.y + trackH * 0.5f;
+  Clay_BoundingBox knobBox{knobCx - meta.switchKnobSize * 0.5f, knobCy - meta.switchKnobSize * 0.5f, meta.switchKnobSize, meta.switchKnobSize};
+  Clay_Color knobColor{meta.switchKnobColor.r, meta.switchKnobColor.g, meta.switchKnobColor.b, meta.switchKnobColor.a};
+  drawRoundedRect(knobBox, knobColor, {meta.switchKnobSize / 2, meta.switchKnobSize / 2, meta.switchKnobSize / 2, meta.switchKnobSize / 2});
+
+  if (meta.switchGlyphScale > 0.01f) {
+    Clay_Color glyphColor{
+      meta.switchKnobGlyphColor.r, meta.switchKnobGlyphColor.g, meta.switchKnobGlyphColor.b, meta.switchKnobGlyphColor.a * meta.switchGlyphScale
+    };
+    drawCheckmark(knobBox, glyphColor);
+  }
+}
+
 void Sdl2Backend::drawDropdownChevron(const Clay_BoundingBox &box, const Clay_Color &color, bool pointsUp) {
   SDL_Color tint{(Uint8)color.r, (Uint8)color.g, (Uint8)color.b, (Uint8)color.a};
   float cx = box.x + box.width * 0.5f;

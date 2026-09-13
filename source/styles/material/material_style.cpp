@@ -67,6 +67,27 @@ public:
     return paint;
   }
 
+  TogglePaint toggle(bool /*on*/, bool /*hovered*/, bool /*pressed*/) const override {
+    TogglePaint paint{};
+    paint.trackOnColor = {103, 80, 164, 255};
+    paint.trackOffColor = {228, 225, 230, 255};
+    paint.trackBorderColor = {121, 116, 126, 255};
+    paint.trackBorderWidth = 2.0f;
+    paint.knobOnColor = {255, 255, 255, 255};
+    paint.knobOffColor = {121, 116, 126, 255};
+    paint.knobGlyphColor = {103, 80, 164, 255};
+    paint.showGlyphWhenOn = true;
+    paint.trackWidth = 52.0f;
+    paint.trackHeight = 32.0f;
+    paint.knobSizeOff = 16.0f;
+    paint.knobSizeOn = 24.0f;
+    paint.padding = {16, 16, 10, 10};
+    paint.font = FontFamily::Roboto;
+    paint.fontSize = 14;
+    paint.transitionSeconds = 0.2f;
+    return paint;
+  }
+
   EntryPaint entry(bool focused, bool /*hasValue*/) const override {
     EntryPaint paint{};
     paint.background = {255, 255, 255, 255};

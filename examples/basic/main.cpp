@@ -13,6 +13,7 @@ int main() {
 
   int clickCount = 0;
   bool passwordInput = false;
+  bool darkMode = false;
   std::string name;
   int favoriteColor = 0;
   int favoriteFruit = -1;
@@ -37,6 +38,8 @@ int main() {
         }
 
         checkbox({.checked = &passwordInput})("Password mode.");
+
+        toggle({.checked = &darkMode})("Dark mode");
 
         entry({.value = &name, .placeholder = passwordInput ? "Password" : "Your name", .password = passwordInput});
 

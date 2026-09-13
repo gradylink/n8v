@@ -41,6 +41,8 @@ struct Backend {
 
   virtual bool rendersNativeChrome() const { return true; }
 
+  virtual bool aliasesSwitchAsCheckbox() const { return false; }
+
   virtual Clay_Vector2 consumeScrollDelta() { return {0, 0}; }
   virtual bool ownsScrollMath() const { return false; }
 

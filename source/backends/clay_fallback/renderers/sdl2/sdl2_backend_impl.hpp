@@ -84,6 +84,7 @@ private:
   void drawCheckmark(const Clay_BoundingBox &box, const Clay_Color &color);
   void drawRadioDot(const Clay_BoundingBox &box, const Clay_Color &color, float scale);
   void drawDropdownChevron(const Clay_BoundingBox &box, const Clay_Color &color, bool pointsUp);
+  void renderSwitchIndicator(NativeWidgetMeta &meta, const Clay_BoundingBox &labelBox);
 
   void drawImage(NativeWidgetMeta &meta, const Clay_BoundingBox &box, const Clay_CornerRadius &corner);
 

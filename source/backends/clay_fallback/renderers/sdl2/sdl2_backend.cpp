@@ -117,6 +117,7 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
 
   bool pendingIsCheckbox = false;
   bool pendingIsRadio = false;
+  bool pendingIsSwitch = false;
   NativeWidgetMeta *pendingIndicatorMeta = nullptr;
 
   NativeWidgetMeta *pendingEntryMeta = nullptr;
@@ -130,7 +131,8 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
       auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
       pendingIsCheckbox = meta && meta->kind == NativeWidgetKind::Checkbox;
       pendingIsRadio = meta && meta->kind == NativeWidgetKind::Radio;
-      if (pendingIsCheckbox || pendingIsRadio) {
+      pendingIsSwitch = meta && meta->kind == NativeWidgetKind::Switch;
+      if (pendingIsCheckbox || pendingIsRadio || pendingIsSwitch) {
         pendingIndicatorMeta = meta;
         break;
       }
@@ -168,6 +170,11 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
         renderCheckboxOrRadioIndicator(*pendingIndicatorMeta, command->boundingBox, pendingIsRadio);
         pendingIsCheckbox = false;
         pendingIsRadio = false;
+        pendingIndicatorMeta = nullptr;
+      }
+      if (pendingIsSwitch && pendingIndicatorMeta) {
+        renderSwitchIndicator(*pendingIndicatorMeta, command->boundingBox);
+        pendingIsSwitch = false;
         pendingIndicatorMeta = nullptr;
       }
 
@@ -216,6 +223,7 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
     default:
       pendingIsCheckbox = false;
       pendingIsRadio = false;
+      pendingIsSwitch = false;
       pendingEntryMeta = nullptr;
       pendingEntryClicked = false;
       pendingEntryDragging = false;

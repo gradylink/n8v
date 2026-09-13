@@ -131,6 +131,83 @@ void HtmlBackend::renderCheckboxIndicator(NativeWidgetMeta &meta, const Clay_Bou
   svg.set("innerHTML", glyph);
 }
 
+void HtmlBackend::renderSwitchIndicator(NativeWidgetMeta &meta, const Clay_BoundingBox &labelBox) {
+  float trackW = meta.switchTrackWidth, trackH = meta.switchTrackHeight;
+  float gap = trackH * 0.5f;
+  Clay_BoundingBox trackBox{labelBox.x - trackW - gap, labelBox.y + (labelBox.height - trackH) * 0.5f, trackW, trackH};
+
+  touchedIndicatorThisFrame_[meta.ordinal] = true;
+
+  auto it = switchElements_.find(meta.ordinal);
+  emscripten::val el;
+  bool created = false;
+  if (it != switchElements_.end()) {
+    el = it->second;
+    reorderElement(el);
+  } else {
+    el = createSvg(doc_);
+    el.call<void>("setAttribute", std::string("preserveAspectRatio"), std::string("none"));
+    root_.call<void>("appendChild", el);
+    lastAppendedSibling_ = el;
+    switchElements_[meta.ordinal] = el;
+    created = true;
+  }
+
+  positionElement(el, switchLastBox_[meta.ordinal], trackBox);
+
+  SwitchSignature sig{
+    meta.switchTrackColor,
+    meta.switchTrackBorderColor,
+    meta.switchKnobColor,
+    meta.switchKnobGlyphColor,
+    meta.switchTrackBorderWidth,
+    meta.switchKnobPosition,
+    meta.switchKnobSize,
+    meta.switchGlyphScale,
+    trackW,
+    trackH,
+  };
+  SwitchSignature &last = switchSig_[meta.ordinal];
+  if (
+    !created && colorEquals(sig.trackColor, last.trackColor) && colorEquals(sig.trackBorderColor, last.trackBorderColor) && colorEquals(sig.knobColor, last.knobColor) &&
+    colorEquals(sig.glyphColor, last.glyphColor) && sig.trackBorderWidth == last.trackBorderWidth && sig.knobPosition == last.knobPosition && sig.knobSize == last.knobSize &&
+    sig.glyphScale == last.glyphScale && sig.trackWidth == last.trackWidth && sig.trackHeight == last.trackHeight
+  ) {
+    return;
+  }
+  last = sig;
+
+  el.call<void>("setAttribute", std::string("viewBox"), std::string("0 0 ") + std::to_string(trackW) + " " + std::to_string(trackH));
+
+  float strokeWidth = meta.switchTrackBorderWidth;
+  float pillR = trackH / 2.0f;
+  std::string svgContent = "<rect x='" + std::to_string(strokeWidth / 2.0f) + "' y='" + std::to_string(strokeWidth / 2.0f) + "' width='" +
+                           std::to_string(trackW - strokeWidth) + "' height='" + std::to_string(trackH - strokeWidth) + "' rx='" + std::to_string(pillR) + "' fill='" +
+                           cssColor(meta.switchTrackColor) + "'";
+  if (strokeWidth > 0.0f) svgContent += " stroke='" + cssColor(meta.switchTrackBorderColor) + "' stroke-width='" + std::to_string(strokeWidth) + "'";
+  svgContent += "/>";
+
+  float knobInset = std::max((trackH - meta.switchKnobSize) * 0.5f, 0.0f);
+  float leftX = meta.switchKnobSize * 0.5f + knobInset;
+  float rightX = trackW - meta.switchKnobSize * 0.5f - knobInset;
+  float knobCx = leftX + (rightX - leftX) * std::clamp(meta.switchKnobPosition, 0.0f, 1.0f);
+  float knobCy = trackH / 2.0f;
+  svgContent += "<circle cx='" + std::to_string(knobCx) + "' cy='" + std::to_string(knobCy) + "' r='" + std::to_string(meta.switchKnobSize / 2.0f) + "' fill='" +
+                cssColor(meta.switchKnobColor) + "'/>";
+
+  if (meta.switchGlyphScale > 0.01f) {
+    float r = meta.switchKnobSize / 2.0f;
+    float x0 = knobCx - r * 0.55f, y0 = knobCy + 0.0f * r;
+    float xm = knobCx - r * 0.1f, ym = knobCy + r * 0.4f;
+    float x1 = knobCx + r * 0.55f, y1 = knobCy - r * 0.35f;
+    svgContent += "<polyline points='" + std::to_string(x0) + "," + std::to_string(y0) + " " + std::to_string(xm) + "," + std::to_string(ym) + " " + std::to_string(x1) + "," +
+                  std::to_string(y1) + "' fill='none' stroke='" + cssColor(meta.switchKnobGlyphColor) + "' stroke-opacity='" + std::to_string(meta.switchGlyphScale) +
+                  "' stroke-width='" + std::to_string(r * 0.22f) + "' stroke-linecap='round' stroke-linejoin='round'/>";
+  }
+
+  el.set("innerHTML", svgContent);
+}
+
 void HtmlBackend::removeUntouchedIndicators() {
   for (auto it = indicatorElements_.begin(); it != indicatorElements_.end();) {
     if (touchedIndicatorThisFrame_.find(it->first) == touchedIndicatorThisFrame_.end()) {
@@ -138,6 +215,16 @@ void HtmlBackend::removeUntouchedIndicators() {
       indicatorLastBox_.erase(it->first);
       indicatorSig_.erase(it->first);
       it = indicatorElements_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  for (auto it = switchElements_.begin(); it != switchElements_.end();) {
+    if (touchedIndicatorThisFrame_.find(it->first) == touchedIndicatorThisFrame_.end()) {
+      it->second.call<void>("remove");
+      switchLastBox_.erase(it->first);
+      switchSig_.erase(it->first);
+      it = switchElements_.erase(it);
     } else {
       ++it;
     }

@@ -24,8 +24,10 @@
 #include <FL/Fl_RGB_Image.H>
 #include <FL/Fl_Round_Button.H>
 #include <FL/Fl_Scroll.H>
+#include <FL/Fl_Toggle_Button.H>
 #include <FL/fl_draw.H>
 
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <set>
@@ -121,7 +123,7 @@ public:
       float textWidth = fl_width(std::string(text).c_str());
       return {textWidth + 32.0f + fontSize + fontSize / 2, (float)fl_height() + 14.0f};
     }
-    if (kind == NativeWidgetKind::Checkbox || kind == NativeWidgetKind::Radio) {
+    if (kind == NativeWidgetKind::Checkbox || kind == NativeWidgetKind::Radio || kind == NativeWidgetKind::Switch) {
       fl_font(FL_HELVETICA, fontSize);
       float textWidth = fl_width(std::string(text).c_str());
       float indicatorSize = (float)fl_height();
@@ -453,7 +455,7 @@ private:
         action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
       } else if (meta.kind == NativeWidgetKind::Link) {
         action.url = meta.url ? *meta.url : std::string();
-      } else if (meta.kind == NativeWidgetKind::Checkbox && meta.checked) {
+      } else if ((meta.kind == NativeWidgetKind::Checkbox || meta.kind == NativeWidgetKind::Switch) && meta.checked) {
         action.checked = meta.checked;
         action.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
         auto *button = static_cast<Fl_Button *>(it->second);
@@ -495,6 +497,14 @@ private:
       widget = button;
     } else if (meta.kind == NativeWidgetKind::Checkbox) {
       auto *button = new Fl_Check_Button(0, 0, 1, 1);
+      action.checked = meta.checked;
+      action.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
+      button->value(meta.checked && *meta.checked);
+      button->when(FL_WHEN_CHANGED);
+      button->callback(&FltkBackend::onCheckboxChanged, &action);
+      widget = button;
+    } else if (meta.kind == NativeWidgetKind::Switch) {
+      auto *button = new Fl_Toggle_Button(0, 0, 1, 1);
       action.checked = meta.checked;
       action.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
       button->value(meta.checked && *meta.checked);

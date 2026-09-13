@@ -14,6 +14,7 @@
 typedef void (*MwLLDestroyPixmapFn)(MwLLPixmap);
 #include "milsko_lazy_vars.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <functional>
@@ -84,6 +85,8 @@ public:
 
   bool pointerDown() const override { return false; }
 
+  bool aliasesSwitchAsCheckbox() const override { return true; }
+
   Clay_Dimensions windowSize() const override { return {(float)MwGetInteger(window_, MwNwidth), (float)MwGetInteger(window_, MwNheight)}; }
 
   Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view, uint16_t, bool) const override {
@@ -142,7 +145,7 @@ public:
         seenKeys.insert(key);
         MwWidget widget = ensureWidget(key, *meta);
 
-        if (meta->kind == NativeWidgetKind::Checkbox || meta->kind == NativeWidgetKind::Radio) {
+        if (meta->kind == NativeWidgetKind::Checkbox || meta->kind == NativeWidgetKind::Radio || meta->kind == NativeWidgetKind::Switch) {
           pendingCheckboxWidget = widget;
           pendingCheckboxOrdinal = meta->ordinal;
         } else {
@@ -389,7 +392,7 @@ private:
       ClickAction &action = actions_[meta.ordinal];
       if (meta.kind == NativeWidgetKind::Button) {
         action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
-      } else if (meta.kind == NativeWidgetKind::Checkbox && meta.checked) {
+      } else if ((meta.kind == NativeWidgetKind::Checkbox || meta.kind == NativeWidgetKind::Switch) && meta.checked) {
         action.checked = meta.checked;
         action.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
         MwSetInteger(it->second, MwNchecked, *meta.checked ? 1 : 0);
@@ -421,7 +424,7 @@ private:
     action.isLink = meta.kind == NativeWidgetKind::Link;
 
     MwWidget widget = nullptr;
-    if (meta.kind == NativeWidgetKind::Checkbox) {
+    if (meta.kind == NativeWidgetKind::Checkbox || meta.kind == NativeWidgetKind::Switch) {
       action.checked = meta.checked;
       action.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
       widget = MwCreateWidget(MwCheckBoxClass, "n8v-checkbox", currentParent(), 0, 0, 1, 1);

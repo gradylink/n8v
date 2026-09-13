@@ -46,6 +46,25 @@ struct RadioPaint {
   float transitionSeconds = 0.0f;
 };
 
+struct TogglePaint {
+  Color trackOnColor = {0, 0, 0, 0};
+  Color trackOffColor = {0, 0, 0, 0};
+  Color trackBorderColor = {0, 0, 0, 0}; // outline shown only when off, for styles that use one (Material/Fluent)
+  float trackBorderWidth = 0.0f;
+  Color knobOnColor = {0, 0, 0, 0};
+  Color knobOffColor = {0, 0, 0, 0};
+  Color knobGlyphColor = {0, 0, 0, 0}; // Material 3 Expressive only: checkmark drawn inside the "on" knob
+  bool showGlyphWhenOn = false;
+  float trackWidth = 0.0f;
+  float trackHeight = 0.0f;
+  float knobSizeOff = 0.0f;
+  float knobSizeOn = 0.0f; // Material 3 Expressive grows the knob when on; other styles set these equal
+  Padding padding;
+  FontFamily font = FontFamily::DejaVuSans;
+  uint16_t fontSize = 16;
+  float transitionSeconds = 0.0f;
+};
+
 struct EntryPaint {
   Color background;
   Color textColor;
@@ -107,6 +126,7 @@ struct Paint {
   virtual TextPaint text(const TextOptions &options) const = 0;
   virtual CheckboxPaint checkbox(bool checked, bool hovered, bool pressed) const = 0;
   virtual RadioPaint radio(bool selected, bool hovered, bool pressed) const = 0;
+  virtual TogglePaint toggle(bool on, bool hovered, bool pressed) const = 0;
   virtual EntryPaint entry(bool focused, bool hasValue) const = 0;
   virtual DropdownPaint dropdown(bool open, bool hasSelection, bool hovered, bool pressed) const = 0;
   virtual SliderPaint slider(bool hovered, bool pressed) const = 0;

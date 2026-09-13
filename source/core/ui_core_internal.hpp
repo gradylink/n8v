@@ -182,6 +182,7 @@ inline const char *internCString(std::string_view text) {
 
 void resetLeafFrameState();
 void resetCheckboxFrameState();
+void resetToggleFrameState();
 void resetRadioFrameState();
 void resetEntryFrameState();
 void resetDropdownFrameState();

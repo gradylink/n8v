@@ -199,6 +199,12 @@ typedef struct n8v_checkbox_options {
   void *on_change_userdata;
 } n8v_checkbox_options;
 
+typedef struct n8v_toggle_options {
+  bool *checked;
+  n8v_bool_change_fn on_change;
+  void *on_change_userdata;
+} n8v_toggle_options;
+
 typedef struct n8v_radio_options {
   int *selected;
   int value;
@@ -295,6 +301,12 @@ N8V_API void _n8v_checkbox_commit(const char *label);
   _n8v_set_checkbox_opts(opts);                                                                                                                                               \
   _n8v_checkbox_commit
 
+N8V_API void _n8v_set_toggle_opts(n8v_toggle_options opts);
+N8V_API void _n8v_toggle_commit(const char *label);
+#define n8v_toggle(opts)                                                                                                                                                      \
+  _n8v_set_toggle_opts(opts);                                                                                                                                                 \
+  _n8v_toggle_commit
+
 N8V_API void _n8v_set_radio_opts(n8v_radio_options opts);
 N8V_API void _n8v_radio_commit(const char *label);
 #define n8v_radio(opts)                                                                                                                                                       \
@@ -319,6 +331,7 @@ N8V_API void n8v_icon(n8v_icon_options options);
 #define button n8v_button
 #define text n8v_text
 #define checkbox n8v_checkbox
+#define toggle n8v_toggle
 #define radio n8v_radio
 #define entry n8v_entry
 #define dropdown n8v_dropdown
@@ -347,6 +360,7 @@ N8V_API void n8v_icon(n8v_icon_options options);
 #define text_options n8v_text_options
 #define button_options n8v_button_options
 #define checkbox_options n8v_checkbox_options
+#define toggle_options n8v_toggle_options
 #define radio_options n8v_radio_options
 #define entry_options n8v_entry_options
 #define dropdown_options n8v_dropdown_options

@@ -6,6 +6,7 @@
 
 static int click_count = 0;
 static bool password_input = false;
+static bool dark_mode = false;
 static int favorite_color = 0;
 static int favorite_fruit = -1;
 static float volume = 0.5f;
@@ -57,6 +58,8 @@ int main(void) {
           .checked = &password_input,
           .on_change = on_password_toggle,
         }))("Password mode.");
+
+        toggle(((toggle_options){.checked = &dark_mode}))("Dark mode");
 
         entry((entry_options){
           .value = &name,

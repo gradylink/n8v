@@ -76,6 +76,7 @@ void n8v_begin_frame(void) {
   widgetMetaStorage.clear();
   resetLeafFrameState();
   resetCheckboxFrameState();
+  resetToggleFrameState();
   resetRadioFrameState();
   resetEntryFrameState();
   resetDropdownFrameState();

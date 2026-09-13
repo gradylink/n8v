@@ -178,6 +178,19 @@ struct CheckboxBuilder {
   }
 };
 
+struct ToggleBuilder {
+  ToggleOptions options;
+
+  void operator()(std::string_view label) && {
+    std::string labelStorage(label);
+    n8v_toggle_options c_opts{};
+    c_opts.checked = options.checked;
+    if (options.onChange) callback_bridge::bridge(callback_bridge::boolChangeClosures, std::move(options.onChange), c_opts.on_change, c_opts.on_change_userdata);
+    _n8v_set_toggle_opts(c_opts);
+    _n8v_toggle_commit(labelStorage.c_str());
+  }
+};
+
 struct RadioBuilder {
   RadioOptions options;
 
@@ -306,6 +319,8 @@ inline detail::LeafBuilder button(ButtonOptions options) { return detail::LeafBu
 inline detail::LeafBuilder text(TextOptions options) { return detail::LeafBuilder{false, {}, std::move(options)}; }
 
 inline detail::CheckboxBuilder checkbox(CheckboxOptions options) { return detail::CheckboxBuilder{std::move(options)}; }
+
+inline detail::ToggleBuilder toggle(ToggleOptions options) { return detail::ToggleBuilder{std::move(options)}; }
 
 inline detail::RadioBuilder radio(RadioOptions options) { return detail::RadioBuilder{std::move(options)}; }
 

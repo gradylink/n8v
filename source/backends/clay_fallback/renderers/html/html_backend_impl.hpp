@@ -80,6 +80,7 @@ private:
     NativeWidgetMeta *indicatorMeta = nullptr;
     bool isCheckbox = false;
     bool isRadio = false;
+    bool isSwitch = false;
     NativeWidgetMeta *entryMeta = nullptr;
     Clay_BoundingBox entryFieldBox{};
     NativeWidgetMeta *linkMeta = nullptr;
@@ -88,6 +89,7 @@ private:
       indicatorMeta = nullptr;
       isCheckbox = false;
       isRadio = false;
+      isSwitch = false;
       entryMeta = nullptr;
       linkMeta = nullptr;
     }
@@ -101,6 +103,7 @@ private:
   void renderCheckboxOrRadioIndicator(NativeWidgetMeta &meta, const Clay_BoundingBox &labelBox, bool isRadio);
   void renderRadioIndicator(NativeWidgetMeta &meta, const Clay_BoundingBox &squareBox);
   void renderCheckboxIndicator(NativeWidgetMeta &meta, const Clay_BoundingBox &squareBox);
+  void renderSwitchIndicator(NativeWidgetMeta &meta, const Clay_BoundingBox &labelBox);
   void renderDropdownChevron(const Clay_RenderCommand &command);
   void removeUntouchedIndicators();
   void syncEntryInput(NativeWidgetMeta &meta, const Clay_BoundingBox &fieldBox, const Clay_RenderCommand &textCommand);
@@ -127,6 +130,10 @@ private:
   struct IndicatorSignature {
     n8v::Color fill{}, border{}, glyph{};
     float borderWidth = -1.0f, cornerRadius = -1.0f, glyphScale = -1.0f;
+  };
+  struct SwitchSignature {
+    n8v::Color trackColor{}, trackBorderColor{}, knobColor{}, glyphColor{};
+    float trackBorderWidth = -1.0f, knobPosition = -1.0f, knobSize = -1.0f, glyphScale = -1.0f, trackWidth = -1.0f, trackHeight = -1.0f;
   };
   struct ChevronSignature {
     bool pointsUp = false;
@@ -169,6 +176,9 @@ private:
   std::unordered_map<int, Clay_BoundingBox> indicatorLastBox_;
   std::unordered_map<int, IndicatorSignature> indicatorSig_;
   std::unordered_map<int, bool> touchedIndicatorThisFrame_;
+  std::unordered_map<int, emscripten::val> switchElements_;
+  std::unordered_map<int, Clay_BoundingBox> switchLastBox_;
+  std::unordered_map<int, SwitchSignature> switchSig_;
   std::unordered_map<const void *, std::string> imageDataUris_;
   std::unordered_map<ElementKey, const void *> elementImageSource_;
   std::vector<ClipFrame> clipStack_;

@@ -83,6 +83,24 @@ protected:
   }
 };
 
+class N8VSwitch final : public QPushButton {
+public:
+  using QPushButton::QPushButton;
+  bool *checkedPtr = nullptr;
+  std::function<void(bool)> onChange;
+
+protected:
+  void mouseReleaseEvent(QMouseEvent *event) override {
+    QPushButton::mouseReleaseEvent(event);
+    if (!checkedPtr) return;
+    bool newValue = isChecked();
+    if (newValue != *checkedPtr) {
+      *checkedPtr = newValue;
+      if (onChange) onChange(newValue);
+    }
+  }
+};
+
 class N8VRadioButton final : public QRadioButton {
 public:
   using QRadioButton::QRadioButton;
@@ -138,6 +156,9 @@ public:
     measureSlider_ = new QSlider(Qt::Horizontal, window_);
     measureSlider_->setVisible(false);
 
+    measureSwitch_ = new QPushButton(window_);
+    measureSwitch_->setVisible(false);
+
     return true;
   }
 
@@ -159,6 +180,11 @@ public:
 
   Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view text, uint16_t fontSize, bool hasIcon) const override {
     QString qtext = QString::fromUtf8(text.data(), (int)text.size());
+    if (kind == NativeWidgetKind::Switch) {
+      measureSwitch_->setText(qtext);
+      QSize hint = measureSwitch_->sizeHint();
+      return {(float)hint.width(), (float)hint.height()};
+    }
     if (kind == NativeWidgetKind::Button) {
       measureButton_->setText(qtext);
       QSize hint = measureButton_->sizeHint();
@@ -263,6 +289,8 @@ public:
             static_cast<N8VCheckBox *>(pendingLabelTarget)->setText(qtext);
           } else if (pendingLabelTarget && pendingKind == NativeWidgetKind::Radio) {
             static_cast<N8VRadioButton *>(pendingLabelTarget)->setText(qtext);
+          } else if (pendingLabelTarget && pendingKind == NativeWidgetKind::Switch) {
+            static_cast<N8VSwitch *>(pendingLabelTarget)->setText(qtext);
           } else if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry && pendingKind != NativeWidgetKind::Dropdown) {
             static_cast<N8VLinkLabel *>(pendingLabelTarget)->setText(linkHtml(qtext, QString::fromStdString(pendingLinkUrl)));
           }
@@ -585,6 +613,11 @@ private:
         checkbox->checkedPtr = meta.checked;
         checkbox->onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
         checkbox->setChecked(*meta.checked);
+      } else if (meta.kind == NativeWidgetKind::Switch && meta.checked) {
+        auto *sw = static_cast<N8VSwitch *>(it->second);
+        sw->checkedPtr = meta.checked;
+        sw->onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
+        if (sw->isChecked() != *meta.checked) sw->setChecked(*meta.checked);
       } else if (meta.kind == NativeWidgetKind::Entry) {
         auto *lineEdit = static_cast<QLineEdit *>(it->second);
         lineEdit->setEchoMode(meta.password ? QLineEdit::Password : QLineEdit::Normal);
@@ -617,6 +650,13 @@ private:
       checkbox->onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
       checkbox->setChecked(meta.checked && *meta.checked);
       widget = checkbox;
+    } else if (meta.kind == NativeWidgetKind::Switch) {
+      auto *sw = new N8VSwitch(currentParent());
+      sw->setCheckable(true);
+      sw->checkedPtr = meta.checked;
+      sw->onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
+      sw->setChecked(meta.checked && *meta.checked);
+      widget = sw;
     } else if (meta.kind == NativeWidgetKind::Entry) {
       auto *lineEdit = new QLineEdit(currentParent());
       lineEdit->setEchoMode(meta.password ? QLineEdit::Password : QLineEdit::Normal);
@@ -703,6 +743,7 @@ private:
   QRadioButton *measureRadio_ = nullptr;
   QComboBox *measureCombo_ = nullptr;
   QSlider *measureSlider_ = nullptr;
+  QPushButton *measureSwitch_ = nullptr;
 
   std::map<WidgetKey, QWidget *> widgets_;
   std::unordered_map<int, std::function<void()>> callbacks_;

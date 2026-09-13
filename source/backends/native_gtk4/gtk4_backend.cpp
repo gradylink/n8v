@@ -12,6 +12,7 @@
 // fix conflict with function of same name
 #undef g_object_ref_sink
 
+#include <algorithm>
 #include <cstdio>
 #include <functional>
 #include <map>
@@ -83,6 +84,9 @@ public:
     measureSlider_ = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0.0, 1.0, 0.01);
     g_object_ref_sink(measureSlider_);
 
+    measureSwitch_ = gtk_switch_new();
+    g_object_ref_sink(measureSwitch_);
+
     return true;
   }
 
@@ -132,6 +136,16 @@ public:
       gtk_widget_measure(measureSlider_, GTK_ORIENTATION_VERTICAL, -1, &minH, &natH, nullptr, nullptr);
       return {0, (float)natH};
     }
+    if (kind == NativeWidgetKind::Switch) {
+      int swMinW = 0, swNatW = 0, swMinH = 0, swNatH = 0;
+      gtk_widget_measure(measureSwitch_, GTK_ORIENTATION_HORIZONTAL, -1, &swMinW, &swNatW, nullptr, nullptr);
+      gtk_widget_measure(measureSwitch_, GTK_ORIENTATION_VERTICAL, -1, &swMinH, &swNatH, nullptr, nullptr);
+      gtk_label_set_text(GTK_LABEL(measureLabel_), std::string(text).c_str());
+      int lblMinW = 0, lblNatW = 0, lblMinH = 0, lblNatH = 0;
+      gtk_widget_measure(measureLabel_, GTK_ORIENTATION_HORIZONTAL, -1, &lblMinW, &lblNatW, nullptr, nullptr);
+      gtk_widget_measure(measureLabel_, GTK_ORIENTATION_VERTICAL, -1, &lblMinH, &lblNatH, nullptr, nullptr);
+      return {(float)(swNatW + 6 + lblNatW), (float)std::max(swNatH, lblNatH)};
+    }
     if (kind == NativeWidgetKind::Checkbox || kind == NativeWidgetKind::Radio) {
       GtkWidget *probe = kind == NativeWidgetKind::Radio ? measureRadio_ : measureCheckbox_;
       gtk_check_button_set_label(GTK_CHECK_BUTTON(probe), std::string(text).c_str());
@@ -155,6 +169,7 @@ public:
     std::set<WidgetKey> seenKeys;
     GtkWidget *pendingLabelTarget = nullptr;
     GtkWidget *pendingButtonIconLabel = nullptr;
+    GtkWidget *pendingSwitchLabel = nullptr;
     NativeWidgetKind pendingKind = NativeWidgetKind::Button;
     std::string pendingLinkUrl;
     containerStack_.clear();
@@ -168,6 +183,7 @@ public:
         if (!meta) {
           pendingLabelTarget = nullptr;
           pendingButtonIconLabel = nullptr;
+          pendingSwitchLabel = nullptr;
           continue;
         }
         WidgetKey key{meta->ordinal, -1};
@@ -178,6 +194,7 @@ public:
         pendingKind = meta->kind;
         pendingLinkUrl = meta->kind == NativeWidgetKind::Link && meta->url ? *meta->url : std::string();
         pendingButtonIconLabel = meta->kind == NativeWidgetKind::Button ? ensureButtonIcon(widget, *meta) : nullptr;
+        pendingSwitchLabel = meta->kind == NativeWidgetKind::Switch ? switchStates_[meta->ordinal].label : nullptr;
         continue;
       }
 
@@ -195,6 +212,7 @@ public:
         }
         pendingLabelTarget = nullptr;
         pendingButtonIconLabel = nullptr;
+        pendingSwitchLabel = nullptr;
         continue;
       }
 
@@ -202,6 +220,7 @@ public:
         ensureScrollContainer(command->id, command->boundingBox, command->renderData.clip);
         pendingLabelTarget = nullptr;
         pendingButtonIconLabel = nullptr;
+        pendingSwitchLabel = nullptr;
         continue;
       }
 
@@ -209,6 +228,7 @@ public:
         closeScrollContainer();
         pendingLabelTarget = nullptr;
         pendingButtonIconLabel = nullptr;
+        pendingSwitchLabel = nullptr;
         continue;
       }
 
@@ -223,11 +243,15 @@ public:
             gtk_label_set_markup(GTK_LABEL(pendingLabelTarget), linkMarkup(text, pendingLinkUrl).c_str());
           } else if (pendingButtonIconLabel) {
             gtk_label_set_text(GTK_LABEL(pendingButtonIconLabel), text.c_str());
+          } else if (pendingSwitchLabel) {
+            gtk_label_set_text(GTK_LABEL(pendingSwitchLabel), text.c_str());
           } else if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry && pendingKind != NativeWidgetKind::Dropdown) {
             gtk_button_set_label(GTK_BUTTON(pendingLabelTarget), text.c_str());
           }
           pendingLabelTarget = nullptr;
           pendingButtonIconLabel = nullptr;
+          pendingSwitchLabel = nullptr;
+          pendingSwitchLabel = nullptr;
           continue;
         }
 
@@ -240,11 +264,13 @@ public:
         positionWidget(widget, command->boundingBox);
         pendingLabelTarget = nullptr;
         pendingButtonIconLabel = nullptr;
+        pendingSwitchLabel = nullptr;
         continue;
       }
 
       pendingLabelTarget = nullptr;
       pendingButtonIconLabel = nullptr;
+      pendingSwitchLabel = nullptr;
     }
 
     for (auto it = widgets_.begin(); it != widgets_.end();) {
@@ -260,6 +286,7 @@ public:
         }
         dropdownStates_.erase(it->first.ordinal);
         sliderStates_.erase(it->first.ordinal);
+        switchStates_.erase(it->first.ordinal);
         imageTextureSources_.erase(it->second);
         it = widgets_.erase(it);
       } else {
@@ -312,6 +339,10 @@ public:
       g_object_unref(measureSlider_);
       measureSlider_ = nullptr;
     }
+    if (measureSwitch_) {
+      g_object_unref(measureSwitch_);
+      measureSwitch_ = nullptr;
+    }
     if (window_) {
       gtk_window_destroy(GTK_WINDOW(window_));
       window_ = nullptr;
@@ -339,6 +370,23 @@ private:
     auto *state = static_cast<CheckboxState *>(userData);
     if (!state || !state->checked) return;
     bool newValue = gtk_check_button_get_active(button);
+    if (newValue == *state->checked) return;
+    *state->checked = newValue;
+    if (state->onChange) state->onChange(newValue);
+  }
+
+  struct SwitchState {
+    GtkWidget *box = nullptr;
+    GtkWidget *sw = nullptr;
+    GtkWidget *label = nullptr;
+    bool *checked = nullptr;
+    std::function<void(bool)> onChange;
+  };
+
+  static void onSwitchToggled(GObject *object, GParamSpec *, gpointer userData) {
+    auto *state = static_cast<SwitchState *>(userData);
+    if (!state || !state->checked) return;
+    bool newValue = gtk_switch_get_active(GTK_SWITCH(object));
     if (newValue == *state->checked) return;
     *state->checked = newValue;
     if (state->onChange) state->onChange(newValue);
@@ -438,6 +486,12 @@ private:
         bool shouldBeActive = *meta.radioSelected == meta.radioValue;
         gboolean current = gtk_check_button_get_active(GTK_CHECK_BUTTON(it->second));
         if ((bool)current != shouldBeActive) gtk_check_button_set_active(GTK_CHECK_BUTTON(it->second), shouldBeActive);
+      } else if (meta.kind == NativeWidgetKind::Switch && meta.checked) {
+        SwitchState &state = switchStates_[meta.ordinal];
+        state.checked = meta.checked;
+        state.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
+        gboolean current = gtk_switch_get_active(GTK_SWITCH(state.sw));
+        if ((bool)current != *meta.checked) gtk_switch_set_active(GTK_SWITCH(state.sw), *meta.checked);
       } else if (meta.kind == NativeWidgetKind::Dropdown && meta.dropdownSelected) {
         DropdownState &state = dropdownStates_[meta.ordinal];
         state.selected = meta.dropdownSelected;
@@ -485,6 +539,18 @@ private:
         else leader = widget;
       }
       g_signal_connect_data(widget, "toggled", G_CALLBACK(&Gtk4Backend::onRadioToggled), &radioStates_[meta.ordinal], nullptr, (GConnectFlags)0);
+    } else if (meta.kind == NativeWidgetKind::Switch) {
+      SwitchState &state = switchStates_[meta.ordinal];
+      state.box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+      state.sw = gtk_switch_new();
+      state.label = gtk_label_new("");
+      gtk_box_append(GTK_BOX(state.box), state.sw);
+      gtk_box_append(GTK_BOX(state.box), state.label);
+      state.checked = meta.checked;
+      state.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
+      gtk_switch_set_active(GTK_SWITCH(state.sw), meta.checked && *meta.checked);
+      g_signal_connect_data(state.sw, "notify::active", G_CALLBACK(&Gtk4Backend::onSwitchToggled), &switchStates_[meta.ordinal], nullptr, (GConnectFlags)0);
+      widget = state.box;
     } else if (meta.kind == NativeWidgetKind::Dropdown) {
       std::vector<const char *> cstrs;
       if (meta.dropdownItems) {
@@ -702,11 +768,13 @@ private:
   GtkWidget *measureRadio_ = nullptr;
   GtkWidget *measureDropdown_ = nullptr;
   GtkWidget *measureSlider_ = nullptr;
+  GtkWidget *measureSwitch_ = nullptr;
   bool closeRequested_ = false;
 
   std::map<WidgetKey, GtkWidget *> widgets_;
   std::unordered_map<int, std::function<void()>> buttonCallbacks_;
   std::unordered_map<int, CheckboxState> checkboxStates_;
+  std::unordered_map<int, SwitchState> switchStates_;
   std::unordered_map<int, EntryState> entryStates_;
   std::unordered_map<int, RadioState> radioStates_;
   std::unordered_map<int *, GtkWidget *> radioGroups_;

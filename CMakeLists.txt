@@ -263,6 +263,7 @@ set(N8V_SOURCES
   source/core/widgets/leaf.cpp
   source/core/widgets/checkbox.cpp
   source/core/widgets/radio.cpp
+  source/core/widgets/toggle.cpp
   source/core/widgets/entry.cpp
   source/core/widgets/dropdown.cpp
   source/core/widgets/slider.cpp
