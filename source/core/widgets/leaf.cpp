@@ -88,8 +88,8 @@ void _n8v_button_commit(const char *label) {
   }
 
   Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Button, labelView, paint.fontSize, iconImage != nullptr);
-  if (nativeSize.width > 0 && nativeSize.height > 0) {
-    decl.layout.sizing.width = CLAY_SIZING_FIXED(nativeSize.width);
+  if (nativeSize.width > 0) decl.layout.sizing.width = CLAY_SIZING_FIXED(nativeSize.width);
+  if (nativeSize.height > 0) {
     decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
   }
 
@@ -123,6 +123,8 @@ void _n8v_button_commit(const char *label) {
     iconMeta.kind = n8v::NativeWidgetKind::Icon;
     iconMeta.ordinal = widgetOrdinal++;
     iconMeta.image = iconImage;
+    iconMeta.iconName = hasIcon ? internCString(iconView) : nullptr;
+    iconMeta.iconTint = paint.textColor;
     iconDecl.userData = &iconMeta;
     Clay__ConfigureOpenElement(iconDecl);
     Clay__CloseElement();
@@ -175,10 +177,8 @@ void _n8v_text_commit(const char *label) {
     const n8v::TextPaint textPaint = n8v::activePaint().text(textOptions);
 
     Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Link, labelView, textPaint.fontSize);
-    if (nativeSize.width > 0 && nativeSize.height > 0) {
-      decl.layout.sizing.width = CLAY_SIZING_FIXED(nativeSize.width);
-      decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
-    }
+    if (nativeSize.width > 0) decl.layout.sizing.width = CLAY_SIZING_FIXED(nativeSize.width);
+    if (nativeSize.height > 0) decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
 
     Clay__ConfigureOpenElement(decl);
 

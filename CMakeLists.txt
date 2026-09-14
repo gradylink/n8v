@@ -301,6 +301,20 @@ else()
     source/backends/clay_fallback/renderers/sdl2/draw_primitives.cpp
     source/backends/clay_fallback/renderers/sdl2/image_field.cpp
   )
+  if(NOT WIN32)
+    list(APPEND N8V_SOURCES
+      source/backends/native_tui/tui_backend.cpp
+      source/backends/native_tui/screen_grid.cpp
+      source/backends/native_tui/draw_primitives.cpp
+      source/backends/native_tui/indicators.cpp
+      source/backends/native_tui/entry_field.cpp
+      source/backends/native_tui/text_selection.cpp
+      source/backends/native_tui/kitty_graphics.cpp
+      source/backends/native_tui/image_field.cpp
+      source/backends/native_tui/slider_field.cpp
+      source/backends/native_tui/dropdown_field.cpp
+    )
+  endif()
 endif()
 
 option(N8V_BUILD_SHARED "Also build a shared libn8v.so." ON)
@@ -329,6 +343,9 @@ foreach(_n8v_target ${_n8v_targets})
 
   if(NOT EMSCRIPTEN)
     target_link_libraries(${_n8v_target} PRIVATE sdl2_lazy)
+    if(NOT WIN32)
+      cl_add_dep(${_n8v_target} ftxui PRIVATE)
+    endif()
   endif()
 
   if(N8V_HAVE_HTML)

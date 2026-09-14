@@ -57,9 +57,13 @@ void _n8v_toggle_commit(const char *label) {
   n8v::Color knobColor = easeColor(ordinal, 16, onValue ? paint.knobOnColor : paint.knobOffColor, paint.transitionSeconds);
   float glyphScale = easeValue(animKey(ordinal, 20), paint.showGlyphWhenOn && onValue ? 1.0f : 0.0f, paint.transitionSeconds);
 
+  Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Switch, labelView, labelPaint.fontSize);
+
   Clay_ElementDeclaration decl = {};
   n8v::Padding pad = paint.padding;
-  if (n8v::activeBackend().aliasesSwitchAsCheckbox()) {
+  if (nativeSize.width > 0.0f) {
+    pad.left = (uint16_t)nativeSize.width;
+  } else if (n8v::activeBackend().aliasesSwitchAsCheckbox()) {
     Clay_Dimensions labelDims = n8v::activeBackend().measureText(labelView, labelPaint.font, labelPaint.fontSize, false, false);
     float indicatorSize = labelDims.height;
     pad.left = (uint16_t)(indicatorSize + indicatorSize * 0.4f);
@@ -69,7 +73,6 @@ void _n8v_toggle_commit(const char *label) {
   decl.layout.padding = n8v::detail::toClay(pad);
   decl.backgroundColor = {0, 0, 0, 1};
 
-  Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Switch, labelView, labelPaint.fontSize);
   if (nativeSize.width > 0 && nativeSize.height > 0) {
     decl.layout.sizing.width = CLAY_SIZING_FIXED(nativeSize.width);
     decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);

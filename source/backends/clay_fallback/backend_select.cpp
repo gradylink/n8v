@@ -7,6 +7,9 @@
 #else
 #include "renderers/sdl2/sdl2_backend.hpp"
 #include "sdl2_lazy_vars.h"
+#if !defined(_WIN32)
+#include "backends/native_tui/tui_backend.hpp"
+#endif
 #endif
 
 #ifdef N8V_HAS_GTK4_BACKEND
@@ -77,9 +80,19 @@ std::unique_ptr<Backend> selectBackend() {
     return detail::makeFltkBackend();
   }
 #endif
+#if !defined(_WIN32)
+  if (preferredBackend && (std::strcmp(preferredBackend, "tui") == 0 || std::strcmp(preferredBackend, "ftxui") == 0)) {
+    return detail::makeTuiBackend();
+  }
+#endif
   if (lzy_sdl2_lazy_is_available()) {
     return detail::makeSdl2Backend();
   }
+#if !defined(_WIN32)
+  if (!preferredBackend && detail::tuiBackendLikelyUsable()) {
+    return detail::makeTuiBackend();
+  }
+#endif
   return std::make_unique<HeadlessBackend>();
 #endif
 }

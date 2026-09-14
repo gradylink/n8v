@@ -1,33 +1,31 @@
-#include "sdl2_backend_impl.hpp"
-#include "backends/text_edit_utils.hpp"
+#include "tui_backend_impl.hpp"
 
+#include "backends/text_edit_utils.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
 #include "core/ui_core_internal.hpp"
-
-#include <SDL2/SDL.h>
 
 #include <string>
 #include <string_view>
 
 namespace n8v::detail {
 
-void Sdl2Backend::fireEntryChange() {
+void TuiBackend::fireEntryChange() {
   if (!entry_.value) return;
   if (entry_.buf) ui_internal::writeToStringBuf(*entry_.value, *entry_.buf);
   if (entry_.onChange) entry_.onChange(entry_.buf ? entry_.buf->data : entry_.value->c_str(), entry_.buf ? entry_.buf->length : entry_.value->size(), entry_.onChangeUserdata);
 }
 
-void Sdl2Backend::handleEntryClick(NativeWidgetMeta *meta, size_t hitOffset) {
-  Uint32 now = SDL_GetTicks();
-  if (meta->ordinal == lastClickOrdinal_ && (now - lastClickTicks_) < 400) {
+void TuiBackend::handleEntryClick(NativeWidgetMeta *meta, size_t hitOffset) {
+  int64_t now = nowMs();
+  if (meta->ordinal == lastClickOrdinal_ && (now - lastClickMs_) < 400) {
     clickCount_ = (clickCount_ % 3) + 1;
   } else {
     clickCount_ = 1;
   }
-  lastClickTicks_ = now;
+  lastClickMs_ = now;
   lastClickOrdinal_ = meta->ordinal;
-  lastActivityTicks_ = now;
+  lastActivityMs_ = now;
 
   textSel_ = TextSelState{};
   entry_.value = meta->entryValue;
@@ -56,16 +54,16 @@ void Sdl2Backend::handleEntryClick(NativeWidgetMeta *meta, size_t hitOffset) {
   }
 }
 
-void Sdl2Backend::eraseEntrySelection() {
+void TuiBackend::eraseEntrySelection() {
   if (!entry_.value || !entry_.hasSelection()) return;
   size_t s = entry_.selStart(), e = entry_.selEnd();
   entry_.value->erase(s, e - s);
   entry_.cursor = entry_.anchor = s;
 }
 
-void Sdl2Backend::insertAtCursor(std::string_view text) {
+void TuiBackend::insertAtCursor(std::string_view text) {
   if (!entry_.value || text.empty()) return;
-  lastActivityTicks_ = SDL_GetTicks();
+  lastActivityMs_ = nowMs();
   if (entry_.hasSelection()) eraseEntrySelection();
   entry_.value->insert(entry_.cursor, text);
   entry_.cursor += text.size();
@@ -73,62 +71,55 @@ void Sdl2Backend::insertAtCursor(std::string_view text) {
   fireEntryChange();
 }
 
-void Sdl2Backend::moveEntryCursor(size_t newPos, bool extendSelection) {
+void TuiBackend::moveEntryCursor(size_t newPos, bool extendSelection) {
   entry_.cursor = newPos;
   if (!extendSelection) entry_.anchor = newPos;
 }
 
-void Sdl2Backend::handleEntryKey(SDL_Keysym keysym) {
+void TuiBackend::handleEntryKey(const TuiKeyEvent &key) {
   if (!entry_.value) return;
-  lastActivityTicks_ = SDL_GetTicks();
+  lastActivityMs_ = nowMs();
   std::string &s = *entry_.value;
-  bool ctrl = (keysym.mod & KMOD_CTRL) != 0;
-  bool shift = (keysym.mod & KMOD_SHIFT) != 0;
+  bool ctrl = key.ctrl;
+  bool shift = key.shift;
 
-  switch (keysym.sym) {
-  case SDLK_LEFT: {
+  switch (key.code) {
+  case TuiKeyCode::Left: {
     size_t target = (!shift && entry_.hasSelection()) ? entry_.selStart() : (ctrl ? wordLeft(s, entry_.cursor) : prevCodepointStart(s, entry_.cursor));
     moveEntryCursor(target, shift);
     break;
   }
-  case SDLK_RIGHT: {
+  case TuiKeyCode::Right: {
     size_t target = (!shift && entry_.hasSelection()) ? entry_.selEnd() : (ctrl ? wordRight(s, entry_.cursor) : nextCodepointStart(s, entry_.cursor));
     moveEntryCursor(target, shift);
     break;
   }
-  case SDLK_HOME:
+  case TuiKeyCode::Home:
     moveEntryCursor(0, shift);
     break;
-  case SDLK_END:
+  case TuiKeyCode::End:
     moveEntryCursor(s.size(), shift);
     break;
-  case SDLK_a:
+  case TuiKeyCode::LetterA:
     if (ctrl) {
       entry_.anchor = 0;
       entry_.cursor = s.size();
     }
     break;
-  case SDLK_c:
-  case SDLK_x:
+  case TuiKeyCode::LetterC:
+  case TuiKeyCode::LetterX:
     if (ctrl && entry_.hasSelection()) {
-      std::string selected = s.substr(entry_.selStart(), entry_.selEnd() - entry_.selStart());
-      SDL_SetClipboardText(selected.c_str());
-      if (keysym.sym == SDLK_x) {
+      internalClipboard_ = s.substr(entry_.selStart(), entry_.selEnd() - entry_.selStart());
+      if (key.code == TuiKeyCode::LetterX) {
         eraseEntrySelection();
         fireEntryChange();
       }
     }
     break;
-  case SDLK_v:
-    if (ctrl) {
-      char *clip = SDL_GetClipboardText();
-      if (clip) {
-        insertAtCursor(clip);
-        SDL_free(clip);
-      }
-    }
+  case TuiKeyCode::LetterV:
+    if (ctrl && !internalClipboard_.empty()) insertAtCursor(internalClipboard_);
     break;
-  case SDLK_BACKSPACE:
+  case TuiKeyCode::Backspace:
     if (entry_.hasSelection()) {
       eraseEntrySelection();
     } else if (ctrl) {
@@ -144,7 +135,7 @@ void Sdl2Backend::handleEntryKey(SDL_Keysym keysym) {
     }
     fireEntryChange();
     break;
-  case SDLK_DELETE:
+  case TuiKeyCode::Delete:
     if (entry_.hasSelection()) {
       eraseEntrySelection();
     } else if (ctrl) {
@@ -163,10 +154,7 @@ void Sdl2Backend::handleEntryKey(SDL_Keysym keysym) {
   }
 }
 
-void Sdl2Backend::renderEntryText(NativeWidgetMeta *meta, const Clay_RenderCommand &command, bool clicked, bool dragging) {
-  auto *flags = static_cast<TextStyleFlags *>(command.userData);
-  uint16_t fontSize = command.renderData.text.fontSize;
-  FontFamily family = flags ? flags->font : FontFamily::DejaVuSans;
+void TuiBackend::renderEntryText(NativeWidgetMeta *meta, const Clay_RenderCommand &command, bool clicked, bool dragging) {
   const std::string &value = *meta->entryValue;
   bool isPassword = meta->password;
   std::string_view displayText(command.renderData.text.stringContents.chars, (size_t)command.renderData.text.stringContents.length);
@@ -176,34 +164,30 @@ void Sdl2Backend::renderEntryText(NativeWidgetMeta *meta, const Clay_RenderComma
     size_t realHit = 0;
     if (hasValue) {
       float localX = pointerX_ - command.boundingBox.x;
-      size_t displayHit = hitTestOffset(displayText, family, fontSize, localX);
+      size_t displayHit = hitTestOffset(displayText, localX);
       realHit = displayOffsetToRealOffset(value, displayHit, isPassword);
     }
     handleEntryClick(meta, realHit);
   } else if (dragging) {
     if (hasValue) {
       float localX = pointerX_ - command.boundingBox.x;
-      size_t displayHit = hitTestOffset(displayText, family, fontSize, localX);
+      size_t displayHit = hitTestOffset(displayText, localX);
       entry_.cursor = displayOffsetToRealOffset(value, displayHit, isPassword);
     } else {
       entry_.cursor = 0;
     }
-    lastActivityTicks_ = SDL_GetTicks();
+    lastActivityMs_ = nowMs();
   }
 
   bool isFocused = meta->ordinal == entry_.ordinal;
   bool hasSel = isFocused && entry_.hasSelection();
   size_t displaySelStart = realOffsetToDisplayOffset(value, entry_.selStart(), isPassword);
   size_t displaySelEnd = realOffsetToDisplayOffset(value, entry_.selEnd(), isPassword);
-  if (hasSel) drawSelectionHighlight(command.boundingBox, displayText, family, fontSize, displaySelStart, displaySelEnd);
-  if (hasSel) {
-    drawText(command, displaySelStart, displaySelEnd);
-  } else {
-    drawText(command);
-  }
+  if (hasSel) drawSelectionHighlight(command.boundingBox, displayText, displaySelStart, displaySelEnd);
+  drawText(command);
   if (isFocused && !hasSel && blinkOn()) {
     size_t displayCursor = realOffsetToDisplayOffset(value, entry_.cursor, isPassword);
-    drawCursorCaret(command.boundingBox, displayText, family, fontSize, displayCursor);
+    drawCursorCaret(command.boundingBox, displayText, displayCursor);
   }
 }
 

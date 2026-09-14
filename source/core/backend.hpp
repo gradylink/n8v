@@ -37,6 +37,9 @@ struct Backend {
     return {0, 0};
   }
 
+  // for TUI backend
+  virtual Clay_Dimensions cellSize() const { return {0, 0}; }
+
   virtual bool isEntryFocused(int) const { return false; }
 
   virtual bool rendersNativeChrome() const { return true; }

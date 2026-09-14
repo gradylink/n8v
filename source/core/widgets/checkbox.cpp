@@ -53,15 +53,16 @@ void _n8v_checkbox_commit(const char *label) {
   float indicatorSize = paint.indicatorSize > 0.0f ? paint.indicatorSize : labelDims.height;
   float indicatorGap = indicatorSize * 0.4f;
 
+  Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Checkbox, labelView, labelPaint.fontSize);
+
   Clay_ElementDeclaration decl = {};
   n8v::Padding pad = paint.padding;
-  pad.left = (uint16_t)(indicatorSize + indicatorGap);
+  pad.left = nativeSize.width > 0.0f ? (uint16_t)nativeSize.width : (uint16_t)(indicatorSize + indicatorGap);
   decl.layout.padding = n8v::detail::toClay(pad);
   decl.backgroundColor = {0, 0, 0, 1};
 
   float radius = easeValue(animKey(ordinal, 0), paint.cornerRadius.topLeft, paint.transitionSeconds);
 
-  Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Checkbox, labelView, labelPaint.fontSize);
   if (nativeSize.width > 0 && nativeSize.height > 0) {
     decl.layout.sizing.width = CLAY_SIZING_FIXED(nativeSize.width);
     decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);

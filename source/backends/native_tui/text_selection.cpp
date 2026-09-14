@@ -1,25 +1,23 @@
-#include "sdl2_backend_impl.hpp"
+#include "tui_backend_impl.hpp"
+
 #include "backends/text_edit_utils.hpp"
-
 #include "core/text_style_flags.hpp"
-
-#include <SDL2/SDL.h>
 
 #include <string>
 #include <string_view>
 
 namespace n8v::detail {
 
-void Sdl2Backend::handleTextClick(int ordinal, std::string_view text, size_t hitOffset) {
-  Uint32 now = SDL_GetTicks();
-  if (ordinal == lastClickOrdinal_ && (now - lastClickTicks_) < 400) {
+void TuiBackend::handleTextClick(int ordinal, std::string_view text, size_t hitOffset) {
+  int64_t now = nowMs();
+  if (ordinal == lastClickOrdinal_ && (now - lastClickMs_) < 400) {
     clickCount_ = (clickCount_ % 3) + 1;
   } else {
     clickCount_ = 1;
   }
-  lastClickTicks_ = now;
+  lastClickMs_ = now;
   lastClickOrdinal_ = ordinal;
-  lastActivityTicks_ = now;
+  lastActivityMs_ = now;
 
   entry_ = EntryEditState{};
   textSel_.ordinal = ordinal;
@@ -45,45 +43,44 @@ void Sdl2Backend::handleTextClick(int ordinal, std::string_view text, size_t hit
   }
 }
 
-void Sdl2Backend::moveTextCursor(size_t newPos, bool extendSelection) {
+void TuiBackend::moveTextCursor(size_t newPos, bool extendSelection) {
   textSel_.cursor = newPos;
   if (!extendSelection) textSel_.anchor = newPos;
 }
 
-void Sdl2Backend::handleTextKey(SDL_Keysym keysym) {
+void TuiBackend::handleTextKey(const TuiKeyEvent &key) {
   if (!textSel_.active) return;
-  lastActivityTicks_ = SDL_GetTicks();
+  lastActivityMs_ = nowMs();
   const std::string &s = textSel_.text;
-  bool ctrl = (keysym.mod & KMOD_CTRL) != 0;
-  bool shift = (keysym.mod & KMOD_SHIFT) != 0;
+  bool ctrl = key.ctrl;
+  bool shift = key.shift;
 
-  switch (keysym.sym) {
-  case SDLK_LEFT: {
+  switch (key.code) {
+  case TuiKeyCode::Left: {
     size_t target = (!shift && textSel_.hasSelection()) ? textSel_.selStart() : (ctrl ? wordLeft(s, textSel_.cursor) : prevCodepointStart(s, textSel_.cursor));
     moveTextCursor(target, shift);
     break;
   }
-  case SDLK_RIGHT: {
+  case TuiKeyCode::Right: {
     size_t target = (!shift && textSel_.hasSelection()) ? textSel_.selEnd() : (ctrl ? wordRight(s, textSel_.cursor) : nextCodepointStart(s, textSel_.cursor));
     moveTextCursor(target, shift);
     break;
   }
-  case SDLK_HOME:
+  case TuiKeyCode::Home:
     moveTextCursor(0, shift);
     break;
-  case SDLK_END:
+  case TuiKeyCode::End:
     moveTextCursor(s.size(), shift);
     break;
-  case SDLK_a:
+  case TuiKeyCode::LetterA:
     if (ctrl) {
       textSel_.anchor = 0;
       textSel_.cursor = s.size();
     }
     break;
-  case SDLK_c:
+  case TuiKeyCode::LetterC:
     if (ctrl && textSel_.hasSelection()) {
-      std::string selected = s.substr(textSel_.selStart(), textSel_.selEnd() - textSel_.selStart());
-      SDL_SetClipboardText(selected.c_str());
+      internalClipboard_ = s.substr(textSel_.selStart(), textSel_.selEnd() - textSel_.selStart());
     }
     break;
   default:
@@ -91,38 +88,28 @@ void Sdl2Backend::handleTextKey(SDL_Keysym keysym) {
   }
 }
 
-bool Sdl2Backend::renderSelectableText(const Clay_RenderCommand &command, const TextStyleFlags &flags, std::string_view text) {
+bool TuiBackend::renderSelectableText(const Clay_RenderCommand &command, const TextStyleFlags &flags, std::string_view text) {
   int ord = flags.ordinal;
-  uint16_t fontSize = command.renderData.text.fontSize;
-  FontFamily family = flags.font;
-  bool bold = flags.bold;
-  bool italic = flags.italic;
   const Clay_BoundingBox &box = command.boundingBox;
 
   bool hit = pointerX_ >= box.x && pointerX_ <= box.x + box.width && pointerY_ >= box.y && pointerY_ <= box.y + box.height;
 
-  if (hit && currentCursorKind_ == CursorKind::Default) {
-    setCursor(CursorKind::Text);
-  }
-
   if (justClicked_ && hit) {
     float localX = pointerX_ - box.x;
-    size_t hitOffset = hitTestOffset(text, family, fontSize, localX, bold, italic);
+    size_t hitOffset = hitTestOffset(text, localX);
     handleTextClick(ord, text, hitOffset);
   } else if (textMouseSelecting_ && textSel_.active && textSel_.ordinal == ord) {
     float localX = pointerX_ - box.x;
-    textSel_.cursor = hitTestOffset(text, family, fontSize, localX, bold, italic);
-    lastActivityTicks_ = SDL_GetTicks();
+    textSel_.cursor = hitTestOffset(text, localX);
+    lastActivityMs_ = nowMs();
   }
 
   if (textSel_.active && textSel_.ordinal == ord) {
     textSel_.text = std::string(text);
     if (textSel_.hasSelection()) {
-      drawSelectionHighlight(box, text, family, fontSize, textSel_.selStart(), textSel_.selEnd(), bold, italic);
-      drawText(command, textSel_.selStart(), textSel_.selEnd());
-    } else {
-      drawText(command);
+      drawSelectionHighlight(box, text, textSel_.selStart(), textSel_.selEnd());
     }
+    drawText(command);
     return true;
   }
   return false;

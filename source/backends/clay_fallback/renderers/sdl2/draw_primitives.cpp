@@ -1,5 +1,5 @@
 #include "sdl2_backend_impl.hpp"
-#include "text_edit_utils.hpp"
+#include "backends/text_edit_utils.hpp"
 
 #include "backends/clay_fallback/text/line_layout.hpp"
 #include "core/text_style_flags.hpp"
