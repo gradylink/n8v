@@ -15,6 +15,7 @@ widgets when available and if needed can fall back to built-in styles.
 - GTK4 (with optional libadwaita)
 - Qt6
 - FLTK
+- FTXUI (TUI)
 - [Milsko](https://forgejo.nishi.boats/pyrite-dev/milsko)
 
 ### Partial Support
