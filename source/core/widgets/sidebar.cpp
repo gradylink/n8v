@@ -201,8 +201,13 @@ bool n8v_open_page(n8v_page_options opts) {
     decl.layout.childGap = paint.fontSize / 2;
     decl.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
   }
-  float radius = paint.cornerRadius.topLeft;
+  float radius = easeValue(animKey(rowOrdinal, 0), paint.cornerRadius.topLeft, paint.transitionSeconds);
   decl.cornerRadius = {radius, radius, radius, radius};
+  if (paint.transitionSeconds > 0.0f) {
+    decl.transition.handler = Clay_EaseOut;
+    decl.transition.duration = paint.transitionSeconds;
+    decl.transition.properties = CLAY_TRANSITION_PROPERTY_BACKGROUND_COLOR;
+  }
 
   Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Button, nameView, paint.fontSize, rowImage != nullptr);
   if (nativeSize.height > 0) decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
