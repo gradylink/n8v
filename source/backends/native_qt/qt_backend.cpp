@@ -14,6 +14,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFontMetrics>
+#include <QFrame>
 #include <QIcon>
 #include <QImage>
 #include <QLabel>
@@ -228,13 +229,14 @@ public:
     std::string pendingLinkUrl;
     containerStack_.clear();
     touchedScrollContainers_.clear();
+    touchedSidebarPanels_.clear();
 
     for (int32_t i = 0; i < commands.length; ++i) {
       Clay_RenderCommand *command = Clay_RenderCommandArray_Get(&commands, i);
 
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_RECTANGLE) {
         auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
-        if (!meta) {
+        if (!meta || meta->kind == NativeWidgetKind::Sidebar) {
           pendingLabelTarget = nullptr;
           continue;
         }
@@ -266,7 +268,12 @@ public:
       }
 
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_SCISSOR_START) {
-        ensureScrollContainer(command->id, command->boundingBox, command->renderData.clip);
+        auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
+        if (meta && meta->kind == NativeWidgetKind::Sidebar) {
+          ensureSidebarPanel(command->id, command->boundingBox);
+        } else {
+          ensureScrollContainer(command->id, command->boundingBox, command->renderData.clip);
+        }
         pendingLabelTarget = nullptr;
         continue;
       }
@@ -331,6 +338,15 @@ public:
       if (!touchedScrollContainers_.count(it->first)) {
         delete it->second.scrollArea;
         it = scrollContainers_.erase(it);
+      } else {
+        ++it;
+      }
+    }
+
+    for (auto it = sidebarPanels_.begin(); it != sidebarPanels_.end();) {
+      if (!touchedSidebarPanels_.count(it->first)) {
+        delete it->second;
+        it = sidebarPanels_.erase(it);
       } else {
         ++it;
       }
@@ -601,6 +617,27 @@ private:
     if (!containerStack_.empty()) containerStack_.pop_back();
   }
 
+  void ensureSidebarPanel(uint32_t id, const Clay_BoundingBox &box) {
+    QFrame *&panel = sidebarPanels_[id];
+    if (!panel) {
+      panel = new QFrame(currentParent());
+      panel->setFrameShape(QFrame::StyledPanel);
+      panel->setFrameShadow(QFrame::Raised);
+      panel->setAutoFillBackground(true);
+    }
+
+    float originX = 0.0f, originY = 0.0f;
+    if (!containerStack_.empty()) {
+      originX = containerStack_.back().originX;
+      originY = containerStack_.back().originY;
+    }
+    panel->setGeometry((int)(box.x - originX), (int)(box.y - originY), (int)box.width, (int)box.height);
+    panel->setVisible(true);
+
+    containerStack_.push_back(ContainerFrame{nullptr, panel, box.x, box.y});
+    touchedSidebarPanels_.insert(id);
+  }
+
   QWidget *ensureWidget(const WidgetKey &key, const NativeWidgetMeta &meta) {
     auto it = widgets_.find(key);
     if (it != widgets_.end()) {
@@ -760,6 +797,8 @@ private:
   std::unordered_map<uint32_t, ContainerFrame> scrollContainers_;
   std::vector<ContainerFrame> containerStack_;
   std::set<uint32_t> touchedScrollContainers_;
+  std::unordered_map<uint32_t, QFrame *> sidebarPanels_;
+  std::set<uint32_t> touchedSidebarPanels_;
 };
 
 } // namespace

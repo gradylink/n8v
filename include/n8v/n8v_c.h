@@ -267,6 +267,22 @@ typedef struct n8v_icon_options {
   n8v_color tint;
 } n8v_icon_options;
 
+typedef struct n8v_sidebar_options {
+  const char *title;
+  int *selected;
+  n8v_int_change_fn on_change;
+  void *on_change_userdata;
+  n8v_sizing width;
+  float min_width;
+  float max_width;
+} n8v_sidebar_options;
+
+typedef struct n8v_page_options {
+  const char *name;
+  const char *icon;
+  const char *image;
+} n8v_page_options;
+
 N8V_API bool n8v_initialize(int width, int height, const char *title);
 N8V_API bool n8v_pump_events(void);
 N8V_API void n8v_shutdown(void);
@@ -278,10 +294,20 @@ N8V_API void n8v_begin_frame(void);
 N8V_API void n8v_end_frame(void);
 N8V_API void n8v_open_flex(n8v_flex_options options);
 N8V_API void n8v_close_flex(void);
+N8V_API void n8v_open_sidebar(n8v_sidebar_options options);
+N8V_API void n8v_close_sidebar(void);
+/** Returns true if this page is the selected one. */
+N8V_API bool n8v_open_page(n8v_page_options options);
+N8V_API void n8v_close_page(void);
 
 #define N8V_UI() for (uint8_t n8v_c_uiLatch = (n8v_begin_frame(), 0); n8v_c_uiLatch < 1; n8v_c_uiLatch = 1, n8v_end_frame())
 
 #define n8v_flex(...) for (uint8_t n8v_c_flexLatch = (n8v_open_flex(__VA_ARGS__), 0); n8v_c_flexLatch < 1; n8v_c_flexLatch = 1, n8v_close_flex())
+
+#define n8v_sidebar(...) for (uint8_t n8v_c_sidebarLatch = (n8v_open_sidebar(__VA_ARGS__), 0); n8v_c_sidebarLatch < 1; n8v_c_sidebarLatch = 1, n8v_close_sidebar())
+
+#define n8v_page(...)                                                                                                                                                         \
+  for (bool n8v_c_pageOpened = n8v_open_page(__VA_ARGS__), n8v_c_pageLatch = false; n8v_c_pageOpened && !n8v_c_pageLatch; n8v_c_pageLatch = true, n8v_close_page())
 
 N8V_API void _n8v_set_button_opts(n8v_button_options opts);
 N8V_API void _n8v_button_commit(const char *label);
@@ -352,6 +378,8 @@ inline void n8v_text(const char *label) {
 
 #define UI N8V_UI
 #define flex n8v_flex
+#define sidebar n8v_sidebar
+#define page n8v_page
 #define button n8v_button
 #define text n8v_text
 #define checkbox n8v_checkbox
@@ -381,6 +409,8 @@ inline void n8v_text(const char *label) {
 #define string_buf_cstr n8v_string_buf_cstr
 
 #define flex_options n8v_flex_options
+#define sidebar_options n8v_sidebar_options
+#define page_options n8v_page_options
 #define text_options n8v_text_options
 #define button_options n8v_button_options
 #define checkbox_options n8v_checkbox_options

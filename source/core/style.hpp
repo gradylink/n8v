@@ -120,6 +120,15 @@ struct SliderPaint {
   float trackGap = 0.0f;
 };
 
+struct SidebarPaint {
+  Color background = {0, 0, 0, 0};
+  Color borderColor = {0, 0, 0, 0};
+  float borderWidth = 0.0f;
+  CornerRadius cornerRadius;
+  Padding padding;
+  float rowGap = 4.0f;
+};
+
 struct Paint {
   virtual ~Paint() = default;
   virtual ButtonPaint button(ButtonStyle style, bool hovered, bool pressed) const = 0;
@@ -132,6 +141,7 @@ struct Paint {
   virtual SliderPaint slider(bool hovered, bool pressed) const = 0;
   virtual ImagePaint image() const = 0;
   virtual IconPaint icon() const = 0;
+  virtual SidebarPaint sidebar() const = 0;
 };
 
 const Paint &activePaint();

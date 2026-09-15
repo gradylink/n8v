@@ -17,56 +17,58 @@ struct DecodedImage;
 struct NativeWidgetMeta {
   NativeWidgetKind kind;
   int ordinal;
-  n8v_click_fn onClick = nullptr;                    // Button only
-  void *onClickUserdata = nullptr;                   // Button only
-  std::string *url = nullptr;                        // Link only
-  bool *checked = nullptr;                           // Checkbox/Switch only
-  n8v_bool_change_fn onChange = nullptr;             // Checkbox/Switch only
-  void *onChangeUserdata = nullptr;                  // Checkbox/Switch only
-  std::string *entryValue = nullptr;                 // Entry only
-  n8v_string_buf *entryBuf = nullptr;                // Entry only - the caller's buffer entryValue shadows; see EntryEditState
-  std::string *placeholder = nullptr;                // Entry only
-  bool password = false;                             // Entry only
-  n8v_text_change_fn onEntryChange = nullptr;        // Entry only
-  void *onEntryChangeUserdata = nullptr;             // Entry only
-  bool entryHasCustomBorder = false;                 // Entry only - skip the generic focus ring; the style's own border already changes color/width on focus
-  int *radioSelected = nullptr;                      // Radio only
-  int radioValue = 0;                                // Radio only
-  n8v_int_change_fn onRadioChange = nullptr;         // Radio only
-  void *onRadioChangeUserdata = nullptr;             // Radio only
-  std::vector<std::string> *dropdownItems = nullptr; // Dropdown only
-  int *dropdownSelected = nullptr;                   // Dropdown only
-  n8v_int_change_fn onDropdownChange = nullptr;      // Dropdown only
-  void *onDropdownChangeUserdata = nullptr;          // Dropdown only
-  float *sliderValue = nullptr;                      // Slider only
-  float sliderMin = 0.0f;                            // Slider only
-  float sliderMax = 1.0f;                            // Slider only
-  n8v_float_change_fn onSliderChange = nullptr;      // Slider only
-  void *onSliderChangeUserdata = nullptr;            // Slider only
-  n8v::Color indicatorFillColor{};                   // Checkbox/Radio only
-  n8v::Color indicatorBorderColor{};                 // Checkbox/Radio only
-  float indicatorBorderWidth = 0.0f;                 // Checkbox/Radio only
-  n8v::Color indicatorGlyphColor{};                  // Checkbox (check) / Radio (dot) only
-  float indicatorCornerRadius = 0.0f;                // Checkbox only
-  float indicatorSize = 0.0f;                        // Checkbox/Radio only
-  float indicatorGlyphScale = 1.0f;                  // Radio only - eases 0->1 so the inner dot grows in rather than popping to full size
-  n8v::Color chevronColor{};                         // DropdownChevron only
-  bool chevronPointsUp = false;                      // DropdownChevron only
-  const DecodedImage *image = nullptr;               // Image/Icon - the bundled-fallback raster, always decoded eagerly by core
-  const char *iconName = nullptr;                     // Icon widget, and Button when an icon was requested - canonical name, for backends with a native icon theme/set
+  n8v_click_fn onClick = nullptr;                           // Button only
+  void *onClickUserdata = nullptr;                          // Button only
+  std::string *url = nullptr;                               // Link only
+  bool *checked = nullptr;                                  // Checkbox/Switch only
+  n8v_bool_change_fn onChange = nullptr;                    // Checkbox/Switch only
+  void *onChangeUserdata = nullptr;                         // Checkbox/Switch only
+  std::string *entryValue = nullptr;                        // Entry only
+  n8v_string_buf *entryBuf = nullptr;                       // Entry only - the caller's buffer entryValue shadows; see EntryEditState
+  std::string *placeholder = nullptr;                       // Entry only
+  bool password = false;                                    // Entry only
+  n8v_text_change_fn onEntryChange = nullptr;               // Entry only
+  void *onEntryChangeUserdata = nullptr;                    // Entry only
+  bool entryHasCustomBorder = false;                        // Entry only - skip the generic focus ring; the style's own border already changes color/width on focus
+  int *radioSelected = nullptr;                             // Radio only
+  int radioValue = 0;                                       // Radio only
+  n8v_int_change_fn onRadioChange = nullptr;                // Radio only
+  void *onRadioChangeUserdata = nullptr;                    // Radio only
+  std::vector<std::string> *dropdownItems = nullptr;        // Dropdown only
+  int *dropdownSelected = nullptr;                          // Dropdown only
+  n8v_int_change_fn onDropdownChange = nullptr;             // Dropdown only
+  void *onDropdownChangeUserdata = nullptr;                 // Dropdown only
+  float *sliderValue = nullptr;                             // Slider only
+  float sliderMin = 0.0f;                                   // Slider only
+  float sliderMax = 1.0f;                                   // Slider only
+  n8v_float_change_fn onSliderChange = nullptr;             // Slider only
+  void *onSliderChangeUserdata = nullptr;                   // Slider only
+  n8v::Color indicatorFillColor{};                          // Checkbox/Radio only
+  n8v::Color indicatorBorderColor{};                        // Checkbox/Radio only
+  float indicatorBorderWidth = 0.0f;                        // Checkbox/Radio only
+  n8v::Color indicatorGlyphColor{};                         // Checkbox (check) / Radio (dot) only
+  float indicatorCornerRadius = 0.0f;                       // Checkbox only
+  float indicatorSize = 0.0f;                               // Checkbox/Radio only
+  float indicatorGlyphScale = 1.0f;                         // Radio only - eases 0->1 so the inner dot grows in rather than popping to full size
+  n8v::Color chevronColor{};                                // DropdownChevron only
+  bool chevronPointsUp = false;                             // DropdownChevron only
+  const DecodedImage *image = nullptr;                      // Image/Icon - the bundled-fallback raster, always decoded eagerly by core
+  const char *iconName = nullptr;                           // Icon widget, and Button when an icon was requested - canonical name, for backends with a native icon theme/set
   n8v::IconVariant iconVariant = n8v::IconVariant::Outline; // Icon/Button only
-  bool iconTrailing = false;                          // Button only
-  n8v::Color iconTint{};                              // Icon widget only - the tint used to decode `image`, so backends can re-decode a freedesktop-theme file (found on disk, not in the bundle) with the same color
-  n8v::Color switchTrackColor{};                       // Switch only - eased track fill (on/off interpolated)
-  n8v::Color switchTrackBorderColor{};                 // Switch only
-  float switchTrackBorderWidth = 0.0f;                 // Switch only
-  n8v::Color switchKnobColor{};                        // Switch only - the knob's own fill
-  n8v::Color switchKnobGlyphColor{};                   // Switch only - Material 3 Expressive's checkmark drawn inside the "on" knob
-  float switchGlyphScale = 0.0f;                       // Switch only - eased 0..1 opacity of the in-knob glyph (0 for styles without one)
-  float switchKnobPosition = 0.0f;                     // Switch only - eased 0 (off, left) .. 1 (on, right)
-  float switchKnobSize = 0.0f;                         // Switch only - eased knob diameter (Material 3 Expressive grows it when on)
-  float switchTrackWidth = 0.0f;                       // Switch only
-  float switchTrackHeight = 0.0f;                      // Switch only
+  bool iconTrailing = false;                                // Button only
+  bool buttonSelected = false;                              // for sidebar
+  n8v::Color iconTint{}; // Icon widget only - the tint used to decode `image`, so backends can re-decode a freedesktop-theme file (found on disk, not in the bundle) with the
+                         // same color
+  n8v::Color switchTrackColor{};       // Switch only - eased track fill (on/off interpolated)
+  n8v::Color switchTrackBorderColor{}; // Switch only
+  float switchTrackBorderWidth = 0.0f; // Switch only
+  n8v::Color switchKnobColor{};        // Switch only - the knob's own fill
+  n8v::Color switchKnobGlyphColor{};   // Switch only - Material 3 Expressive's checkmark drawn inside the "on" knob
+  float switchGlyphScale = 0.0f;       // Switch only - eased 0..1 opacity of the in-knob glyph (0 for styles without one)
+  float switchKnobPosition = 0.0f;     // Switch only - eased 0 (off, left) .. 1 (on, right)
+  float switchKnobSize = 0.0f;         // Switch only - eased knob diameter (Material 3 Expressive grows it when on)
+  float switchTrackWidth = 0.0f;       // Switch only
+  float switchTrackHeight = 0.0f;      // Switch only
 };
 
 inline std::function<void()> toStdFunction(n8v_click_fn fn, void *userdata) {

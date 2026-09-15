@@ -135,6 +135,37 @@ inline void openFlex(const FlexOptions &options) {
 
 inline void closeFlex() { n8v_close_flex(); }
 
+inline void openSidebar(const SidebarOptions &options) {
+  std::string titleStorage(options.title);
+  n8v_sidebar_options c_opts{};
+  c_opts.title = titleStorage.c_str();
+  c_opts.selected = options.selected;
+  if (options.onChange) callback_bridge::bridge(callback_bridge::intChangeClosures, options.onChange, c_opts.on_change, c_opts.on_change_userdata);
+  c_opts.width = toC(options.width);
+  c_opts.min_width = options.minWidth;
+  c_opts.max_width = options.maxWidth;
+  n8v_open_sidebar(c_opts);
+}
+
+inline void openSidebar(std::string_view title) { openSidebar(SidebarOptions{.title = title}); }
+
+inline void closeSidebar() { n8v_close_sidebar(); }
+
+inline bool openPage(const PageOptions &options) {
+  std::string nameStorage(options.name);
+  std::string iconStorage(options.icon);
+  std::string imageStorage(options.image);
+  n8v_page_options c_opts{};
+  c_opts.name = nameStorage.c_str();
+  c_opts.icon = iconStorage.empty() ? nullptr : iconStorage.c_str();
+  c_opts.image = imageStorage.empty() ? nullptr : imageStorage.c_str();
+  return n8v_open_page(c_opts);
+}
+
+inline bool openPage(std::string_view name) { return openPage(PageOptions{.name = name}); }
+
+inline void closePage() { n8v_close_page(); }
+
 struct LeafBuilder {
   bool isButton;
   ButtonOptions buttonOptions;
@@ -355,3 +386,8 @@ inline StyleFamily activeStyleFamily() { return detail::fromC(n8v_active_style_f
 #define UI() for (uint8_t n8v_uiLatch = (n8v::detail::beginFrame(), 0); n8v_uiLatch < 1; n8v_uiLatch = 1, n8v::detail::endFrame())
 
 #define flex(...) for (uint8_t n8v_flexLatch = (n8v::detail::openFlex(__VA_ARGS__), 0); n8v_flexLatch < 1; n8v_flexLatch = 1, n8v::detail::closeFlex())
+
+#define sidebar(...) for (uint8_t n8v_sidebarLatch = (n8v::detail::openSidebar(__VA_ARGS__), 0); n8v_sidebarLatch < 1; n8v_sidebarLatch = 1, n8v::detail::closeSidebar())
+
+#define page(...)                                                                                                                                                            \
+  for (bool n8v_pageOpened = n8v::detail::openPage(__VA_ARGS__), n8v_pageLatch = false; n8v_pageOpened && !n8v_pageLatch; n8v_pageLatch = true, n8v::detail::closePage())

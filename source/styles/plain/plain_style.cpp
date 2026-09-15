@@ -130,6 +130,15 @@ public:
     paint.defaultSize = 20.0f;
     return paint;
   }
+
+  SidebarPaint sidebar() const override {
+    SidebarPaint paint{};
+    paint.background = {235, 235, 235, 255};
+    paint.borderColor = {210, 210, 210, 255};
+    paint.borderWidth = 1.0f;
+    paint.padding = {10, 10, 10, 10};
+    return paint;
+  }
 };
 
 } // namespace

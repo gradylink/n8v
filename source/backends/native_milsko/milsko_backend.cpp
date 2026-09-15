@@ -131,13 +131,14 @@ public:
     int pendingCheckboxOrdinal = -1;
     containerStack_.clear();
     touchedScrollContainers_.clear();
+    touchedSidebarPanels_.clear();
 
     for (int32_t i = 0; i < commands.length; ++i) {
       Clay_RenderCommand *command = Clay_RenderCommandArray_Get(&commands, i);
 
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_RECTANGLE) {
         auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
-        if (!meta) {
+        if (!meta || meta->kind == NativeWidgetKind::Sidebar) {
           pendingLabelTarget = nullptr;
           continue;
         }
@@ -173,7 +174,12 @@ public:
       }
 
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_SCISSOR_START) {
-        ensureScrollContainer(command->id, command->boundingBox);
+        auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
+        if (meta && meta->kind == NativeWidgetKind::Sidebar) {
+          ensureSidebarPanel(command->id, command->boundingBox);
+        } else {
+          ensureScrollContainer(command->id, command->boundingBox);
+        }
         pendingLabelTarget = nullptr;
         continue;
       }
@@ -247,6 +253,15 @@ public:
       if (!touchedScrollContainers_.count(it->first)) {
         MwDestroyWidget(it->second.viewport);
         it = scrollContainers_.erase(it);
+      } else {
+        ++it;
+      }
+    }
+
+    for (auto it = sidebarPanels_.begin(); it != sidebarPanels_.end();) {
+      if (!touchedSidebarPanels_.count(it->first)) {
+        MwDestroyWidget(it->second.viewport);
+        it = sidebarPanels_.erase(it);
       } else {
         ++it;
       }
@@ -544,6 +559,21 @@ private:
     if (!containerStack_.empty()) containerStack_.pop_back();
   }
 
+  void ensureSidebarPanel(uint32_t id, const Clay_BoundingBox &box) {
+    auto it = sidebarPanels_.find(id);
+    if (it == sidebarPanels_.end()) {
+      MwWidget viewport = MwCreateWidget(MwViewportClass, "n8v-sidebar", currentParent(), (int)box.x, (int)box.y, (unsigned int)box.width, (unsigned int)box.height);
+      MwWidget inner = MwViewportGetViewport(viewport);
+      it = sidebarPanels_.emplace(id, ContainerFrame{viewport, inner, box.x, box.y}).first;
+    }
+    ContainerFrame &frame = it->second;
+    positionWidget(frame.viewport, box);
+    frame.originX = box.x;
+    frame.originY = box.y;
+    containerStack_.push_back(frame);
+    touchedSidebarPanels_.insert(id);
+  }
+
   MwWidget window_ = nullptr;
   MwWidget measureLabel_ = nullptr;
 
@@ -554,6 +584,8 @@ private:
   std::unordered_map<uint32_t, ContainerFrame> scrollContainers_;
   std::vector<ContainerFrame> containerStack_;
   std::set<uint32_t> touchedScrollContainers_;
+  std::unordered_map<uint32_t, ContainerFrame> sidebarPanels_;
+  std::set<uint32_t> touchedSidebarPanels_;
 };
 
 } // namespace

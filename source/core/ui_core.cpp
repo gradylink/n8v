@@ -83,6 +83,7 @@ void n8v_begin_frame(void) {
   resetDropdownFrameState();
   resetSliderFrameState();
   resetImageFrameState();
+  resetSidebarFrameState();
 
   Clay_SetLayoutDimensions(backend.windowSize());
   Clay_UpdateScrollContainers(false, backend.consumeScrollDelta(), currentDelta);

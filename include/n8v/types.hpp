@@ -53,6 +53,7 @@ enum class NativeWidgetKind {
   Image,
   Icon,
   Switch,
+  Sidebar,
 };
 
 enum class IconVariant {

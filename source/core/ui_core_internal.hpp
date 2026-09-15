@@ -188,5 +188,6 @@ void resetEntryFrameState();
 void resetDropdownFrameState();
 void resetSliderFrameState();
 void resetImageFrameState();
+void resetSidebarFrameState();
 
 } // namespace n8v::detail::ui_internal

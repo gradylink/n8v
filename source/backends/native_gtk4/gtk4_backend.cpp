@@ -11,6 +11,11 @@
 
 // fix conflict with function of same name
 #undef g_object_ref_sink
+#undef g_object_ref
+
+#ifdef N8V_HAVE_ADWAITA
+#include <adwaita.h>
+#endif
 
 #include <algorithm>
 #include <cstdio>
@@ -25,6 +30,7 @@
 extern "C" {
 gulong g_signal_connect_data(gpointer instance, const gchar *detailed_signal, GCallback c_handler, gpointer data, GClosureNotify destroy_data, GConnectFlags connect_flags);
 gpointer g_object_ref_sink(gpointer object);
+gpointer g_object_ref(gpointer object);
 void g_object_unref(gpointer object);
 }
 
@@ -46,6 +52,9 @@ public:
 
   bool initialize(int width, int height, std::string_view title) override {
     gtk_init();
+#ifdef N8V_HAVE_ADWAITA
+    adw_init();
+#endif
 
     window_ = gtk_window_new();
     gtk_window_set_title(GTK_WINDOW(window_), std::string(title).c_str());
@@ -100,7 +109,7 @@ public:
 
   bool pointerDown() const override { return false; }
 
-  Clay_Dimensions windowSize() const override { return {(float)gtk_widget_get_width(fixed_), (float)gtk_widget_get_height(fixed_)}; }
+  Clay_Dimensions windowSize() const override { return {(float)gtk_widget_get_width(window_), (float)gtk_widget_get_height(window_)}; }
 
   Clay_Dimensions measureText(std::string_view text, FontFamily, uint16_t, bool, bool) const override {
     gtk_label_set_text(GTK_LABEL(measureLabel_), std::string(text).c_str());
@@ -170,8 +179,10 @@ public:
     GtkWidget *pendingLabelTarget = nullptr;
     GtkWidget *pendingButtonIconLabel = nullptr;
     GtkWidget *pendingSwitchLabel = nullptr;
+    bool pendingIsActionRow = false;
     NativeWidgetKind pendingKind = NativeWidgetKind::Button;
     std::string pendingLinkUrl;
+    std::set<int> seenActionRowOrdinals;
     containerStack_.clear();
     touchedScrollContainers_.clear();
 
@@ -180,12 +191,23 @@ public:
 
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_RECTANGLE) {
         auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
-        if (!meta) {
+        if (!meta || meta->kind == NativeWidgetKind::Sidebar) {
           pendingLabelTarget = nullptr;
           pendingButtonIconLabel = nullptr;
           pendingSwitchLabel = nullptr;
+          pendingIsActionRow = false;
           continue;
         }
+        if (meta->kind == NativeWidgetKind::Button && !containerStack_.empty() && containerStack_.back().rowListBox) {
+          seenActionRowOrdinals.insert(meta->ordinal);
+          pendingLabelTarget = ensureActionRow(containerStack_.back(), *meta);
+          pendingKind = NativeWidgetKind::Button;
+          pendingButtonIconLabel = nullptr;
+          pendingSwitchLabel = nullptr;
+          pendingIsActionRow = true;
+          continue;
+        }
+        pendingIsActionRow = false;
         WidgetKey key{meta->ordinal, -1};
         seenKeys.insert(key);
         GtkWidget *widget = ensureWidget(key, *meta);
@@ -213,14 +235,21 @@ public:
         pendingLabelTarget = nullptr;
         pendingButtonIconLabel = nullptr;
         pendingSwitchLabel = nullptr;
+        pendingIsActionRow = false;
         continue;
       }
 
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_SCISSOR_START) {
-        ensureScrollContainer(command->id, command->boundingBox, command->renderData.clip);
+        auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
+        if (meta && meta->kind == NativeWidgetKind::Sidebar) {
+          ensureSidebarPanel(command->boundingBox);
+        } else {
+          ensureScrollContainer(command->id, command->boundingBox, command->renderData.clip);
+        }
         pendingLabelTarget = nullptr;
         pendingButtonIconLabel = nullptr;
         pendingSwitchLabel = nullptr;
+        pendingIsActionRow = false;
         continue;
       }
 
@@ -229,6 +258,7 @@ public:
         pendingLabelTarget = nullptr;
         pendingButtonIconLabel = nullptr;
         pendingSwitchLabel = nullptr;
+        pendingIsActionRow = false;
         continue;
       }
 
@@ -237,7 +267,13 @@ public:
         std::string text(command->renderData.text.stringContents.chars, (size_t)command->renderData.text.stringContents.length);
 
         if (flags && flags->ownedByWidget) {
-          if (pendingLabelTarget && (pendingKind == NativeWidgetKind::Checkbox || pendingKind == NativeWidgetKind::Radio)) {
+          if (pendingIsActionRow && pendingLabelTarget) {
+#ifdef N8V_HAVE_ADWAITA
+            adw_preferences_row_set_title(ADW_PREFERENCES_ROW(pendingLabelTarget), text.c_str());
+#else
+            gtk_label_set_text(GTK_LABEL(pendingLabelTarget), text.c_str());
+#endif
+          } else if (pendingLabelTarget && (pendingKind == NativeWidgetKind::Checkbox || pendingKind == NativeWidgetKind::Radio)) {
             gtk_check_button_set_label(GTK_CHECK_BUTTON(pendingLabelTarget), text.c_str());
           } else if (pendingLabelTarget && pendingKind == NativeWidgetKind::Link) {
             gtk_label_set_markup(GTK_LABEL(pendingLabelTarget), linkMarkup(text, pendingLinkUrl).c_str());
@@ -251,7 +287,16 @@ public:
           pendingLabelTarget = nullptr;
           pendingButtonIconLabel = nullptr;
           pendingSwitchLabel = nullptr;
+          pendingIsActionRow = false;
+          continue;
+        }
+
+        if (!containerStack_.empty() && containerStack_.back().rowListBox) {
+          gtk_label_set_text(GTK_LABEL(titleLabel_), text.c_str());
+          pendingLabelTarget = nullptr;
+          pendingButtonIconLabel = nullptr;
           pendingSwitchLabel = nullptr;
+          pendingIsActionRow = false;
           continue;
         }
 
@@ -265,12 +310,26 @@ public:
         pendingLabelTarget = nullptr;
         pendingButtonIconLabel = nullptr;
         pendingSwitchLabel = nullptr;
+        pendingIsActionRow = false;
         continue;
       }
 
       pendingLabelTarget = nullptr;
       pendingButtonIconLabel = nullptr;
       pendingSwitchLabel = nullptr;
+      pendingIsActionRow = false;
+    }
+
+    for (auto it = actionRows_.begin(); it != actionRows_.end();) {
+      if (!seenActionRowOrdinals.count(it->first)) {
+        gtk_list_box_remove(GTK_LIST_BOX(gtk_widget_get_parent(it->second)), it->second);
+        buttonCallbacks_.erase(it->first);
+        rowLabels_.erase(it->first);
+        rowIcons_.erase(it->first);
+        it = actionRows_.erase(it);
+      } else {
+        ++it;
+      }
     }
 
     for (auto it = widgets_.begin(); it != widgets_.end();) {
@@ -287,6 +346,7 @@ public:
         dropdownStates_.erase(it->first.ordinal);
         sliderStates_.erase(it->first.ordinal);
         switchStates_.erase(it->first.ordinal);
+        buttonIconStates_.erase(it->first.ordinal);
         imageTextureSources_.erase(it->second);
         it = widgets_.erase(it);
       } else {
@@ -347,6 +407,12 @@ public:
       gtk_window_destroy(GTK_WINDOW(window_));
       window_ = nullptr;
       fixed_ = nullptr;
+      sidebarBox_ = nullptr;
+      titleLabel_ = nullptr;
+      sidebarListBox_ = nullptr;
+#ifdef N8V_HAVE_ADWAITA
+      splitView_ = nullptr;
+#endif
     }
   }
 
@@ -356,9 +422,21 @@ private:
     return TRUE;
   }
 
+  struct OrdinalRef {
+    Gtk4Backend *backend;
+    int ordinal;
+  };
+
+  static void deleteOrdinalRef(gpointer data, GClosure *) { delete static_cast<OrdinalRef *>(data); }
+
+  static void connectOrdinal(gpointer instance, const char *signal, GCallback handler, Gtk4Backend *backend, int ordinal) {
+    g_signal_connect_data(instance, signal, handler, new OrdinalRef{backend, ordinal}, &Gtk4Backend::deleteOrdinalRef, (GConnectFlags)0);
+  }
+
   static void onButtonClicked(GtkButton *, gpointer userData) {
-    auto *callback = static_cast<std::function<void()> *>(userData);
-    if (callback && *callback) (*callback)();
+    auto *ref = static_cast<OrdinalRef *>(userData);
+    auto it = ref->backend->buttonCallbacks_.find(ref->ordinal);
+    if (it != ref->backend->buttonCallbacks_.end() && it->second) it->second();
   }
 
   struct CheckboxState {
@@ -367,12 +445,15 @@ private:
   };
 
   static void onCheckboxToggled(GtkCheckButton *button, gpointer userData) {
-    auto *state = static_cast<CheckboxState *>(userData);
-    if (!state || !state->checked) return;
+    auto *ref = static_cast<OrdinalRef *>(userData);
+    auto it = ref->backend->checkboxStates_.find(ref->ordinal);
+    if (it == ref->backend->checkboxStates_.end()) return;
+    CheckboxState &state = it->second;
+    if (!state.checked) return;
     bool newValue = gtk_check_button_get_active(button);
-    if (newValue == *state->checked) return;
-    *state->checked = newValue;
-    if (state->onChange) state->onChange(newValue);
+    if (newValue == *state.checked) return;
+    *state.checked = newValue;
+    if (state.onChange) state.onChange(newValue);
   }
 
   struct SwitchState {
@@ -384,12 +465,15 @@ private:
   };
 
   static void onSwitchToggled(GObject *object, GParamSpec *, gpointer userData) {
-    auto *state = static_cast<SwitchState *>(userData);
-    if (!state || !state->checked) return;
+    auto *ref = static_cast<OrdinalRef *>(userData);
+    auto it = ref->backend->switchStates_.find(ref->ordinal);
+    if (it == ref->backend->switchStates_.end()) return;
+    SwitchState &state = it->second;
+    if (!state.checked) return;
     bool newValue = gtk_switch_get_active(GTK_SWITCH(object));
-    if (newValue == *state->checked) return;
-    *state->checked = newValue;
-    if (state->onChange) state->onChange(newValue);
+    if (newValue == *state.checked) return;
+    *state.checked = newValue;
+    if (state.onChange) state.onChange(newValue);
   }
 
   struct RadioState {
@@ -399,11 +483,14 @@ private:
   };
 
   static void onRadioToggled(GtkCheckButton *button, gpointer userData) {
-    auto *state = static_cast<RadioState *>(userData);
-    if (!state || !state->selected || !gtk_check_button_get_active(button)) return;
-    if (*state->selected == state->value) return;
-    *state->selected = state->value;
-    if (state->onChange) state->onChange(state->value);
+    auto *ref = static_cast<OrdinalRef *>(userData);
+    auto it = ref->backend->radioStates_.find(ref->ordinal);
+    if (it == ref->backend->radioStates_.end()) return;
+    RadioState &state = it->second;
+    if (!state.selected || !gtk_check_button_get_active(button)) return;
+    if (*state.selected == state.value) return;
+    *state.selected = state.value;
+    if (state.onChange) state.onChange(state.value);
   }
 
   struct DropdownState {
@@ -412,12 +499,15 @@ private:
   };
 
   static void onDropdownChanged(GObject *object, GParamSpec *, gpointer userData) {
-    auto *state = static_cast<DropdownState *>(userData);
-    if (!state || !state->selected) return;
+    auto *ref = static_cast<OrdinalRef *>(userData);
+    auto it = ref->backend->dropdownStates_.find(ref->ordinal);
+    if (it == ref->backend->dropdownStates_.end()) return;
+    DropdownState &state = it->second;
+    if (!state.selected) return;
     int newValue = (int)gtk_drop_down_get_selected(GTK_DROP_DOWN(object));
-    if (newValue == *state->selected) return;
-    *state->selected = newValue;
-    if (state->onChange) state->onChange(newValue);
+    if (newValue == *state.selected) return;
+    *state.selected = newValue;
+    if (state.onChange) state.onChange(newValue);
   }
 
   struct SliderState {
@@ -426,12 +516,15 @@ private:
   };
 
   static void onSliderChanged(GtkRange *range, gpointer userData) {
-    auto *state = static_cast<SliderState *>(userData);
-    if (!state || !state->value) return;
+    auto *ref = static_cast<OrdinalRef *>(userData);
+    auto it = ref->backend->sliderStates_.find(ref->ordinal);
+    if (it == ref->backend->sliderStates_.end()) return;
+    SliderState &state = it->second;
+    if (!state.value) return;
     float newValue = (float)gtk_range_get_value(range);
-    if (newValue == *state->value) return;
-    *state->value = newValue;
-    if (state->onChange) state->onChange(newValue);
+    if (newValue == *state.value) return;
+    *state.value = newValue;
+    if (state.onChange) state.onChange(newValue);
   }
 
   struct EntryState {
@@ -513,14 +606,14 @@ private:
     if (meta.kind == NativeWidgetKind::Button) {
       widget = gtk_button_new_with_label("");
       buttonCallbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
-      g_signal_connect_data(widget, "clicked", G_CALLBACK(&Gtk4Backend::onButtonClicked), &buttonCallbacks_[meta.ordinal], nullptr, (GConnectFlags)0);
+      connectOrdinal(widget, "clicked", G_CALLBACK(&Gtk4Backend::onButtonClicked), this, meta.ordinal);
     } else if (meta.kind == NativeWidgetKind::Checkbox) {
       widget = gtk_check_button_new();
       CheckboxState &state = checkboxStates_[meta.ordinal];
       state.checked = meta.checked;
       state.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
       gtk_check_button_set_active(GTK_CHECK_BUTTON(widget), meta.checked && *meta.checked);
-      g_signal_connect_data(widget, "toggled", G_CALLBACK(&Gtk4Backend::onCheckboxToggled), &checkboxStates_[meta.ordinal], nullptr, (GConnectFlags)0);
+      connectOrdinal(widget, "toggled", G_CALLBACK(&Gtk4Backend::onCheckboxToggled), this, meta.ordinal);
     } else if (meta.kind == NativeWidgetKind::Entry) {
       widget = gtk_entry_new();
       gtk_entry_set_visibility(GTK_ENTRY(widget), !meta.password);
@@ -538,7 +631,7 @@ private:
         if (leader) gtk_check_button_set_group(GTK_CHECK_BUTTON(widget), GTK_CHECK_BUTTON(leader));
         else leader = widget;
       }
-      g_signal_connect_data(widget, "toggled", G_CALLBACK(&Gtk4Backend::onRadioToggled), &radioStates_[meta.ordinal], nullptr, (GConnectFlags)0);
+      connectOrdinal(widget, "toggled", G_CALLBACK(&Gtk4Backend::onRadioToggled), this, meta.ordinal);
     } else if (meta.kind == NativeWidgetKind::Switch) {
       SwitchState &state = switchStates_[meta.ordinal];
       state.box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
@@ -549,7 +642,7 @@ private:
       state.checked = meta.checked;
       state.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
       gtk_switch_set_active(GTK_SWITCH(state.sw), meta.checked && *meta.checked);
-      g_signal_connect_data(state.sw, "notify::active", G_CALLBACK(&Gtk4Backend::onSwitchToggled), &switchStates_[meta.ordinal], nullptr, (GConnectFlags)0);
+      connectOrdinal(state.sw, "notify::active", G_CALLBACK(&Gtk4Backend::onSwitchToggled), this, meta.ordinal);
       widget = state.box;
     } else if (meta.kind == NativeWidgetKind::Dropdown) {
       std::vector<const char *> cstrs;
@@ -564,7 +657,7 @@ private:
       state.onChange = toStdFunction(meta.onDropdownChange, meta.onDropdownChangeUserdata);
       guint initialSelected = meta.dropdownSelected && *meta.dropdownSelected >= 0 ? (guint)*meta.dropdownSelected : GTK_INVALID_LIST_POSITION;
       gtk_drop_down_set_selected(GTK_DROP_DOWN(widget), initialSelected);
-      g_signal_connect_data(widget, "notify::selected", G_CALLBACK(&Gtk4Backend::onDropdownChanged), &dropdownStates_[meta.ordinal], nullptr, (GConnectFlags)0);
+      connectOrdinal(widget, "notify::selected", G_CALLBACK(&Gtk4Backend::onDropdownChanged), this, meta.ordinal);
     } else if (meta.kind == NativeWidgetKind::Slider) {
       widget = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, meta.sliderMin, meta.sliderMax, (meta.sliderMax - meta.sliderMin) / 1000.0);
       gtk_scale_set_draw_value(GTK_SCALE(widget), FALSE);
@@ -572,7 +665,7 @@ private:
       state.value = meta.sliderValue;
       state.onChange = toStdFunction(meta.onSliderChange, meta.onSliderChangeUserdata);
       if (meta.sliderValue) gtk_range_set_value(GTK_RANGE(widget), *meta.sliderValue);
-      g_signal_connect_data(widget, "value-changed", G_CALLBACK(&Gtk4Backend::onSliderChanged), &sliderStates_[meta.ordinal], nullptr, (GConnectFlags)0);
+      connectOrdinal(widget, "value-changed", G_CALLBACK(&Gtk4Backend::onSliderChanged), this, meta.ordinal);
     } else if (meta.kind == NativeWidgetKind::Image) {
       widget = gtk_picture_new();
       gtk_picture_set_content_fit(GTK_PICTURE(widget), GTK_CONTENT_FIT_FILL);
@@ -614,20 +707,12 @@ private:
       state.hasIcon = true;
     }
 
-    // meta.iconName is n8v's canonical name (e.g. "settings") - resolve it to the real
-    // freedesktop icon-theme name before querying the theme; passing the canonical name straight
-    // through here always missed, silently forcing every button onto the bundled fallback.
     const char *freedesktopName = meta.iconName ? n8v::detail::resolveFreedesktopIconName(meta.iconName) : nullptr;
     GtkIconTheme *theme = gtk_icon_theme_get_for_display(gtk_widget_get_display(button));
     if (freedesktopName && gtk_icon_theme_has_icon(theme, freedesktopName)) {
-      // All of icon_registry.cpp's freedesktop names are "-symbolic" variants, which recolor to
-      // match the current foreground color via CSS automatically - no manual tinting needed here.
       gtk_image_set_from_icon_name(GTK_IMAGE(state.image), freedesktopName);
       state.fallbackSource = nullptr;
     } else if (meta.iconName && meta.image) {
-      // meta.image was decoded by core using the *style's* text color, but this button's real
-      // (system-default) text color may differ - re-decode with the button's actual foreground
-      // color so the fallback icon visually matches what's really on screen.
       GdkRGBA fg;
       gtk_widget_get_color(button, &fg);
       const n8v::detail::DecodedImage *icon =
@@ -645,10 +730,6 @@ private:
     return state.label;
   }
 
-  // The standalone icon() widget - unlike image(), which always shows a fixed raster, this tries
-  // the OS icon theme first (same as ensureButtonIcon) since it's backed by a real GtkImage
-  // rather than a GtkPicture. No re-tinting on the bundled-fallback path: icon() lets the caller
-  // (or the active style's default) pick the tint explicitly, so core's decode is already final.
   void ensureIconImage(GtkWidget *widget, const NativeWidgetMeta &meta) {
     const char *freedesktopName = meta.iconName ? n8v::detail::resolveFreedesktopIconName(meta.iconName) : nullptr;
     GtkIconTheme *theme = gtk_icon_theme_get_for_display(gtk_widget_get_display(widget));
@@ -701,11 +782,8 @@ private:
   }
 
   void positionWidget(GtkWidget *widget, const Clay_BoundingBox &box) {
-    float originX = 0.0f, originY = 0.0f;
-    if (!containerStack_.empty()) {
-      originX = containerStack_.back().originX;
-      originY = containerStack_.back().originY;
-    }
+    float originX = containerStack_.empty() ? rootOriginX_ : containerStack_.back().originX;
+    float originY = containerStack_.empty() ? 0.0f : containerStack_.back().originY;
     gtk_fixed_move(GTK_FIXED(currentFixed()), widget, box.x - originX, box.y - originY);
     gtk_widget_set_size_request(widget, (int)box.width, (int)box.height);
   }
@@ -717,6 +795,7 @@ private:
     GtkWidget *fixed = nullptr;
     float originX = 0.0f;
     float originY = 0.0f;
+    GtkWidget *rowListBox = nullptr;
   };
 
   void ensureScrollContainer(uint32_t id, const Clay_BoundingBox &box, const Clay_ClipRenderData &clip) {
@@ -735,11 +814,8 @@ private:
       clip.horizontal ? GTK_POLICY_AUTOMATIC : GTK_POLICY_NEVER,
       clip.vertical ? GTK_POLICY_AUTOMATIC : GTK_POLICY_NEVER
     );
-    float originX = 0.0f, originY = 0.0f;
-    if (!containerStack_.empty()) {
-      originX = containerStack_.back().originX;
-      originY = containerStack_.back().originY;
-    }
+    float originX = containerStack_.empty() ? rootOriginX_ : containerStack_.back().originX;
+    float originY = containerStack_.empty() ? 0.0f : containerStack_.back().originY;
     gtk_fixed_move(GTK_FIXED(currentFixed()), frame.scrolled, box.x - originX, box.y - originY);
     gtk_widget_set_size_request(frame.scrolled, (int)box.width, (int)box.height);
     frame.originX = box.x;
@@ -758,8 +834,119 @@ private:
     if (!containerStack_.empty()) containerStack_.pop_back();
   }
 
+  void ensureSidebarRoot() {
+    if (sidebarBox_) return;
+    sidebarBox_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+
+    titleLabel_ = gtk_label_new("");
+    gtk_widget_add_css_class(titleLabel_, "heading");
+    gtk_label_set_xalign(GTK_LABEL(titleLabel_), 0.5f);
+    gtk_widget_set_margin_top(titleLabel_, 12);
+    gtk_widget_set_margin_bottom(titleLabel_, 12);
+    gtk_box_append(GTK_BOX(sidebarBox_), titleLabel_);
+
+    sidebarListBox_ = gtk_list_box_new();
+    gtk_widget_add_css_class(sidebarListBox_, "navigation-sidebar");
+    gtk_list_box_set_selection_mode(GTK_LIST_BOX(sidebarListBox_), GTK_SELECTION_SINGLE);
+    gtk_widget_set_vexpand(sidebarListBox_, TRUE);
+    gtk_box_append(GTK_BOX(sidebarBox_), sidebarListBox_);
+
+#ifdef N8V_HAVE_ADWAITA
+    g_object_ref(fixed_);
+    gtk_window_set_child(GTK_WINDOW(window_), nullptr);
+
+    GtkWidget *splitViewWidget = adw_navigation_split_view_new();
+    splitView_ = ADW_NAVIGATION_SPLIT_VIEW(splitViewWidget);
+    AdwNavigationPage *sidebarPage = adw_navigation_page_new(sidebarBox_, "Sidebar");
+    AdwNavigationPage *contentPage = adw_navigation_page_new(fixed_, "Content");
+    adw_navigation_split_view_set_sidebar(splitView_, sidebarPage);
+    adw_navigation_split_view_set_content(splitView_, contentPage);
+    g_object_unref(fixed_);
+
+    gtk_window_set_child(GTK_WINDOW(window_), splitViewWidget);
+#else
+    g_object_ref(fixed_);
+    gtk_window_set_child(GTK_WINDOW(window_), nullptr);
+
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_widget_add_css_class(sidebarBox_, "sidebar");
+    gtk_box_append(GTK_BOX(box), sidebarBox_);
+    gtk_box_append(GTK_BOX(box), fixed_);
+    g_object_unref(fixed_);
+
+    gtk_window_set_child(GTK_WINDOW(window_), box);
+#endif
+  }
+
+  void ensureSidebarPanel(const Clay_BoundingBox &box) {
+    ensureSidebarRoot();
+    rootOriginX_ = box.width;
+#ifdef N8V_HAVE_ADWAITA
+    if (splitView_) {
+      adw_navigation_split_view_set_min_sidebar_width(splitView_, box.width);
+      adw_navigation_split_view_set_max_sidebar_width(splitView_, box.width);
+    }
+#endif
+    containerStack_.push_back(ContainerFrame{nullptr, nullptr, box.x, box.y, sidebarListBox_});
+  }
+
+  GtkWidget *ensureActionRow(ContainerFrame &listFrame, const NativeWidgetMeta &meta) {
+    GtkWidget *&row = actionRows_[meta.ordinal];
+    if (!row) {
+#ifdef N8V_HAVE_ADWAITA
+      row = adw_action_row_new();
+      gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(row), TRUE);
+      GtkWidget *icon = gtk_image_new();
+      adw_action_row_add_prefix(ADW_ACTION_ROW(row), icon);
+      gtk_widget_set_visible(icon, FALSE);
+      rowIcons_[meta.ordinal] = icon;
+      gtk_list_box_append(GTK_LIST_BOX(listFrame.rowListBox), row);
+      connectOrdinal(row, "activated", G_CALLBACK(&Gtk4Backend::onButtonClicked), this, meta.ordinal);
+#else
+      row = gtk_list_box_row_new();
+      GtkWidget *label = gtk_label_new("");
+      gtk_widget_set_halign(label, GTK_ALIGN_START);
+      gtk_widget_set_margin_start(label, 12);
+      gtk_widget_set_margin_end(label, 12);
+      gtk_widget_set_margin_top(label, 8);
+      gtk_widget_set_margin_bottom(label, 8);
+      gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), label);
+      gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(row), TRUE);
+      gtk_list_box_append(GTK_LIST_BOX(listFrame.rowListBox), row);
+      rowLabels_[meta.ordinal] = label;
+      connectOrdinal(row, "activate", G_CALLBACK(&Gtk4Backend::onButtonClicked), this, meta.ordinal);
+#endif
+    }
+    buttonCallbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
+
+#ifdef N8V_HAVE_ADWAITA
+    const char *freedesktopName = meta.iconName ? n8v::detail::resolveFreedesktopIconName(meta.iconName) : nullptr;
+    GtkWidget *icon = rowIcons_[meta.ordinal];
+    if (freedesktopName) {
+      gtk_image_set_from_icon_name(GTK_IMAGE(icon), freedesktopName);
+      gtk_widget_set_visible(icon, TRUE);
+    } else {
+      gtk_widget_set_visible(icon, FALSE);
+    }
+#endif
+
+    if (meta.buttonSelected) gtk_list_box_select_row(GTK_LIST_BOX(listFrame.rowListBox), GTK_LIST_BOX_ROW(row));
+#ifdef N8V_HAVE_ADWAITA
+    return row;
+#else
+    return rowLabels_[meta.ordinal];
+#endif
+  }
+
   GtkWidget *window_ = nullptr;
   GtkWidget *fixed_ = nullptr;
+  GtkWidget *sidebarBox_ = nullptr;
+  GtkWidget *titleLabel_ = nullptr;
+  GtkWidget *sidebarListBox_ = nullptr;
+  float rootOriginX_ = 0.0f;
+#ifdef N8V_HAVE_ADWAITA
+  AdwNavigationSplitView *splitView_ = nullptr;
+#endif
   GtkWidget *measureLabel_ = nullptr;
   GtkWidget *measureButton_ = nullptr;
   GtkWidget *measureLink_ = nullptr;
@@ -772,6 +959,9 @@ private:
   bool closeRequested_ = false;
 
   std::map<WidgetKey, GtkWidget *> widgets_;
+  std::unordered_map<int, GtkWidget *> actionRows_;
+  std::unordered_map<int, GtkWidget *> rowLabels_;
+  std::unordered_map<int, GtkWidget *> rowIcons_;
   std::unordered_map<int, std::function<void()>> buttonCallbacks_;
   std::unordered_map<int, CheckboxState> checkboxStates_;
   std::unordered_map<int, SwitchState> switchStates_;

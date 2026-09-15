@@ -100,6 +100,25 @@ struct ImageOptions {
   Rounding rounding = Rounding::styleDefault();
 };
 
+struct SidebarOptions {
+  std::string_view title = {};
+  int *selected = nullptr;
+  std::function<void(int)> onChange = nullptr;
+  Sizing width = Sizing::fixed(240.0f);
+  /** 0 = style/backend default. Only affects backends with a resizable sidebar (e.g. GTK4/Adwaita). */
+  float minWidth = 0.0f;
+  /** 0 = unbounded. Only affects backends with a resizable sidebar (e.g. GTK4/Adwaita). */
+  float maxWidth = 0.0f;
+};
+
+struct PageOptions {
+  std::string_view name = {};
+  /** Mutually exclusive with `image`. */
+  std::string_view icon = {};
+  /** Mutually exclusive with `icon`. */
+  std::string_view image = {};
+};
+
 struct IconOptions {
   std::string name;
   IconVariant variant = IconVariant::Outline;

@@ -151,6 +151,13 @@ public:
     return paint;
   }
 
+  SidebarPaint sidebar() const override {
+    SidebarPaint paint{};
+    paint.background = {231, 224, 236, 255}; // surface container
+    paint.padding = {12, 12, 12, 12};
+    return paint;
+  }
+
 private:
   static constexpr float RoundRadius = 20.0f;
   static constexpr float PressedRadius = 8.0f;

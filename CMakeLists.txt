@@ -252,6 +252,23 @@ if(NOT EMSCRIPTEN)
 endif()
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/backends/html.cmake")
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+  option(N8V_SANITIZE "Build with AddressSanitizer + UndefinedBehaviorSanitizer" ON)
+else()
+  option(N8V_SANITIZE "Build with AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
+endif()
+
+if(N8V_SANITIZE AND (N8V_HAVE_FLTK OR N8V_HAVE_QT))
+  message(STATUS "[n8v] N8V_SANITIZE requested but FLTK/Qt are enabled (incompatible lzy RTTI shims) - skipping sanitizers")
+  set(N8V_SANITIZE OFF)
+endif()
+
+if(N8V_SANITIZE)
+  message(STATUS "[n8v] Sanitizers enabled (ASan + UBSan)")
+  add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address,undefined)
+endif()
+
 set(N8V_SOURCES
   source/core/clay_impl.cpp
   source/core/open_url.cpp
@@ -269,6 +286,7 @@ set(N8V_SOURCES
   source/core/widgets/slider.cpp
   source/core/widgets/image.cpp
   source/core/widgets/icon.cpp
+  source/core/widgets/sidebar.cpp
   source/styles/style_registry.cpp
   source/styles/plain/plain_style.cpp
   source/styles/material/material_style.cpp
@@ -362,6 +380,10 @@ foreach(_n8v_target ${_n8v_targets})
     target_sources(${_n8v_target} PRIVATE source/backends/native_gtk4/gtk4_backend.cpp)
     target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_GTK4_BACKEND)
     target_link_libraries(${_n8v_target} PRIVATE gtk4_lazy gobject_lazy glib_lazy)
+    if(N8V_HAVE_ADWAITA)
+      target_link_libraries(${_n8v_target} PRIVATE adwaita_lazy)
+      target_compile_definitions(${_n8v_target} PRIVATE N8V_HAVE_ADWAITA)
+    endif()
   endif()
 
   if(N8V_HAVE_QT)

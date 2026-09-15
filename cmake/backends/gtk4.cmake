@@ -38,6 +38,7 @@ if(N8V_BACKEND_GTK4)
         g_signal_connect_data
         g_object_unref
         g_object_ref_sink
+        g_object_ref
         g_type_check_instance_cast
     )
     target_include_directories(gobject_lazy PUBLIC ${_N8V_GTK4_INCLUDE_DIRS})
@@ -60,6 +61,29 @@ if(N8V_BACKEND_GTK4)
         g_bytes_unref
     )
     target_include_directories(glib_lazy PUBLIC ${_N8V_GTK4_INCLUDE_DIRS})
+
+    set(N8V_HAVE_ADWAITA FALSE)
+    cl_add_dep(libadwaita)
+    find_library(_N8V_ADWAITA_SO NAMES adwaita-1)
+    if(TARGET deps::libadwaita AND _N8V_ADWAITA_SO)
+      set(N8V_HAVE_ADWAITA TRUE)
+
+      get_target_property(_N8V_ADWAITA_INCLUDE_DIRS deps::libadwaita INTERFACE_INCLUDE_DIRECTORIES)
+      if(NOT _N8V_ADWAITA_INCLUDE_DIRS)
+        set(_N8V_ADWAITA_INCLUDE_DIRS "")
+      endif()
+
+      lzy_add_wrapper(adwaita_lazy
+        LIBRARY_NAMES
+          "libadwaita-1.so.0"
+          "libadwaita-1.so"
+          "libadwaita-1.dylib"
+        LIBRARY "${_N8V_ADWAITA_SO}"
+      )
+      target_include_directories(adwaita_lazy PUBLIC ${_N8V_ADWAITA_INCLUDE_DIRS} ${_N8V_GTK4_INCLUDE_DIRS})
+    else()
+      message(STATUS "[n8v] libadwaita not found - native_gtk4 will build with alternatives for Adwaita features")
+    endif()
   else()
     message(STATUS "[n8v] GTK4 not found - native_gtk4 backend disabled")
   endif()

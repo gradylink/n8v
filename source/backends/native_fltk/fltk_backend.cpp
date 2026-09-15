@@ -19,6 +19,7 @@
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Double_Window.H>
+#include <FL/Fl_Group.H>
 #include <FL/Fl_Hor_Slider.H>
 #include <FL/Fl_Input.H>
 #include <FL/Fl_RGB_Image.H>
@@ -143,13 +144,14 @@ public:
     bool pendingIconTrailing = false;
     containerStack_.clear();
     touchedScrollContainers_.clear();
+    touchedSidebarGroups_.clear();
 
     for (int32_t i = 0; i < commands.length; ++i) {
       Clay_RenderCommand *command = Clay_RenderCommandArray_Get(&commands, i);
 
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_RECTANGLE) {
         auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
-        if (!meta) {
+        if (!meta || meta->kind == NativeWidgetKind::Sidebar) {
           pendingLabelTarget = nullptr;
           continue;
         }
@@ -181,7 +183,12 @@ public:
       }
 
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_SCISSOR_START) {
-        ensureScrollContainer(command->id, command->boundingBox, command->renderData.clip);
+        auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
+        if (meta && meta->kind == NativeWidgetKind::Sidebar) {
+          ensureSidebarPanel(command->id, command->boundingBox);
+        } else {
+          ensureScrollContainer(command->id, command->boundingBox, command->renderData.clip);
+        }
         pendingLabelTarget = nullptr;
         continue;
       }
@@ -241,6 +248,15 @@ public:
       if (!touchedScrollContainers_.count(it->first)) {
         delete it->second.scroll;
         it = scrollContainers_.erase(it);
+      } else {
+        ++it;
+      }
+    }
+
+    for (auto it = sidebarGroups_.begin(); it != sidebarGroups_.end();) {
+      if (!touchedSidebarGroups_.count(it->first)) {
+        delete it->second.scroll;
+        it = sidebarGroups_.erase(it);
       } else {
         ++it;
       }
@@ -423,19 +439,20 @@ private:
   };
 
   struct ContainerFrame {
-    Fl_Scroll *scroll = nullptr;
+    Fl_Group *scroll = nullptr;
   };
 
-  Fl_Group *currentGroup() const { return containerStack_.empty() ? static_cast<Fl_Group *>(window_) : static_cast<Fl_Group *>(containerStack_.back().scroll); }
+  Fl_Group *currentGroup() const { return containerStack_.empty() ? static_cast<Fl_Group *>(window_) : containerStack_.back().scroll; }
 
   void ensureScrollContainer(uint32_t id, const Clay_BoundingBox &box, const Clay_ClipRenderData &clip) {
     auto it = scrollContainers_.find(id);
     if (it == scrollContainers_.end()) {
       auto *scroll = new Fl_Scroll((int)box.x, (int)box.y, (int)box.width, (int)box.height);
+      scroll->end();
       currentGroup()->add(scroll);
       it = scrollContainers_.emplace(id, ContainerFrame{scroll}).first;
     }
-    Fl_Scroll *scroll = it->second.scroll;
+    Fl_Scroll *scroll = static_cast<Fl_Scroll *>(it->second.scroll);
     scroll->resize((int)box.x, (int)box.y, (int)box.width, (int)box.height);
     scroll->type(clip.horizontal && clip.vertical ? Fl_Scroll::BOTH : clip.horizontal ? Fl_Scroll::HORIZONTAL : clip.vertical ? Fl_Scroll::VERTICAL : 0);
 
@@ -445,6 +462,21 @@ private:
 
   void closeScrollContainer() {
     if (!containerStack_.empty()) containerStack_.pop_back();
+  }
+
+  void ensureSidebarPanel(uint32_t id, const Clay_BoundingBox &box) {
+    auto it = sidebarGroups_.find(id);
+    if (it == sidebarGroups_.end()) {
+      auto *group = new Fl_Group((int)box.x, (int)box.y, (int)box.width, (int)box.height);
+      group->box(FL_UP_BOX);
+      group->end();
+      currentGroup()->add(group);
+      it = sidebarGroups_.emplace(id, ContainerFrame{group}).first;
+    }
+    it->second.scroll->resize((int)box.x, (int)box.y, (int)box.width, (int)box.height);
+
+    containerStack_.push_back(it->second);
+    touchedSidebarGroups_.insert(id);
   }
 
   Fl_Widget *ensureWidget(const WidgetKey &key, const NativeWidgetMeta &meta) {
@@ -596,6 +628,8 @@ private:
   std::unordered_map<uint32_t, ContainerFrame> scrollContainers_;
   std::vector<ContainerFrame> containerStack_;
   std::set<uint32_t> touchedScrollContainers_;
+  std::unordered_map<uint32_t, ContainerFrame> sidebarGroups_;
+  std::set<uint32_t> touchedSidebarGroups_;
 };
 
 } // namespace
