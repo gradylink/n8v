@@ -1,5 +1,6 @@
 #include "sdl2_backend_impl.hpp"
 
+#include "core/icon_loader.hpp"
 #include "core/native_widget_meta.hpp"
 
 #include <SDL2/SDL.h>
@@ -8,6 +9,28 @@
 #include <cmath>
 
 namespace n8v::detail {
+
+void Sdl2Backend::drawIconGlyph(const Clay_BoundingBox &box, const char *iconName, const Clay_Color &color) {
+  uint16_t pixelSize = (uint16_t)std::max(1.0f, std::round(std::min(box.width, box.height)));
+  const DecodedImage *decoded = getOrDecodeIcon(iconName, pixelSize, n8v::Color{255, 255, 255, 255});
+  if (!decoded) return;
+
+  SDL_Texture *&texture = imageTextures_[decoded];
+  if (!texture) {
+    texture = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, decoded->width, decoded->height);
+    if (!texture) return;
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    SDL_UpdateTexture(texture, nullptr, decoded->rgba, decoded->width * 4);
+  }
+
+  SDL_SetTextureColorMod(texture, (Uint8)color.r, (Uint8)color.g, (Uint8)color.b);
+  SDL_SetTextureAlphaMod(texture, (Uint8)color.a);
+  float w = (float)decoded->width, h = (float)decoded->height;
+  SDL_Rect dest{(int)(box.x + (box.width - w) * 0.5f), (int)(box.y + (box.height - h) * 0.5f), (int)w, (int)h};
+  SDL_RenderCopy(renderer_, texture, nullptr, &dest);
+  SDL_SetTextureColorMod(texture, 255, 255, 255);
+  SDL_SetTextureAlphaMod(texture, 255);
+}
 
 void Sdl2Backend::renderCheckboxOrRadioIndicator(NativeWidgetMeta &meta, const Clay_BoundingBox &labelBox, bool isRadio) {
   float squareSize = meta.indicatorSize > 0.0f ? meta.indicatorSize : labelBox.height;
@@ -26,20 +49,8 @@ void Sdl2Backend::renderCheckboxOrRadioIndicator(NativeWidgetMeta &meta, const C
   if (isRadio) {
     if (meta.indicatorGlyphScale > 0.01f) drawRadioDot(squareBox, glyph, meta.indicatorGlyphScale);
   } else if (glyph.a > 0.5f) {
-    drawCheckmark(squareBox, glyph);
+    drawIconGlyph(squareBox, "check", glyph);
   }
-}
-
-void Sdl2Backend::drawCheckmark(const Clay_BoundingBox &box, const Clay_Color &color) {
-  float thickness = std::max(box.width * 0.12f, 1.5f);
-  float x0 = box.x + box.width * 0.15f, y0 = box.y + box.height * 0.45f;
-  float xm = box.x + box.width * 0.4f, ym = box.y + box.height * 0.7f;
-  float x1 = box.x + box.width * 0.85f, y1 = box.y + box.height * 0.25f;
-  drawThickLine(x0, y0, xm, ym, thickness, color);
-  drawThickLine(xm, ym, x1, y1, thickness, color);
-  drawStrokeCap(x0, y0, thickness, color);
-  drawStrokeCap(xm, ym, thickness, color);
-  drawStrokeCap(x1, y1, thickness, color);
 }
 
 void Sdl2Backend::drawRadioDot(const Clay_BoundingBox &box, const Clay_Color &color, float scale) {
@@ -71,10 +82,8 @@ void Sdl2Backend::renderSwitchIndicator(NativeWidgetMeta &meta, const Clay_Bound
   drawRoundedRect(knobBox, knobColor, {meta.switchKnobSize / 2, meta.switchKnobSize / 2, meta.switchKnobSize / 2, meta.switchKnobSize / 2});
 
   if (meta.switchGlyphScale > 0.01f) {
-    Clay_Color glyphColor{
-      meta.switchKnobGlyphColor.r, meta.switchKnobGlyphColor.g, meta.switchKnobGlyphColor.b, meta.switchKnobGlyphColor.a * meta.switchGlyphScale
-    };
-    drawCheckmark(knobBox, glyphColor);
+    Clay_Color glyphColor{meta.switchKnobGlyphColor.r, meta.switchKnobGlyphColor.g, meta.switchKnobGlyphColor.b, meta.switchKnobGlyphColor.a * meta.switchGlyphScale};
+    drawIconGlyph(knobBox, "check", glyphColor);
   }
 }
 

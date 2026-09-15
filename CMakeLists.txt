@@ -63,6 +63,8 @@ if(NOT EMSCRIPTEN)
       SDL_SetClipboardText
       SDL_free
       SDL_GetTicks
+      SDL_SetTextureAlphaMod
+      SDL_SetTextureColorMod
   )
   target_include_directories(sdl2_lazy PUBLIC ${_N8V_SDL2_INCLUDE_DIRS})
 endif()

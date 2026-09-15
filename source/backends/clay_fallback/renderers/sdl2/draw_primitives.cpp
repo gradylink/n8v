@@ -157,27 +157,6 @@ void Sdl2Backend::drawFocusRing(const Clay_BoundingBox &box, const Clay_CornerRa
   drawRoundedRectBorder(box, Clay_Color{60, 110, 220, 255}, cornerRadius, 2.0f);
 }
 
-void Sdl2Backend::drawThickLine(float x0, float y0, float x1, float y1, float thickness, const Clay_Color &color) {
-  float dx = x1 - x0, dy = y1 - y0;
-  float len = std::sqrt(dx * dx + dy * dy);
-  if (len < 0.0001f) return;
-  float nx = -dy / len * thickness * 0.5f, ny = dx / len * thickness * 0.5f;
-  SDL_Color tint{(Uint8)color.r, (Uint8)color.g, (Uint8)color.b, (Uint8)color.a};
-  SDL_Vertex vertices[4] = {
-    {{x0 + nx, y0 + ny}, tint, {0, 0}},
-    {{x1 + nx, y1 + ny}, tint, {0, 0}},
-    {{x1 - nx, y1 - ny}, tint, {0, 0}},
-    {{x0 - nx, y0 - ny}, tint, {0, 0}},
-  };
-  int indices[6] = {0, 1, 2, 0, 2, 3};
-  SDL_RenderGeometry(renderer_, nullptr, vertices, 4, indices, 6);
-}
-
-void Sdl2Backend::drawStrokeCap(float cx, float cy, float thickness, const Clay_Color &color) {
-  float r = thickness * 0.5f;
-  drawRoundedRect({cx - r, cy - r, thickness, thickness}, color, {r, r, r, r});
-}
-
 void Sdl2Backend::drawFilledRect(const Clay_BoundingBox &box, const Clay_Color &color) {
   SDL_SetRenderDrawColor(renderer_, (Uint8)color.r, (Uint8)color.g, (Uint8)color.b, (Uint8)color.a);
   SDL_Rect rect{(int)box.x, (int)box.y, (int)box.width, (int)box.height};

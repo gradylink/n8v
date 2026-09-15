@@ -81,7 +81,7 @@ private:
   bool renderSelectableText(const Clay_RenderCommand &command, const TextStyleFlags &flags, std::string_view text);
 
   void renderCheckboxOrRadioIndicator(NativeWidgetMeta &meta, const Clay_BoundingBox &labelBox, bool isRadio);
-  void drawCheckmark(const Clay_BoundingBox &box, const Clay_Color &color);
+  void drawIconGlyph(const Clay_BoundingBox &box, const char *iconName, const Clay_Color &color);
   void drawRadioDot(const Clay_BoundingBox &box, const Clay_Color &color, float scale);
   void drawDropdownChevron(const Clay_BoundingBox &box, const Clay_Color &color, bool pointsUp);
   void renderSwitchIndicator(NativeWidgetMeta &meta, const Clay_BoundingBox &labelBox);
