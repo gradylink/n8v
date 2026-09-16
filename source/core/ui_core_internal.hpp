@@ -84,6 +84,8 @@ inline n8v::StyleFamily toStyleFamily(n8v_style_family f) {
     return n8v::StyleFamily::Cupertino;
   case N8V_STYLE_FAMILY_FLUENT:
     return n8v::StyleFamily::Fluent;
+  case N8V_STYLE_FAMILY_CUSTOM:
+    return n8v::StyleFamily::Custom;
   }
   return n8v::StyleFamily::Plain;
 }
@@ -98,6 +100,8 @@ inline n8v_style_family fromStyleFamily(n8v::StyleFamily f) {
     return N8V_STYLE_FAMILY_CUPERTINO;
   case n8v::StyleFamily::Fluent:
     return N8V_STYLE_FAMILY_FLUENT;
+  case n8v::StyleFamily::Custom:
+    return N8V_STYLE_FAMILY_CUSTOM;
   }
   return N8V_STYLE_FAMILY_PLAIN;
 }

@@ -26,7 +26,7 @@ int main() {
     UI() {
       sidebar({.title = "Sections", .selected = &selectedSection, .width = Sizing::fixed(260)}) {
         page({.name = "Widgets", .icon = "home"}) {
-          flex({.direction = Direction::Vertical, .gap = 12, .padding = {20, 20, 20, 20}, .width = Sizing::grow()}) {
+          flex({.direction = Direction::Vertical, .gap = 12, .padding = {20, 20, 20, 20}, .width = Sizing::grow(), .clipVertical = true}) {
             text({.bold = true})("n8v basic example");
 
             button({.style = ButtonStyle::Primary, .onClick = [&clickCount] {

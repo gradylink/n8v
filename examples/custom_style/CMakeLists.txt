@@ -1,0 +1,5 @@
+add_executable(n8v-custom-style-example main.cpp)
+target_link_libraries(n8v-custom-style-example PRIVATE n8v)
+if(EMSCRIPTEN)
+  set_target_properties(n8v-custom-style-example PROPERTIES SUFFIX ".html")
+endif()

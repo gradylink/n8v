@@ -45,7 +45,15 @@ typedef enum n8v_style_family {
   N8V_STYLE_FAMILY_MATERIAL,
   N8V_STYLE_FAMILY_CUPERTINO,
   N8V_STYLE_FAMILY_FLUENT,
+  N8V_STYLE_FAMILY_CUSTOM,
 } n8v_style_family;
+
+typedef enum n8v_font_family {
+  N8V_FONT_FAMILY_DEJAVU_SANS,
+  N8V_FONT_FAMILY_ROBOTO,
+  N8V_FONT_FAMILY_INTER,
+  N8V_FONT_FAMILY_SELAWIK,
+} n8v_font_family;
 
 typedef struct n8v_sizing {
   n8v_sizing_mode mode;
@@ -283,12 +291,184 @@ typedef struct n8v_page_options {
   const char *image;
 } n8v_page_options;
 
+typedef struct n8v_button_paint {
+  n8v_color background;
+  n8v_color text_color;
+  n8v_corner_radius corner_radius;
+  n8v_padding padding;
+  n8v_font_family font;
+  uint16_t font_size;
+  float transition_seconds;
+} n8v_button_paint;
+
+typedef struct n8v_text_paint {
+  n8v_color color;
+  n8v_font_family font;
+  uint16_t font_size;
+} n8v_text_paint;
+
+typedef struct n8v_checkbox_paint {
+  n8v_color background;
+  n8v_color border_color;
+  float border_width;
+  n8v_color check_color;
+  n8v_corner_radius corner_radius;
+  float indicator_size;
+  n8v_padding padding;
+  n8v_font_family font;
+  uint16_t font_size;
+  float transition_seconds;
+} n8v_checkbox_paint;
+
+typedef struct n8v_radio_paint {
+  n8v_color background;
+  n8v_color border_color;
+  float border_width;
+  n8v_color dot_color;
+  float indicator_size;
+  n8v_padding padding;
+  n8v_font_family font;
+  uint16_t font_size;
+  float transition_seconds;
+} n8v_radio_paint;
+
+typedef struct n8v_toggle_paint {
+  n8v_color track_on_color;
+  n8v_color track_off_color;
+  n8v_color track_border_color;
+  float track_border_width;
+  n8v_color knob_on_color;
+  n8v_color knob_off_color;
+  n8v_color knob_glyph_color;
+  bool show_glyph_when_on;
+  float track_width;
+  float track_height;
+  float knob_size_off;
+  float knob_size_on;
+  n8v_padding padding;
+  n8v_font_family font;
+  uint16_t font_size;
+  float transition_seconds;
+} n8v_toggle_paint;
+
+typedef struct n8v_entry_paint {
+  n8v_color background;
+  n8v_color text_color;
+  n8v_color placeholder_color;
+  n8v_color border_color;
+  float border_width;
+  bool outlined;
+  n8v_color label_color;
+  uint16_t label_font_size;
+  float transition_seconds;
+  n8v_corner_radius corner_radius;
+  n8v_padding padding;
+  n8v_font_family font;
+  uint16_t font_size;
+} n8v_entry_paint;
+
+typedef struct n8v_dropdown_paint {
+  n8v_color background;
+  n8v_color text_color;
+  n8v_color placeholder_color;
+  n8v_color popup_background;
+  n8v_color item_hover_background;
+  n8v_color item_selected_background;
+  n8v_corner_radius corner_radius;
+  n8v_padding padding;
+  n8v_font_family font;
+  uint16_t font_size;
+  float transition_seconds;
+  n8v_color label_color;
+  uint16_t label_font_size;
+  n8v_color indicator_color;
+  float indicator_width;
+} n8v_dropdown_paint;
+
+typedef struct n8v_slider_paint {
+  n8v_color track_color;
+  n8v_color fill_color;
+  n8v_color thumb_color;
+  float track_height;
+  float thumb_width;
+  float thumb_height;
+  n8v_color thumb_border_color;
+  float thumb_border_width;
+  float track_gap;
+} n8v_slider_paint;
+
+typedef struct n8v_image_paint {
+  n8v_corner_radius corner_radius;
+} n8v_image_paint;
+
+typedef struct n8v_icon_paint {
+  n8v_color tint;
+  float default_size;
+} n8v_icon_paint;
+
+typedef struct n8v_sidebar_paint {
+  n8v_color background;
+  n8v_color border_color;
+  float border_width;
+  n8v_corner_radius corner_radius;
+  n8v_padding padding;
+  float row_gap;
+} n8v_sidebar_paint;
+
+typedef n8v_button_paint (*n8v_paint_button_fn)(n8v_button_style style, bool hovered, bool pressed, void *userdata);
+typedef n8v_text_paint (*n8v_paint_text_fn)(n8v_text_options options, void *userdata);
+typedef n8v_checkbox_paint (*n8v_paint_checkbox_fn)(bool checked, bool hovered, bool pressed, void *userdata);
+typedef n8v_radio_paint (*n8v_paint_radio_fn)(bool selected, bool hovered, bool pressed, void *userdata);
+typedef n8v_toggle_paint (*n8v_paint_toggle_fn)(bool on, bool hovered, bool pressed, void *userdata);
+typedef n8v_entry_paint (*n8v_paint_entry_fn)(bool focused, bool has_value, void *userdata);
+typedef n8v_dropdown_paint (*n8v_paint_dropdown_fn)(bool open, bool has_selection, bool hovered, bool pressed, void *userdata);
+typedef n8v_slider_paint (*n8v_paint_slider_fn)(bool hovered, bool pressed, void *userdata);
+typedef n8v_image_paint (*n8v_paint_image_fn)(void *userdata);
+typedef n8v_icon_paint (*n8v_paint_icon_fn)(void *userdata);
+typedef n8v_sidebar_paint (*n8v_paint_sidebar_fn)(void *userdata);
+
+/** Function-pointer vtable for a custom style. Any entry may be null - see n8v_set_custom_paint. */
+typedef struct n8v_custom_paint_vtable {
+  n8v_paint_button_fn button;
+  n8v_paint_text_fn text;
+  n8v_paint_checkbox_fn checkbox;
+  n8v_paint_radio_fn radio;
+  n8v_paint_toggle_fn toggle;
+  n8v_paint_entry_fn entry;
+  n8v_paint_dropdown_fn dropdown;
+  n8v_paint_slider_fn slider;
+  n8v_paint_image_fn image;
+  n8v_paint_icon_fn icon;
+  n8v_paint_sidebar_fn sidebar;
+} n8v_custom_paint_vtable;
+
 N8V_API bool n8v_initialize(int width, int height, const char *title);
 N8V_API bool n8v_pump_events(void);
 N8V_API void n8v_shutdown(void);
 
 N8V_API void n8v_set_style_family(n8v_style_family family);
 N8V_API n8v_style_family n8v_active_style_family(void);
+
+N8V_API void n8v_set_custom_paint(const n8v_custom_paint_vtable *vtable, void *userdata);
+
+/**
+ * Queries one of the bundled styles' own Paint values directly, bypassing the active style
+ * entirely. Useful for a custom style that wants to reuse a bundled style (typically Plain) for
+ * whichever widgets it doesn't override itself. `family` must be one of PLAIN, MATERIAL,
+ * CUPERTINO or FLUENT - passing CUSTOM resolves to PLAIN, since "the custom style" isn't a
+ * meaningful fallback target for itself.
+ */
+N8V_API n8v_button_paint n8v_style_button_paint(n8v_style_family family, n8v_button_style style, bool hovered, bool pressed);
+N8V_API n8v_text_paint n8v_style_text_paint(n8v_style_family family, n8v_text_options options);
+N8V_API n8v_checkbox_paint n8v_style_checkbox_paint(n8v_style_family family, bool checked, bool hovered, bool pressed);
+N8V_API n8v_radio_paint n8v_style_radio_paint(n8v_style_family family, bool selected, bool hovered, bool pressed);
+N8V_API n8v_toggle_paint n8v_style_toggle_paint(n8v_style_family family, bool on, bool hovered, bool pressed);
+N8V_API n8v_entry_paint n8v_style_entry_paint(n8v_style_family family, bool focused, bool has_value);
+N8V_API n8v_dropdown_paint n8v_style_dropdown_paint(n8v_style_family family, bool open, bool has_selection, bool hovered, bool pressed);
+N8V_API n8v_slider_paint n8v_style_slider_paint(n8v_style_family family, bool hovered, bool pressed);
+N8V_API n8v_image_paint n8v_style_image_paint(n8v_style_family family);
+N8V_API n8v_icon_paint n8v_style_icon_paint(n8v_style_family family);
+N8V_API n8v_sidebar_paint n8v_style_sidebar_paint(n8v_style_family family);
 
 N8V_API void n8v_begin_frame(void);
 N8V_API void n8v_end_frame(void);
@@ -393,6 +573,18 @@ inline void n8v_text(const char *label) {
 
 #define set_style_family n8v_set_style_family
 #define active_style_family n8v_active_style_family
+#define set_custom_paint n8v_set_custom_paint
+#define style_button_paint n8v_style_button_paint
+#define style_text_paint n8v_style_text_paint
+#define style_checkbox_paint n8v_style_checkbox_paint
+#define style_radio_paint n8v_style_radio_paint
+#define style_toggle_paint n8v_style_toggle_paint
+#define style_entry_paint n8v_style_entry_paint
+#define style_dropdown_paint n8v_style_dropdown_paint
+#define style_slider_paint n8v_style_slider_paint
+#define style_image_paint n8v_style_image_paint
+#define style_icon_paint n8v_style_icon_paint
+#define style_sidebar_paint n8v_style_sidebar_paint
 
 #define sizing_fit n8v_sizing_fit
 #define sizing_grow n8v_sizing_grow
@@ -422,6 +614,20 @@ inline void n8v_text(const char *label) {
 #define image_options n8v_image_options
 #define image_source_kind n8v_image_source_kind
 #define icon_options n8v_icon_options
+
+#define font_family n8v_font_family
+#define button_paint n8v_button_paint
+#define text_paint n8v_text_paint
+#define checkbox_paint n8v_checkbox_paint
+#define radio_paint n8v_radio_paint
+#define toggle_paint n8v_toggle_paint
+#define entry_paint n8v_entry_paint
+#define dropdown_paint n8v_dropdown_paint
+#define slider_paint n8v_slider_paint
+#define image_paint n8v_image_paint
+#define icon_paint n8v_icon_paint
+#define sidebar_paint n8v_sidebar_paint
+#define custom_paint_vtable n8v_custom_paint_vtable
 
 #endif
 

@@ -13,10 +13,13 @@ StyleFamily parseStyleFamily(const char *value, StyleFamily fallback) {
   if (name == "material") return StyleFamily::Material;
   if (name == "cupertino") return StyleFamily::Cupertino;
   if (name == "fluent") return StyleFamily::Fluent;
+  if (name == "custom") return StyleFamily::Custom;
   return fallback;
 }
 
 StyleFamily currentFamily = parseStyleFamily(std::getenv("N8V_STYLE"), StyleFamily::Plain);
+
+bool currentFamilyExplicit = false;
 
 } // namespace
 
@@ -28,14 +31,27 @@ const Paint &activePaint() {
     return detail::cupertinoPaint();
   case StyleFamily::Fluent:
     return detail::fluentPaint();
+  case StyleFamily::Custom:
+    return detail::customPaint();
   case StyleFamily::Plain:
   default:
     return detail::plainPaint();
   }
 }
 
-void setStyleFamily(StyleFamily family) { currentFamily = family; }
+void setStyleFamily(StyleFamily family) {
+  currentFamily = family;
+  currentFamilyExplicit = true;
+}
 
 StyleFamily activeStyleFamily() { return currentFamily; }
+
+namespace detail {
+
+void suppressEnvStyleDefault() {
+  if (!currentFamilyExplicit) currentFamily = StyleFamily::Plain;
+}
+
+} // namespace detail
 
 } // namespace n8v

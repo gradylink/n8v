@@ -4,6 +4,7 @@
 #include "backends/text_edit_utils.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
+#include "styles/style_registry.hpp"
 
 #include <ftxui/screen/string.hpp>
 #include <ftxui/screen/terminal.hpp>
@@ -70,6 +71,8 @@ void TuiBackend::pollTerminalSize() {
 }
 
 bool TuiBackend::initialize(int, int, std::string_view title) {
+  n8v::detail::suppressEnvStyleDefault();
+
   enterRawMode();
   std::fputs("\x1b[?1049h", stdout);
   std::fputs("\x1b[?25l", stdout);

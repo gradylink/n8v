@@ -25,6 +25,8 @@ enum class StyleFamily {
   Material,
   Cupertino,
   Fluent,
+  /** A user-supplied Paint installed with setCustomPaint(). */
+  Custom,
 };
 
 /** Bundled font families. Selawik has no italic face and falls back to its regular. */

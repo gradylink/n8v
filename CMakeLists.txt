@@ -294,6 +294,7 @@ set(N8V_SOURCES
   source/styles/material/material_style.cpp
   source/styles/cupertino/cupertino_style.cpp
   source/styles/fluent/fluent_style.cpp
+  source/styles/custom/custom_style.cpp
   source/backends/clay_fallback/backend_select.cpp
   source/backends/clay_fallback/text/bundled_font.cpp
   source/backends/clay_fallback/text/font_atlas.cpp
@@ -411,4 +412,5 @@ option(N8V_EXAMPLES "Build the n8v example apps." ${PROJECT_IS_TOP_LEVEL})
 if(N8V_EXAMPLES)
   add_subdirectory(examples/basic)
   add_subdirectory(examples/basic_c)
+  add_subdirectory(examples/custom_style)
 endif()
