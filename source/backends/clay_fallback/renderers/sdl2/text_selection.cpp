@@ -5,12 +5,13 @@
 
 #include <SDL2/SDL.h>
 
+#include <algorithm>
 #include <string>
 #include <string_view>
 
 namespace n8v::detail {
 
-void Sdl2Backend::handleTextClick(int ordinal, std::string_view text, size_t hitOffset) {
+void Sdl2Backend::handleTextClick(int ordinal, std::string_view lineText, size_t localHitOffset, size_t lineOffset) {
   Uint32 now = SDL_GetTicks();
   if (ordinal == lastClickOrdinal_ && (now - lastClickTicks_) < 400) {
     clickCount_ = (clickCount_ % 3) + 1;
@@ -23,24 +24,26 @@ void Sdl2Backend::handleTextClick(int ordinal, std::string_view text, size_t hit
 
   entry_ = EntryEditState{};
   textSel_.ordinal = ordinal;
-  textSel_.text = std::string(text);
+  textSel_.text = std::string(lineText);
   textSel_.active = true;
+  textSel_.selectToEnd = false;
 
   if (clickCount_ == 2) {
-    size_t probe = hitOffset < text.size() ? hitOffset : prevCodepointStart(text, hitOffset);
-    if (probe < text.size() && isWordByte((unsigned char)text[probe])) {
-      textSel_.anchor = wordStartAt(text, hitOffset);
-      textSel_.cursor = wordEndAt(text, hitOffset);
+    size_t probe = localHitOffset < lineText.size() ? localHitOffset : prevCodepointStart(lineText, localHitOffset);
+    if (probe < lineText.size() && isWordByte((unsigned char)lineText[probe])) {
+      textSel_.anchor = lineOffset + wordStartAt(lineText, localHitOffset);
+      textSel_.cursor = lineOffset + wordEndAt(lineText, localHitOffset);
     } else {
-      textSel_.cursor = textSel_.anchor = hitOffset;
+      textSel_.cursor = textSel_.anchor = lineOffset + localHitOffset;
     }
     textMouseSelecting_ = false;
   } else if (clickCount_ == 3) {
     textSel_.anchor = 0;
-    textSel_.cursor = text.size();
+    textSel_.cursor = lineOffset + lineText.size();
+    textSel_.selectToEnd = true;
     textMouseSelecting_ = false;
   } else {
-    textSel_.cursor = textSel_.anchor = hitOffset;
+    textSel_.cursor = textSel_.anchor = lineOffset + localHitOffset;
     textMouseSelecting_ = true;
   }
 }
@@ -99,6 +102,12 @@ bool Sdl2Backend::renderSelectableText(const Clay_RenderCommand &command, const 
   bool italic = flags.italic;
   const Clay_BoundingBox &box = command.boundingBox;
 
+  if (ord != textLineTrackOrdinal_) {
+    textLineTrackOrdinal_ = ord;
+    textLineTrackBase_ = text.data();
+  }
+  size_t lineOffset = (size_t)(text.data() - textLineTrackBase_);
+
   bool hit = pointerX_ >= box.x && pointerX_ <= box.x + box.width && pointerY_ >= box.y && pointerY_ <= box.y + box.height;
 
   if (hit && currentCursorKind_ == CursorKind::Default) {
@@ -107,19 +116,33 @@ bool Sdl2Backend::renderSelectableText(const Clay_RenderCommand &command, const 
 
   if (justClicked_ && hit) {
     float localX = pointerX_ - box.x;
-    size_t hitOffset = hitTestOffset(text, family, fontSize, localX, bold, italic);
-    handleTextClick(ord, text, hitOffset);
-  } else if (textMouseSelecting_ && textSel_.active && textSel_.ordinal == ord) {
+    size_t localHitOffset = hitTestOffset(text, family, fontSize, localX, bold, italic);
+    handleTextClick(ord, text, localHitOffset, lineOffset);
+  } else if (textMouseSelecting_ && textSel_.active && textSel_.ordinal == ord && hit) {
     float localX = pointerX_ - box.x;
-    textSel_.cursor = hitTestOffset(text, family, fontSize, localX, bold, italic);
+    size_t localHitOffset = hitTestOffset(text, family, fontSize, localX, bold, italic);
+    textSel_.cursor = lineOffset + localHitOffset;
     lastActivityTicks_ = SDL_GetTicks();
   }
 
   if (textSel_.active && textSel_.ordinal == ord) {
-    textSel_.text = std::string(text);
+    size_t lineEndGlobal = lineOffset + text.size();
+    std::string_view spanned(textLineTrackBase_, lineEndGlobal);
+    if (spanned.size() > textSel_.text.size()) textSel_.text = std::string(spanned);
+
+    if (textSel_.selectToEnd) textSel_.cursor = lineEndGlobal;
+
     if (textSel_.hasSelection()) {
-      drawSelectionHighlight(box, text, family, fontSize, textSel_.selStart(), textSel_.selEnd(), bold, italic);
-      drawText(command, textSel_.selStart(), textSel_.selEnd());
+      size_t gSelStart = textSel_.selStart();
+      size_t gSelEnd = textSel_.selEnd();
+      if (gSelEnd > lineOffset && gSelStart < lineEndGlobal) {
+        size_t localSelStart = gSelStart > lineOffset ? gSelStart - lineOffset : 0;
+        size_t localSelEnd = std::min(gSelEnd - lineOffset, text.size());
+        drawSelectionHighlight(box, text, family, fontSize, localSelStart, localSelEnd, bold, italic);
+        drawText(command, localSelStart, localSelEnd);
+      } else {
+        drawText(command);
+      }
     } else {
       drawText(command);
     }

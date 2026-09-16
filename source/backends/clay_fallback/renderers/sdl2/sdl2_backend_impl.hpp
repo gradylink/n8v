@@ -60,6 +60,7 @@ private:
     size_t cursor = 0;
     size_t anchor = 0;
     bool active = false;
+    bool selectToEnd = false;
     bool hasSelection() const { return active && anchor != cursor; }
     size_t selStart() const { return std::min(cursor, anchor); }
     size_t selEnd() const { return std::max(cursor, anchor); }
@@ -75,7 +76,7 @@ private:
   void handleEntryKey(SDL_Keysym keysym);
   void renderEntryText(NativeWidgetMeta *meta, const Clay_RenderCommand &command, bool clicked, bool dragging);
 
-  void handleTextClick(int ordinal, std::string_view text, size_t hitOffset);
+  void handleTextClick(int ordinal, std::string_view lineText, size_t localHitOffset, size_t lineOffset);
   void moveTextCursor(size_t newPos, bool extendSelection);
   void handleTextKey(SDL_Keysym keysym);
   bool renderSelectableText(const Clay_RenderCommand &command, const TextStyleFlags &flags, std::string_view text);
@@ -120,6 +121,8 @@ private:
   bool textMouseSelecting_ = false;
   EntryEditState entry_;
   TextSelState textSel_;
+  int textLineTrackOrdinal_ = -1;
+  const char *textLineTrackBase_ = nullptr;
   Uint32 lastActivityTicks_ = 0;
   Uint32 lastClickTicks_ = 0;
   int lastClickOrdinal_ = -1;

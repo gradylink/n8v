@@ -114,6 +114,8 @@ void Sdl2Backend::beginFrame() {
 void Sdl2Backend::present(Clay_RenderCommandArray commands) {
   clipStack_.clear();
   SDL_RenderSetClipRect(renderer_, nullptr);
+  textLineTrackOrdinal_ = -1;
+  textLineTrackBase_ = nullptr;
 
   bool pendingIsCheckbox = false;
   bool pendingIsRadio = false;
