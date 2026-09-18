@@ -45,8 +45,28 @@ inline FontFamily fromC(n8v_font_family f) {
   return FontFamily::DejaVuSans;
 }
 
-inline n8v_button_style toC(ButtonStyle s) { return s == ButtonStyle::Secondary ? N8V_BUTTON_STYLE_SECONDARY : N8V_BUTTON_STYLE_PRIMARY; }
-inline ButtonStyle fromC(n8v_button_style s) { return s == N8V_BUTTON_STYLE_SECONDARY ? ButtonStyle::Secondary : ButtonStyle::Primary; }
+inline n8v_button_style toC(ButtonStyle s) {
+  switch (s) {
+  case ButtonStyle::Secondary:
+    return N8V_BUTTON_STYLE_SECONDARY;
+  case ButtonStyle::Ghost:
+    return N8V_BUTTON_STYLE_GHOST;
+  case ButtonStyle::Primary:
+    return N8V_BUTTON_STYLE_PRIMARY;
+  }
+  return N8V_BUTTON_STYLE_PRIMARY;
+}
+inline ButtonStyle fromC(n8v_button_style s) {
+  switch (s) {
+  case N8V_BUTTON_STYLE_SECONDARY:
+    return ButtonStyle::Secondary;
+  case N8V_BUTTON_STYLE_GHOST:
+    return ButtonStyle::Ghost;
+  case N8V_BUTTON_STYLE_PRIMARY:
+    return ButtonStyle::Primary;
+  }
+  return ButtonStyle::Primary;
+}
 
 inline n8v_text_options toC(const TextOptions &options) {
   thread_local std::string urlStorage;

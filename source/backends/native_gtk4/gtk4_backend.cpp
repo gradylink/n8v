@@ -177,6 +177,10 @@ public:
       gtk_widget_measure(probe, GTK_ORIENTATION_VERTICAL, -1, &minH, &natH, nullptr, nullptr);
       return {(float)natW, (float)natH};
     }
+    if (hasIcon && text.empty()) {
+      float size = fontSize + 20.0f;
+      return {size, size};
+    }
     gtk_button_set_label(GTK_BUTTON(measureButton_), std::string(text).c_str());
     int minW = 0, natW = 0, minH = 0, natH = 0;
     gtk_widget_measure(measureButton_, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
@@ -293,6 +297,7 @@ public:
             gtk_label_set_markup(GTK_LABEL(pendingLabelTarget), linkMarkup(text, pendingLinkUrl).c_str());
           } else if (pendingButtonIconLabel) {
             gtk_label_set_text(GTK_LABEL(pendingButtonIconLabel), text.c_str());
+            gtk_widget_set_visible(pendingButtonIconLabel, TRUE);
           } else if (pendingSwitchLabel) {
             gtk_label_set_text(GTK_LABEL(pendingSwitchLabel), text.c_str());
           } else if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry && pendingKind != NativeWidgetKind::Dropdown) {
@@ -575,6 +580,8 @@ private:
     if (it != widgets_.end()) {
       if (meta.kind == NativeWidgetKind::Button) {
         buttonCallbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
+        if (meta.buttonFlat) gtk_widget_add_css_class(it->second, "flat");
+        else gtk_widget_remove_css_class(it->second, "flat");
       } else if (meta.kind == NativeWidgetKind::Checkbox && meta.checked) {
         CheckboxState &state = checkboxStates_[meta.ordinal];
         state.checked = meta.checked;
@@ -621,6 +628,7 @@ private:
       widget = gtk_button_new_with_label("");
       buttonCallbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
       connectOrdinal(widget, "clicked", G_CALLBACK(&Gtk4Backend::onButtonClicked), this, meta.ordinal);
+      if (meta.buttonFlat) gtk_widget_add_css_class(widget, "flat");
     } else if (meta.kind == NativeWidgetKind::Checkbox) {
       widget = gtk_check_button_new();
       CheckboxState &state = checkboxStates_[meta.ordinal];
@@ -706,10 +714,15 @@ private:
       return nullptr;
     }
 
+    if (meta.buttonFlat) gtk_widget_add_css_class(button, "n8v-icon-only");
+
     if (!state.hasIcon) {
       state.box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+      gtk_widget_set_halign(state.box, GTK_ALIGN_CENTER);
+      gtk_widget_set_valign(state.box, GTK_ALIGN_CENTER);
       state.image = gtk_image_new();
       state.label = gtk_label_new("");
+      gtk_widget_set_visible(state.label, FALSE);
       if (meta.iconTrailing) {
         gtk_box_append(GTK_BOX(state.box), state.label);
         gtk_box_append(GTK_BOX(state.box), state.image);

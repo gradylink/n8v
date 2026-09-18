@@ -72,11 +72,18 @@ void _n8v_button_commit(const char *label) {
 
   Clay_ElementDeclaration decl = {};
   decl.layout.padding = n8v::detail::toClay(paint.padding);
-  decl.backgroundColor = n8v::detail::toClay(paint.background);
+  n8v::Color background = paint.background;
+  if (background.a <= 0.0f) background.a = 1.0f;
+  decl.backgroundColor = n8v::detail::toClay(background);
   if (iconImage) {
     decl.layout.layoutDirection = CLAY_LEFT_TO_RIGHT;
-    decl.layout.childGap = paint.fontSize / 2;
     decl.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
+    if (labelView.empty()) {
+      decl.layout.childGap = 0;
+      decl.layout.childAlignment.x = CLAY_ALIGN_X_CENTER;
+    } else {
+      decl.layout.childGap = paint.fontSize / 2;
+    }
   }
 
   float radius = easeValue(animKey(ordinal, 0), paint.cornerRadius.topLeft, paint.transitionSeconds);
@@ -103,6 +110,7 @@ void _n8v_button_commit(const char *label) {
   meta.iconName = hasIcon ? internCString(iconView) : nullptr;
   meta.iconVariant = toIconVariant(opts.icon_variant);
   meta.iconTrailing = iconTrailing;
+  meta.buttonFlat = opts.style == N8V_BUTTON_STYLE_GHOST;
   decl.userData = &meta;
 
   Clay__ConfigureOpenElement(decl);
@@ -132,13 +140,15 @@ void _n8v_button_commit(const char *label) {
 
   if (drawIconAsClayChild && !iconTrailing) openIconChild();
 
-  textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
-  Clay_TextElementConfig textConfig = {};
-  textConfig.textColor = n8v::detail::toClay(paint.textColor);
-  textConfig.fontSize = paint.fontSize;
-  textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
-  textConfig.userData = &textStyleStorage.back();
-  CLAY_TEXT(internString(labelView), textConfig);
+  if (!labelView.empty()) {
+    textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
+    Clay_TextElementConfig textConfig = {};
+    textConfig.textColor = n8v::detail::toClay(paint.textColor);
+    textConfig.fontSize = paint.fontSize;
+    textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
+    textConfig.userData = &textStyleStorage.back();
+    CLAY_TEXT(internString(labelView), textConfig);
+  }
 
   if (drawIconAsClayChild && iconTrailing) openIconChild();
 

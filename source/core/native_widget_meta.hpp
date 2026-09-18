@@ -56,6 +56,7 @@ struct NativeWidgetMeta {
   const char *iconName = nullptr;                           // Icon widget, and Button when an icon was requested - canonical name, for backends with a native icon theme/set
   n8v::IconVariant iconVariant = n8v::IconVariant::Outline; // Icon/Button only
   bool iconTrailing = false;                                // Button only
+  bool buttonFlat = false;                                  // Button only - true for ButtonStyle::Ghost; strip native chrome/border
   bool buttonSelected = false;                              // for sidebar
   n8v::Color iconTint{}; // Icon widget only - the tint used to decode `image`, so backends can re-decode a freedesktop-theme file (found on disk, not in the bundle) with the
                          // same color

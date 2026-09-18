@@ -190,6 +190,10 @@ public:
       return {(float)hint.width(), (float)hint.height()};
     }
     if (kind == NativeWidgetKind::Button) {
+      if (hasIcon && text.empty()) {
+        float size = fontSize + 20.0f;
+        return {size, size};
+      }
       measureButton_->setText(qtext);
       QSize hint = measureButton_->sizeHint();
       int width = hint.width() + (hasIcon ? fontSize + fontSize / 2 : 0);
@@ -651,6 +655,7 @@ private:
     if (it != widgets_.end()) {
       if (meta.kind == NativeWidgetKind::Button) {
         callbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
+        static_cast<N8VButton *>(it->second)->setFlat(meta.buttonFlat);
       } else if (meta.kind == NativeWidgetKind::Link) {
         static_cast<N8VLinkLabel *>(it->second)->url = meta.url ? *meta.url : std::string();
       } else if (meta.kind == NativeWidgetKind::Checkbox && meta.checked) {
@@ -688,6 +693,7 @@ private:
       auto *button = new N8VButton(currentParent());
       callbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
       button->callback = &callbacks_[meta.ordinal];
+      button->setFlat(meta.buttonFlat);
       widget = button;
     } else if (meta.kind == NativeWidgetKind::Checkbox) {
       auto *checkbox = new N8VCheckBox(currentParent());

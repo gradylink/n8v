@@ -31,6 +31,7 @@ typedef enum n8v_align {
 typedef enum n8v_button_style {
   N8V_BUTTON_STYLE_PRIMARY,
   N8V_BUTTON_STYLE_SECONDARY,
+  N8V_BUTTON_STYLE_GHOST,
 } n8v_button_style;
 
 typedef enum n8v_sizing_mode {

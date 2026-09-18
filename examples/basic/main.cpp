@@ -36,6 +36,12 @@ int main() {
                   }, .icon = "check"})("Click me");
 
             flex({.direction = Direction::Horizontal, .gap = 8, .vAlign = Align::Center}) {
+              button({.style = ButtonStyle::Ghost, .icon = "search"})("");
+              button({.style = ButtonStyle::Ghost, .icon = "menu"})("");
+              text("ghost icon buttons");
+            }
+
+            flex({.direction = Direction::Horizontal, .gap = 8, .vAlign = Align::Center}) {
               icon({.name = "settings"});
               icon({.name = "star", .tint = {230, 180, 20, 255}});
               icon({.name = "heart", .tint = {220, 40, 60, 255}});

@@ -10,6 +10,9 @@ public:
     if (style == ButtonStyle::Primary) {
       paint.background = pressed ? Color{94, 72, 150, 255} : hovered ? Color{123, 100, 184, 255} : Color{103, 80, 164, 255};
       paint.textColor = {255, 255, 255, 255};
+    } else if (style == ButtonStyle::Ghost) {
+      paint.background = pressed ? Color{103, 80, 164, 31} : hovered ? Color{103, 80, 164, 20} : Color{103, 80, 164, 0};
+      paint.textColor = {103, 80, 164, 255};
     } else {
       paint.background = pressed ? Color{214, 202, 236, 255} : hovered ? Color{223, 211, 243, 255} : Color{232, 222, 248, 255};
       paint.textColor = {29, 25, 43, 255};
@@ -17,7 +20,7 @@ public:
 
     float radius = pressed ? PressedRadius : RoundRadius;
     paint.cornerRadius = {radius, radius, radius, radius};
-    paint.padding = {16, 16, 10, 10};
+    paint.padding = style == ButtonStyle::Ghost ? Padding{10, 10, 10, 10} : Padding{16, 16, 10, 10};
     paint.font = FontFamily::Roboto;
     paint.fontSize = 14;
     paint.transitionSeconds = 0.2f;

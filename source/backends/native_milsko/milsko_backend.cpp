@@ -233,8 +233,7 @@ public:
         WidgetKey key{ordinal, wrapLineIndex};
         seenKeys.insert(key);
         MwWidget label = ensureLabel(key);
-        std::string displayText = (flags && flags->strikethrough) ? withCombiningStrikethrough(text) : text;
-        MwSetText(label, MwNtext, displayText.c_str());
+        MwSetText(label, MwNtext, text.c_str());
         applyBold(label, flags && flags->bold);
         positionWidget(label, command->boundingBox);
         pendingLabelTarget = nullptr;
@@ -419,6 +418,7 @@ private:
       ClickAction &action = actions_[meta.ordinal];
       if (meta.kind == NativeWidgetKind::Button) {
         action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
+        MwSetInteger(it->second, MwNflat, meta.buttonFlat ? 1 : 0);
       } else if ((meta.kind == NativeWidgetKind::Checkbox || meta.kind == NativeWidgetKind::Switch) && meta.checked) {
         action.checked = meta.checked;
         action.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
@@ -500,6 +500,8 @@ private:
       if (action.isLink) {
         MwSetInteger(widget, MwNflat, 1);
         MwSetText(widget, MwNforeground, "#4287f5");
+      } else if (meta.kind == NativeWidgetKind::Button && meta.buttonFlat) {
+        MwSetInteger(widget, MwNflat, 1);
       }
       MwAddUserHandler(widget, MwNactivateHandler, onActivate, &action);
     }

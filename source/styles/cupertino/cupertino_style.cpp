@@ -10,12 +10,15 @@ public:
     if (style == ButtonStyle::Primary) {
       paint.background = pressed ? Color{0, 98, 204, 255} : hovered ? Color{10, 132, 255, 255} : Color{0, 122, 255, 255};
       paint.textColor = {255, 255, 255, 255};
+    } else if (style == ButtonStyle::Ghost) {
+      paint.background = pressed ? Color{0, 122, 255, 40} : hovered ? Color{0, 122, 255, 20} : Color{0, 122, 255, 0};
+      paint.textColor = {0, 122, 255, 255};
     } else {
       paint.background = pressed ? Color{216, 216, 222, 255} : hovered ? Color{229, 229, 234, 255} : Color{242, 242, 247, 255};
       paint.textColor = {0, 122, 255, 255};
     }
     paint.cornerRadius = {12, 12, 12, 12};
-    paint.padding = {20, 20, 13, 13};
+    paint.padding = style == ButtonStyle::Ghost ? Padding{13, 13, 13, 13} : Padding{20, 20, 13, 13};
     paint.font = FontFamily::Inter;
     paint.fontSize = 16;
     paint.transitionSeconds = 0.12f;

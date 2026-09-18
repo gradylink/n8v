@@ -29,8 +29,28 @@ inline n8v_align toC(Align a) {
   return N8V_ALIGN_START;
 }
 
-inline n8v_button_style toC(ButtonStyle s) { return s == ButtonStyle::Primary ? N8V_BUTTON_STYLE_PRIMARY : N8V_BUTTON_STYLE_SECONDARY; }
-inline ButtonStyle fromC(n8v_button_style s) { return s == N8V_BUTTON_STYLE_PRIMARY ? ButtonStyle::Primary : ButtonStyle::Secondary; }
+inline n8v_button_style toC(ButtonStyle s) {
+  switch (s) {
+  case ButtonStyle::Primary:
+    return N8V_BUTTON_STYLE_PRIMARY;
+  case ButtonStyle::Ghost:
+    return N8V_BUTTON_STYLE_GHOST;
+  case ButtonStyle::Secondary:
+    return N8V_BUTTON_STYLE_SECONDARY;
+  }
+  return N8V_BUTTON_STYLE_PRIMARY;
+}
+inline ButtonStyle fromC(n8v_button_style s) {
+  switch (s) {
+  case N8V_BUTTON_STYLE_PRIMARY:
+    return ButtonStyle::Primary;
+  case N8V_BUTTON_STYLE_GHOST:
+    return ButtonStyle::Ghost;
+  case N8V_BUTTON_STYLE_SECONDARY:
+    return ButtonStyle::Secondary;
+  }
+  return ButtonStyle::Primary;
+}
 
 inline n8v_icon_variant toC(IconVariant v) { return v == IconVariant::Outline ? N8V_ICON_VARIANT_OUTLINE : N8V_ICON_VARIANT_FILLED; }
 

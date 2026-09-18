@@ -18,6 +18,8 @@ enum class Align {
 enum class ButtonStyle {
   Primary,
   Secondary,
+  /** Transparent background */
+  Ghost,
 };
 
 enum class StyleFamily {

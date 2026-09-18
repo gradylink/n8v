@@ -122,6 +122,10 @@ public:
       return {0, 20.0f};
     }
     if (kind == NativeWidgetKind::Button && hasIcon) {
+      if (text.empty()) {
+        float size = fontSize + 20.0f;
+        return {size, size};
+      }
       fl_font(FL_HELVETICA, fontSize);
       float textWidth = fl_width(std::string(text).c_str());
       return {textWidth + 32.0f + fontSize + fontSize / 2, (float)fl_height() + 14.0f};
@@ -489,6 +493,9 @@ private:
       WidgetAction &action = actions_[meta.ordinal];
       if (meta.kind == NativeWidgetKind::Button) {
         action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
+        auto *button = static_cast<Fl_Button *>(it->second);
+        button->box(meta.buttonFlat ? FL_FLAT_BOX : FL_UP_BOX);
+        button->down_box(meta.buttonFlat ? FL_FLAT_BOX : FL_DOWN_BOX);
       } else if (meta.kind == NativeWidgetKind::Link) {
         action.url = meta.url ? *meta.url : std::string();
       } else if ((meta.kind == NativeWidgetKind::Checkbox || meta.kind == NativeWidgetKind::Switch) && meta.checked) {
@@ -530,6 +537,10 @@ private:
       auto *button = new Fl_Button(0, 0, 1, 1);
       action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
       button->callback(&FltkBackend::onButtonClicked, &action);
+      if (meta.buttonFlat) {
+        button->box(FL_FLAT_BOX);
+        button->down_box(FL_FLAT_BOX);
+      }
       widget = button;
     } else if (meta.kind == NativeWidgetKind::Checkbox) {
       auto *button = new Fl_Check_Button(0, 0, 1, 1);
