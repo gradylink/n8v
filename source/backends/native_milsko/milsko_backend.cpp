@@ -212,6 +212,7 @@ public:
           MwWidget label = ensureLabel(labelKey);
           MwSetText(label, MwNtext, text.c_str());
           applyBold(label, flags->bold);
+          applyStrikethrough(label, flags->strikethrough);
           positionWidget(label, box);
 
           pendingCheckboxWidget = nullptr;
@@ -223,6 +224,7 @@ public:
           if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry && pendingKind != NativeWidgetKind::Dropdown) {
             MwSetText(pendingLabelTarget, MwNtext, text.c_str());
             applyBold(pendingLabelTarget, flags->bold);
+            applyStrikethrough(pendingLabelTarget, flags->strikethrough);
           }
           pendingLabelTarget = nullptr;
           continue;
@@ -235,6 +237,7 @@ public:
         MwWidget label = ensureLabel(key);
         MwSetText(label, MwNtext, text.c_str());
         applyBold(label, flags && flags->bold);
+        applyStrikethrough(label, flags && flags->strikethrough);
         positionWidget(label, command->boundingBox);
         pendingLabelTarget = nullptr;
         continue;
@@ -597,6 +600,8 @@ private:
     void *font = bold ? boldFont_ : regularFont_;
     if (font) MwVaApply(widget, MwNfont, font, NULL);
   }
+
+  void applyStrikethrough(MwWidget widget, bool strikethrough) const { MwSetInteger(widget, MwNstrikethrough, strikethrough ? 1 : 0); }
 
   std::map<WidgetKey, MwWidget> widgets_;
   std::unordered_map<int, ClickAction> actions_;
