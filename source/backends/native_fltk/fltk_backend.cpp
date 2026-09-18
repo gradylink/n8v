@@ -9,6 +9,8 @@
 #include "core/text_style_flags.hpp"
 #include "core/ui_core_internal.hpp"
 
+#include "backends/text_edit_utils.hpp"
+
 #include <FL/Fl_Graphics_Driver.H>
 
 #include "fltk_lazy_vars.h"
@@ -218,7 +220,9 @@ public:
         WidgetKey key{ordinal, wrapLineIndex};
         seenKeys.insert(key);
         Fl_Box *label = ensureLabel(key);
-        label->copy_label(text.c_str());
+        std::string displayText = (flags && flags->strikethrough) ? withCombiningStrikethrough(text) : text;
+        label->copy_label(displayText.c_str());
+        label->labelfont(FL_HELVETICA + ((flags && flags->bold) ? 1 : 0) + ((flags && flags->italic) ? 2 : 0));
         positionWidget(label, command->boundingBox, !containerStack_.empty());
         pendingLabelTarget = nullptr;
         continue;

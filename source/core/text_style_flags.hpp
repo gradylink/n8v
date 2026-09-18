@@ -11,6 +11,7 @@ struct TextStyleFlags {
   bool underline = false;
   bool ownedByWidget = false;
   int ordinal = 0;
+  bool strikethrough = false;
 };
 
 } // namespace n8v::detail

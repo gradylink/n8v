@@ -172,9 +172,12 @@ public:
 
   Clay_Dimensions windowSize() const override { return {(float)window_->width(), (float)window_->height()}; }
 
-  Clay_Dimensions measureText(std::string_view text, FontFamily, uint16_t, bool, bool) const override {
+  Clay_Dimensions measureText(std::string_view text, FontFamily, uint16_t, bool bold, bool italic) const override {
     QString qtext = QString::fromUtf8(text.data(), (int)text.size());
-    QFontMetrics fm(measureLabel_->font());
+    QFont font = measureLabel_->font();
+    font.setBold(bold);
+    font.setItalic(italic);
+    QFontMetrics fm(font);
     QSize size = fm.size(0, qtext);
     return {(float)size.width(), (float)size.height()};
   }
@@ -311,6 +314,11 @@ public:
         seenKeys.insert(key);
         QLabel *label = ensureLabel(key);
         label->setText(qtext);
+        QFont labelFont = label->font();
+        labelFont.setBold(flags && flags->bold);
+        labelFont.setItalic(flags && flags->italic);
+        labelFont.setStrikeOut(flags && flags->strikethrough);
+        label->setFont(labelFont);
         positionWidget(label, command->boundingBox);
         pendingLabelTarget = nullptr;
         continue;

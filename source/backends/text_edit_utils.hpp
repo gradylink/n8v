@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -25,6 +26,20 @@ inline size_t prevCodepointStart(std::string_view s, size_t pos) {
 }
 
 inline size_t nextCodepointStart(std::string_view s, size_t pos) { return pos >= s.size() ? s.size() : pos + utf8CodepointLen(s, pos); }
+
+// for backends missing rich text strikethrough
+inline std::string withCombiningStrikethrough(std::string_view s) {
+  std::string out;
+  out.reserve(s.size() * 3);
+  size_t i = 0;
+  while (i < s.size()) {
+    size_t len = utf8CodepointLen(s, i);
+    out.append(s.substr(i, len));
+    out.append("\xCC\xB6");
+    i += len;
+  }
+  return out;
+}
 
 inline bool isWordByte(unsigned char c) { return std::isalnum(c) || c == '_' || c >= 0x80; }
 

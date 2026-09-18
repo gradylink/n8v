@@ -83,6 +83,7 @@ void TuiBackend::drawText(const Clay_RenderCommand &command) {
   auto *flags = static_cast<TextStyleFlags *>(command.userData);
   bool bold = flags && flags->bold;
   bool underline = flags && flags->underline;
+  bool strikethrough = flags && flags->strikethrough;
   std::string_view text(textData.stringContents.chars, (size_t)textData.stringContents.length);
   if (text.empty()) return;
 
@@ -95,7 +96,7 @@ void TuiBackend::drawText(const Clay_RenderCommand &command) {
     std::string glyph(text.substr(offsets[k], offsets[k + 1] - offsets[k]));
     int w = ftxui::string_width(glyph);
     if (w <= 0) continue;
-    grid_.setGlyph(x, y, glyph, fg, bold, underline);
+    grid_.setGlyph(x, y, glyph, fg, bold, underline, /*inverted=*/false, strikethrough);
     if (w >= 2) grid_.markWideContinuation(x + 1, y);
     x += w;
   }

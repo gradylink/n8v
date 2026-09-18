@@ -54,7 +54,7 @@ void ScreenGrid::fillBackground(CellRect rect, ftxui::Color bg) {
   }
 }
 
-void ScreenGrid::setGlyph(int x, int y, const std::string &glyph, ftxui::Color fg, bool bold, bool underline, bool inverted) {
+void ScreenGrid::setGlyph(int x, int y, const std::string &glyph, ftxui::Color fg, bool bold, bool underline, bool inverted, bool strikethrough) {
   if (!visible(x, y)) return;
   ftxui::Cell &pixel = screen_.PixelAt(x, y);
   pixel.character = glyph;
@@ -62,6 +62,7 @@ void ScreenGrid::setGlyph(int x, int y, const std::string &glyph, ftxui::Color f
   pixel.bold = bold;
   pixel.underlined = underline;
   pixel.inverted = inverted;
+  pixel.strikethrough = strikethrough;
 }
 
 void ScreenGrid::markWideContinuation(int x, int y) {

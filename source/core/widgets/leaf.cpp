@@ -172,6 +172,7 @@ void _n8v_text_commit(const char *label) {
     n8v::TextOptions textOptions{};
     textOptions.bold = opts.bold;
     textOptions.italic = opts.italic;
+    textOptions.strikethrough = opts.strikethrough;
     textOptions.url = urlView;
     textOptions.color = toTextColor(opts.color);
     const n8v::TextPaint textPaint = n8v::activePaint().text(textOptions);
@@ -184,7 +185,7 @@ void _n8v_text_commit(const char *label) {
 
     Clay_OnHover(dispatchLinkClick, meta.url);
 
-    textStyleStorage.push_back(n8v::detail::TextStyleFlags{textPaint.font, opts.bold, opts.italic, true, true, ordinal});
+    textStyleStorage.push_back(n8v::detail::TextStyleFlags{textPaint.font, opts.bold, opts.italic, true, true, ordinal, opts.strikethrough});
     Clay_TextElementConfig textConfig = {};
     textConfig.textColor = n8v::detail::toClay(textPaint.color);
     textConfig.fontSize = textPaint.fontSize;
@@ -198,9 +199,10 @@ void _n8v_text_commit(const char *label) {
     n8v::TextOptions textOptions{};
     textOptions.bold = opts.bold;
     textOptions.italic = opts.italic;
+    textOptions.strikethrough = opts.strikethrough;
     textOptions.color = toTextColor(opts.color);
     const n8v::TextPaint textPaint = n8v::activePaint().text(textOptions);
-    textStyleStorage.push_back(n8v::detail::TextStyleFlags{textPaint.font, opts.bold, opts.italic, false, false, ordinal});
+    textStyleStorage.push_back(n8v::detail::TextStyleFlags{textPaint.font, opts.bold, opts.italic, false, false, ordinal, opts.strikethrough});
     Clay_TextElementConfig textConfig = {};
     textConfig.textColor = n8v::detail::toClay(textPaint.color);
     textConfig.fontSize = textPaint.fontSize;

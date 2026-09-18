@@ -92,6 +92,7 @@ void Sdl2Backend::drawText(const Clay_RenderCommand &command, size_t selStartByt
   bool bold = flags && flags->bold;
   bool italic = flags && flags->italic;
   bool underline = flags && flags->underline;
+  bool strikethrough = flags && flags->strikethrough;
 
   LineLayoutResult layout;
   std::string_view text(textData.stringContents.chars, (size_t)textData.stringContents.length);
@@ -150,6 +151,12 @@ void Sdl2Backend::drawText(const Clay_RenderCommand &command, size_t selStartByt
     SDL_SetRenderDrawColor(renderer_, tint.r, tint.g, tint.b, tint.a);
     int underlineY = (int)std::round(command.boundingBox.y + command.boundingBox.height - 1.0f);
     SDL_RenderDrawLine(renderer_, (int)originX, underlineY, (int)std::round(originX + layout.width), underlineY);
+  }
+
+  if (strikethrough) {
+    SDL_SetRenderDrawColor(renderer_, tint.r, tint.g, tint.b, tint.a);
+    int strikeY = (int)std::round(command.boundingBox.y + command.boundingBox.height * 0.5f);
+    SDL_RenderDrawLine(renderer_, (int)originX, strikeY, (int)std::round(originX + layout.width), strikeY);
   }
 }
 

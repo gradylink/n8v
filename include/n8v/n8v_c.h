@@ -178,6 +178,7 @@ typedef struct n8v_flex_options {
 typedef struct n8v_text_options {
   bool bold;
   bool italic;
+  bool strikethrough;
   const char *url;
   n8v_color color;
 } n8v_text_options;

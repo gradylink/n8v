@@ -30,6 +30,10 @@ if(N8V_BACKEND_MILSKO)
         MwImageClass MwClass
         MwViewportClass MwClass
         MwLLDestroyPixmap MwLLDestroyPixmapFn
+        MwTTFData "unsigned char"
+        MwTTFDataSize "unsigned int"
+        MwBoldTTFData "unsigned char"
+        MwBoldTTFDataSize "unsigned int"
     )
     target_include_directories(milsko_lazy PUBLIC "${_N8V_MILSKO_INCLUDE_DIR}")
   else()

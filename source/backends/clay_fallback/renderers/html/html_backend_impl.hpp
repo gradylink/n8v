@@ -119,7 +119,7 @@ private:
     Clay_Color color{};
     FontFamily family = FontFamily::DejaVuSans;
     uint16_t fontSize = 0;
-    bool bold = false, italic = false, underline = false;
+    bool bold = false, italic = false, underline = false, strikethrough = false;
     std::string text;
   };
   struct BorderSignature {

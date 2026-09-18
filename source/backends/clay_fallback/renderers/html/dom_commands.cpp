@@ -30,13 +30,15 @@ void applyTextStyle(emscripten::val &el, const Clay_RenderCommand &command) {
   bool bold = flags && flags->bold;
   bool italic = flags && flags->italic;
   bool underline = flags && flags->underline;
+  bool strikethrough = flags && flags->strikethrough;
 
   el["style"].set("color", cssColor(text.textColor));
   el["style"].set("fontFamily", htmlFontFamilyName(family));
   el["style"].set("fontSize", std::to_string(text.fontSize) + "px");
   el["style"].set("fontWeight", std::string(bold ? "bold" : "normal"));
   el["style"].set("fontStyle", std::string(italic ? "italic" : "normal"));
-  el["style"].set("textDecoration", std::string(underline ? "underline" : "none"));
+  std::string decoration = underline && strikethrough ? "underline line-through" : underline ? "underline" : strikethrough ? "line-through" : "none";
+  el["style"].set("textDecoration", decoration);
   el["style"].set("lineHeight", std::string("normal"));
 
   std::string_view contents(text.stringContents.chars, (size_t)text.stringContents.length);
@@ -202,12 +204,13 @@ void HtmlBackend::renderText(const Clay_RenderCommand &command, PendingState &pe
     flags && flags->bold,
     flags && flags->italic,
     flags && flags->underline,
+    flags && flags->strikethrough,
     std::string(text.stringContents.chars, (size_t)text.stringContents.length)
   };
   TextSignature &last = elementTextSig_[key];
   if (
     created || !(colorEquals(sig.color, last.color) && sig.family == last.family && sig.fontSize == last.fontSize && sig.bold == last.bold && sig.italic == last.italic &&
-                 sig.underline == last.underline && sig.text == last.text)
+                 sig.underline == last.underline && sig.strikethrough == last.strikethrough && sig.text == last.text)
   ) {
     applyTextStyle(el, command);
     last = std::move(sig);
@@ -236,12 +239,13 @@ void HtmlBackend::renderLinkText(NativeWidgetMeta &meta, const Clay_RenderComman
     flags && flags->bold,
     flags && flags->italic,
     flags && flags->underline,
+    flags && flags->strikethrough,
     std::string(text.stringContents.chars, (size_t)text.stringContents.length)
   };
   TextSignature &last = elementTextSig_[key];
   if (
     created || !(colorEquals(sig.color, last.color) && sig.family == last.family && sig.fontSize == last.fontSize && sig.bold == last.bold && sig.italic == last.italic &&
-                 sig.underline == last.underline && sig.text == last.text)
+                 sig.underline == last.underline && sig.strikethrough == last.strikethrough && sig.text == last.text)
   ) {
     applyTextStyle(el, command);
     last = std::move(sig);

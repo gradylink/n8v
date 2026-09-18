@@ -25,7 +25,7 @@ public:
   bool visible(int x, int y) const;
 
   void fillBackground(CellRect rect, ftxui::Color bg);
-  void setGlyph(int x, int y, const std::string &glyph, ftxui::Color fg, bool bold = false, bool underline = false, bool inverted = false);
+  void setGlyph(int x, int y, const std::string &glyph, ftxui::Color fg, bool bold = false, bool underline = false, bool inverted = false, bool strikethrough = false);
   void markWideContinuation(int x, int y);
   void invertCell(int x, int y);
 

@@ -26,6 +26,7 @@ struct FlexOptions {
 struct TextOptions {
   bool bold = false;
   bool italic = false;
+  bool strikethrough = false;
   /** If non-empty, the text is painted as a link (color + underline) to this URL. */
   std::string_view url = {};
   /** Ignored by style families that pick their own color (e.g. links). */

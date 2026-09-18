@@ -54,6 +54,7 @@ inline n8v_text_options toC(const TextOptions &options) {
   n8v_text_options c{};
   c.bold = options.bold;
   c.italic = options.italic;
+  c.strikethrough = options.strikethrough;
   c.url = urlStorage.c_str();
   c.color = toC(options.color);
   return c;
@@ -63,6 +64,7 @@ inline TextOptions fromC(n8v_text_options options) {
   return TextOptions{
     .bold = options.bold,
     .italic = options.italic,
+    .strikethrough = options.strikethrough,
     .url = options.url ? std::string_view(options.url) : std::string_view{},
     .color = fromC(options.color),
   };

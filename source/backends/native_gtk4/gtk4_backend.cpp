@@ -46,6 +46,20 @@ std::string linkMarkup(std::string_view text, std::string_view url) {
   return result;
 }
 
+void setPlainLabelText(GtkWidget *label, std::string_view text, bool bold, bool italic, bool strikethrough = false) {
+  if (!bold && !italic && !strikethrough) {
+    gtk_label_set_text(GTK_LABEL(label), std::string(text).c_str());
+    return;
+  }
+  gchar *escaped = g_markup_escape_text(std::string(text).c_str(), -1);
+  std::string markup = escaped;
+  g_free(escaped);
+  if (strikethrough) markup = "<s>" + markup + "</s>";
+  if (italic) markup = "<i>" + markup + "</i>";
+  if (bold) markup = "<b>" + markup + "</b>";
+  gtk_label_set_markup(GTK_LABEL(label), markup.c_str());
+}
+
 class Gtk4Backend final : public Backend {
 public:
   ~Gtk4Backend() override { shutdown(); }
@@ -111,8 +125,8 @@ public:
 
   Clay_Dimensions windowSize() const override { return {(float)gtk_widget_get_width(window_), (float)gtk_widget_get_height(window_)}; }
 
-  Clay_Dimensions measureText(std::string_view text, FontFamily, uint16_t, bool, bool) const override {
-    gtk_label_set_text(GTK_LABEL(measureLabel_), std::string(text).c_str());
+  Clay_Dimensions measureText(std::string_view text, FontFamily, uint16_t, bool bold, bool italic) const override {
+    setPlainLabelText(measureLabel_, text, bold, italic);
     int minW = 0, natW = 0, minH = 0, natH = 0;
     gtk_widget_measure(measureLabel_, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
     gtk_widget_measure(measureLabel_, GTK_ORIENTATION_VERTICAL, -1, &minH, &natH, nullptr, nullptr);
@@ -292,7 +306,7 @@ public:
         }
 
         if (!containerStack_.empty() && containerStack_.back().rowListBox) {
-          gtk_label_set_text(GTK_LABEL(titleLabel_), text.c_str());
+          setPlainLabelText(titleLabel_, text, flags && flags->bold, flags && flags->italic, flags && flags->strikethrough);
           pendingLabelTarget = nullptr;
           pendingButtonIconLabel = nullptr;
           pendingSwitchLabel = nullptr;
@@ -305,7 +319,7 @@ public:
         WidgetKey key{ordinal, wrapLineIndex};
         seenKeys.insert(key);
         GtkWidget *widget = ensureLabel(key);
-        gtk_label_set_text(GTK_LABEL(widget), text.c_str());
+        setPlainLabelText(widget, text, flags && flags->bold, flags && flags->italic, flags && flags->strikethrough);
         positionWidget(widget, command->boundingBox);
         pendingLabelTarget = nullptr;
         pendingButtonIconLabel = nullptr;

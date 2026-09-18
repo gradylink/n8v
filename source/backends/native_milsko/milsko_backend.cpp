@@ -9,6 +9,8 @@
 #include "core/text_style_flags.hpp"
 #include "core/ui_core_internal.hpp"
 
+#include "backends/text_edit_utils.hpp"
+
 #include <Mw/Milsko.h>
 
 typedef void (*MwLLDestroyPixmapFn)(MwLLPixmap);
@@ -73,6 +75,9 @@ public:
     measureLabel_ = MwCreateWidget(MwLabelClass, "n8v-measure", window_, 0, 0, 1, 1);
     MwShow(measureLabel_, 0);
 
+    regularFont_ = MwFontLoad(&MwTTFData, MwTTFDataSize);
+    boldFont_ = MwFontLoad(&MwBoldTTFData, MwBoldTTFDataSize);
+
     return true;
   }
 
@@ -99,8 +104,9 @@ public:
     return {0, 0};
   }
 
-  Clay_Dimensions measureText(std::string_view text, FontFamily, uint16_t, bool, bool) const override {
+  Clay_Dimensions measureText(std::string_view text, FontFamily, uint16_t, bool bold, bool) const override {
     std::string s(text);
+    applyBold(measureLabel_, bold);
 
     bool allWhitespace = !s.empty();
     for (char c : s) {
@@ -205,6 +211,7 @@ public:
           seenKeys.insert(labelKey);
           MwWidget label = ensureLabel(labelKey);
           MwSetText(label, MwNtext, text.c_str());
+          applyBold(label, flags->bold);
           positionWidget(label, box);
 
           pendingCheckboxWidget = nullptr;
@@ -213,7 +220,10 @@ public:
         }
 
         if (flags && flags->ownedByWidget) {
-          if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry && pendingKind != NativeWidgetKind::Dropdown) MwSetText(pendingLabelTarget, MwNtext, text.c_str());
+          if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry && pendingKind != NativeWidgetKind::Dropdown) {
+            MwSetText(pendingLabelTarget, MwNtext, text.c_str());
+            applyBold(pendingLabelTarget, flags->bold);
+          }
           pendingLabelTarget = nullptr;
           continue;
         }
@@ -223,7 +233,9 @@ public:
         WidgetKey key{ordinal, wrapLineIndex};
         seenKeys.insert(key);
         MwWidget label = ensureLabel(key);
-        MwSetText(label, MwNtext, text.c_str());
+        std::string displayText = (flags && flags->strikethrough) ? withCombiningStrikethrough(text) : text;
+        MwSetText(label, MwNtext, displayText.c_str());
+        applyBold(label, flags && flags->bold);
         positionWidget(label, command->boundingBox);
         pendingLabelTarget = nullptr;
         continue;
@@ -576,6 +588,13 @@ private:
 
   MwWidget window_ = nullptr;
   MwWidget measureLabel_ = nullptr;
+  void *regularFont_ = nullptr;
+  void *boldFont_ = nullptr;
+
+  void applyBold(MwWidget widget, bool bold) const {
+    void *font = bold ? boldFont_ : regularFont_;
+    if (font) MwVaApply(widget, MwNfont, font, NULL);
+  }
 
   std::map<WidgetKey, MwWidget> widgets_;
   std::unordered_map<int, ClickAction> actions_;
