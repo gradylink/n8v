@@ -102,4 +102,8 @@ n8v_icon_paint n8v_style_icon_paint(n8v_style_family family) { return n8v::detai
 
 n8v_sidebar_paint n8v_style_sidebar_paint(n8v_style_family family) { return n8v::detail::toC(bundledPaintForFamily(family).sidebar()); }
 
+n8v_panel_paint n8v_style_panel_paint(n8v_style_family family, n8v_panel_role role, bool hovered, bool pressed) {
+  return n8v::detail::toC(bundledPaintForFamily(family).panel(n8v::detail::fromC(role), hovered, pressed));
+}
+
 } // extern "C"

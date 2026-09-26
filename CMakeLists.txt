@@ -289,6 +289,7 @@ set(N8V_SOURCES
   source/core/widgets/image.cpp
   source/core/widgets/icon.cpp
   source/core/widgets/sidebar.cpp
+  source/core/widgets/panel.cpp
   source/styles/style_registry.cpp
   source/styles/plain/plain_style.cpp
   source/styles/material/material_style.cpp

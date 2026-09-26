@@ -1,6 +1,7 @@
 #include <n8v/ui.hpp>
 
 #undef sidebar
+#undef panel
 
 using namespace n8v;
 
@@ -42,6 +43,7 @@ public:
   ImagePaint image() const override { return plainPaint().image(); }
   IconPaint icon() const override { return plainPaint().icon(); }
   SidebarPaint sidebar() const override { return plainPaint().sidebar(); }
+  PanelPaint panel(PanelRole role, bool hovered, bool pressed) const override { return plainPaint().panel(role, hovered, pressed); }
 };
 
 } // namespace

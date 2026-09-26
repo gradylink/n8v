@@ -23,6 +23,18 @@ struct FlexOptions {
   bool clipVertical = false;
 };
 
+struct PanelOptions {
+  PanelRole role = PanelRole::Card;
+  Direction direction = Direction::Vertical;
+  uint16_t gap = 0;
+  Align hAlign = Align::Start;
+  Align vAlign = Align::Start;
+  Sizing width = Sizing::fit();
+  Sizing height = Sizing::fit();
+  bool clipHorizontal = false;
+  bool clipVertical = false;
+};
+
 struct TextOptions {
   bool bold = false;
   bool italic = false;

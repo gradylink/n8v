@@ -150,6 +150,22 @@ public:
     paint.padding = {10, 10, 10, 10};
     return paint;
   }
+
+  PanelPaint panel(PanelRole role, bool hovered, bool /*pressed*/) const override {
+    PanelPaint paint{};
+    if (role == PanelRole::ListItem) {
+      paint.background = hovered ? Color{0, 0, 0, 14} : Color{0, 0, 0, 0};
+      paint.cornerRadius = {4, 4, 4, 4};
+      paint.padding = {10, 12, 10, 12};
+      return paint;
+    }
+    paint.background = {251, 251, 253, 255};
+    paint.borderColor = {225, 225, 225, 255};
+    paint.borderWidth = 1.0f;
+    paint.cornerRadius = {7, 7, 7, 7};
+    paint.padding = {12, 12, 12, 12};
+    return paint;
+  }
 };
 
 } // namespace

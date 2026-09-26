@@ -66,6 +66,11 @@ public:
     return plainPaint().sidebar();
   }
 
+  PanelPaint panel(PanelRole role, bool hovered, bool pressed) const override {
+    if (vtable_.panel) return fromC(vtable_.panel(toC(role), hovered, pressed, userdata_));
+    return plainPaint().panel(role, hovered, pressed);
+  }
+
 private:
   n8v_custom_paint_vtable vtable_{};
   void *userdata_ = nullptr;

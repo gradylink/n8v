@@ -34,6 +34,11 @@ typedef enum n8v_button_style {
   N8V_BUTTON_STYLE_GHOST,
 } n8v_button_style;
 
+typedef enum n8v_panel_role {
+  N8V_PANEL_ROLE_CARD,
+  N8V_PANEL_ROLE_LIST_ITEM,
+} n8v_panel_role;
+
 typedef enum n8v_sizing_mode {
   N8V_SIZING_FIT,
   N8V_SIZING_GROW,
@@ -175,6 +180,18 @@ typedef struct n8v_flex_options {
   bool clip_horizontal;
   bool clip_vertical;
 } n8v_flex_options;
+
+typedef struct n8v_panel_options {
+  n8v_panel_role role;
+  n8v_direction direction;
+  uint16_t gap;
+  n8v_align h_align;
+  n8v_align v_align;
+  n8v_sizing width;
+  n8v_sizing height;
+  bool clip_horizontal;
+  bool clip_vertical;
+} n8v_panel_options;
 
 typedef struct n8v_text_options {
   bool bold;
@@ -417,6 +434,14 @@ typedef struct n8v_sidebar_paint {
   float row_gap;
 } n8v_sidebar_paint;
 
+typedef struct n8v_panel_paint {
+  n8v_color background;
+  n8v_color border_color;
+  float border_width;
+  n8v_corner_radius corner_radius;
+  n8v_padding padding;
+} n8v_panel_paint;
+
 typedef n8v_button_paint (*n8v_paint_button_fn)(n8v_button_style style, bool hovered, bool pressed, void *userdata);
 typedef n8v_text_paint (*n8v_paint_text_fn)(n8v_text_options options, void *userdata);
 typedef n8v_checkbox_paint (*n8v_paint_checkbox_fn)(bool checked, bool hovered, bool pressed, void *userdata);
@@ -428,6 +453,7 @@ typedef n8v_slider_paint (*n8v_paint_slider_fn)(bool hovered, bool pressed, void
 typedef n8v_image_paint (*n8v_paint_image_fn)(void *userdata);
 typedef n8v_icon_paint (*n8v_paint_icon_fn)(void *userdata);
 typedef n8v_sidebar_paint (*n8v_paint_sidebar_fn)(void *userdata);
+typedef n8v_panel_paint (*n8v_paint_panel_fn)(n8v_panel_role role, bool hovered, bool pressed, void *userdata);
 
 /** Function-pointer vtable for a custom style. Any entry may be null - see n8v_set_custom_paint. */
 typedef struct n8v_custom_paint_vtable {
@@ -442,6 +468,7 @@ typedef struct n8v_custom_paint_vtable {
   n8v_paint_image_fn image;
   n8v_paint_icon_fn icon;
   n8v_paint_sidebar_fn sidebar;
+  n8v_paint_panel_fn panel;
 } n8v_custom_paint_vtable;
 
 N8V_API bool n8v_initialize(int width, int height, const char *title);
@@ -471,6 +498,7 @@ N8V_API n8v_slider_paint n8v_style_slider_paint(n8v_style_family family, bool ho
 N8V_API n8v_image_paint n8v_style_image_paint(n8v_style_family family);
 N8V_API n8v_icon_paint n8v_style_icon_paint(n8v_style_family family);
 N8V_API n8v_sidebar_paint n8v_style_sidebar_paint(n8v_style_family family);
+N8V_API n8v_panel_paint n8v_style_panel_paint(n8v_style_family family, n8v_panel_role role, bool hovered, bool pressed);
 
 N8V_API void n8v_begin_frame(void);
 N8V_API void n8v_end_frame(void);
@@ -481,10 +509,13 @@ N8V_API void n8v_close_sidebar(void);
 /** Returns true if this page is the selected one. */
 N8V_API bool n8v_open_page(n8v_page_options options);
 N8V_API void n8v_close_page(void);
+N8V_API void n8v_open_panel(n8v_panel_options options);
+N8V_API void n8v_close_panel(void);
 
 #define N8V_UI() for (uint8_t n8v_c_uiLatch = (n8v_begin_frame(), 0); n8v_c_uiLatch < 1; n8v_c_uiLatch = 1, n8v_end_frame())
 
 #define n8v_flex(...) for (uint8_t n8v_c_flexLatch = (n8v_open_flex(__VA_ARGS__), 0); n8v_c_flexLatch < 1; n8v_c_flexLatch = 1, n8v_close_flex())
+#define n8v_panel(...) for (uint8_t n8v_c_panelLatch = (n8v_open_panel(__VA_ARGS__), 0); n8v_c_panelLatch < 1; n8v_c_panelLatch = 1, n8v_close_panel())
 
 #define n8v_sidebar(...) for (uint8_t n8v_c_sidebarLatch = (n8v_open_sidebar(__VA_ARGS__), 0); n8v_c_sidebarLatch < 1; n8v_c_sidebarLatch = 1, n8v_close_sidebar())
 
@@ -562,6 +593,7 @@ inline void n8v_text(const char *label) {
 #define flex n8v_flex
 #define sidebar n8v_sidebar
 #define page n8v_page
+#define panel n8v_panel
 #define button n8v_button
 #define text n8v_text
 #define checkbox n8v_checkbox
@@ -587,6 +619,7 @@ inline void n8v_text(const char *label) {
 #define style_image_paint n8v_style_image_paint
 #define style_icon_paint n8v_style_icon_paint
 #define style_sidebar_paint n8v_style_sidebar_paint
+#define style_panel_paint n8v_style_panel_paint
 
 #define sizing_fit n8v_sizing_fit
 #define sizing_grow n8v_sizing_grow
@@ -605,6 +638,7 @@ inline void n8v_text(const char *label) {
 #define flex_options n8v_flex_options
 #define sidebar_options n8v_sidebar_options
 #define page_options n8v_page_options
+#define panel_options n8v_panel_options
 #define text_options n8v_text_options
 #define button_options n8v_button_options
 #define checkbox_options n8v_checkbox_options
@@ -629,6 +663,7 @@ inline void n8v_text(const char *label) {
 #define image_paint n8v_image_paint
 #define icon_paint n8v_icon_paint
 #define sidebar_paint n8v_sidebar_paint
+#define panel_paint n8v_panel_paint
 #define custom_paint_vtable n8v_custom_paint_vtable
 
 #endif

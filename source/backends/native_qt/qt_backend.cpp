@@ -13,6 +13,8 @@
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCursor>
+#include <QEvent>
 #include <QFontMetrics>
 #include <QFrame>
 #include <QIcon>
@@ -118,6 +120,31 @@ protected:
   }
 };
 
+class N8VRootWidget final : public QWidget {
+public:
+  using QWidget::QWidget;
+  std::function<void(QPointF)> onMove;
+  std::function<void(bool)> onPress;
+
+  bool eventFilter(QObject *, QEvent *event) override {
+    switch (event->type()) {
+    case QEvent::MouseMove:
+      if (onMove) onMove(mapFromGlobal(QCursor::pos()));
+      break;
+    case QEvent::MouseButtonPress:
+      if (onMove) onMove(mapFromGlobal(QCursor::pos()));
+      if (onPress) onPress(true);
+      break;
+    case QEvent::MouseButtonRelease:
+      if (onPress) onPress(false);
+      break;
+    default:
+      break;
+    }
+    return false;
+  }
+};
+
 class QtBackend final : public Backend {
 public:
   ~QtBackend() override { shutdown(); }
@@ -127,9 +154,15 @@ public:
     static char *argv[] = {nullptr};
     app_ = std::make_unique<QApplication>(argc, argv);
 
-    window_ = new QWidget();
+    window_ = new N8VRootWidget();
     window_->setWindowTitle(QString::fromUtf8(title.data(), (int)title.size()));
     window_->resize(width, height);
+    window_->onMove = [this](QPointF pos) {
+      pointerX_ = (float)pos.x();
+      pointerY_ = (float)pos.y();
+    };
+    window_->onPress = [this](bool down) { pointerDown_ = down; };
+    app_->installEventFilter(window_);
     window_->show();
 
     measureLabel_ = new QLabel(window_);
@@ -168,7 +201,7 @@ public:
     return window_->isVisible();
   }
 
-  bool pointerDown() const override { return false; }
+  bool pointerDown() const override { return pointerDown_; }
 
   Clay_Dimensions windowSize() const override { return {(float)window_->width(), (float)window_->height()}; }
 
@@ -226,7 +259,7 @@ public:
     return {(float)hint.width(), (float)hint.height()};
   }
 
-  void beginFrame() override {}
+  void beginFrame() override { Clay_SetPointerState({pointerX_, pointerY_}, false); }
 
   void present(Clay_RenderCommandArray commands) override {
     std::map<int, int> wrapLineCounts;
@@ -451,6 +484,14 @@ private:
     }
   }
 
+  void applyPanelStyle(QWidget *widget, const NativeWidgetMeta &meta) {
+    auto *frame = static_cast<QFrame *>(widget);
+    frame->setStyleSheet(QString());
+    frame->setFrameShape(QFrame::StyledPanel);
+    frame->setFrameShadow(QFrame::Raised);
+    (void)meta;
+  }
+
   struct EntryState {
     std::string *value = nullptr;
     std::function<void(std::string_view)> onChange;
@@ -657,7 +698,9 @@ private:
         callbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
         static_cast<N8VButton *>(it->second)->setFlat(meta.buttonFlat);
       } else if (meta.kind == NativeWidgetKind::Link) {
-        static_cast<N8VLinkLabel *>(it->second)->url = meta.url ? *meta.url : std::string();
+        auto *label = static_cast<N8VLinkLabel *>(it->second);
+        label->url = meta.url ? *meta.url : std::string();
+        label->setAttribute(Qt::WA_TransparentForMouseEvents, label->url.empty());
       } else if (meta.kind == NativeWidgetKind::Checkbox && meta.checked) {
         auto *checkbox = static_cast<N8VCheckBox *>(it->second);
         checkbox->checkedPtr = meta.checked;
@@ -684,6 +727,8 @@ private:
         syncDropdown(static_cast<QComboBox *>(it->second), meta, dropdownStates_[meta.ordinal]);
       } else if (meta.kind == NativeWidgetKind::Slider) {
         syncSlider(static_cast<QSlider *>(it->second), meta, sliderStates_[meta.ordinal]);
+      } else if (meta.kind == NativeWidgetKind::Panel) {
+        if (meta.panelRole != n8v::PanelRole::ListItem) applyPanelStyle(it->second, meta);
       }
       return it->second;
     }
@@ -752,10 +797,21 @@ private:
       auto *label = new QLabel(currentParent());
       label->setScaledContents(true);
       widget = label;
+    } else if (meta.kind == NativeWidgetKind::Panel && meta.panelRole == n8v::PanelRole::ListItem) {
+      auto *button = new QPushButton(currentParent());
+      button->setFlat(true);
+      button->setFocusPolicy(Qt::NoFocus);
+      widget = button;
+    } else if (meta.kind == NativeWidgetKind::Panel) {
+      auto *frame = new QFrame(currentParent());
+      frame->setAttribute(Qt::WA_TransparentForMouseEvents);
+      applyPanelStyle(frame, meta);
+      widget = frame;
     } else {
       auto *label = new N8VLinkLabel(currentParent());
       label->setTextFormat(Qt::RichText);
       label->url = meta.url ? *meta.url : std::string();
+      label->setAttribute(Qt::WA_TransparentForMouseEvents, label->url.empty());
       widget = label;
     }
 
@@ -785,7 +841,10 @@ private:
   }
 
   std::unique_ptr<QApplication> app_;
-  QWidget *window_ = nullptr;
+  N8VRootWidget *window_ = nullptr;
+  float pointerX_ = 0.0f;
+  float pointerY_ = 0.0f;
+  bool pointerDown_ = false;
   QLabel *measureLabel_ = nullptr;
   QPushButton *measureButton_ = nullptr;
   QLabel *measureLink_ = nullptr;

@@ -29,6 +29,7 @@ if(N8V_BACKEND_MILSKO)
         MwScrollBarClass MwClass
         MwImageClass MwClass
         MwViewportClass MwClass
+        MwBoxClass MwClass
         MwLLDestroyPixmap MwLLDestroyPixmapFn
         MwTTFData "unsigned char"
         MwTTFDataSize "unsigned int"

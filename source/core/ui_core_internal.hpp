@@ -46,6 +46,8 @@ inline n8v::ButtonStyle toButtonStyle(n8v_button_style s) {
 
 inline n8v::IconVariant toIconVariant(n8v_icon_variant v) { return v == N8V_ICON_VARIANT_FILLED ? n8v::IconVariant::Filled : n8v::IconVariant::Outline; }
 
+inline n8v::PanelRole toPanelRole(n8v_panel_role r) { return r == N8V_PANEL_ROLE_LIST_ITEM ? n8v::PanelRole::ListItem : n8v::PanelRole::Card; }
+
 inline n8v::IconPosition toIconPosition(n8v_icon_position p) { return p == N8V_ICON_POSITION_TRAILING ? n8v::IconPosition::Trailing : n8v::IconPosition::Leading; }
 
 inline n8v::SizingMode toSizingMode(n8v_sizing_mode m) {

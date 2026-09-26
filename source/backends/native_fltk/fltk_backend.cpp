@@ -164,7 +164,7 @@ public:
         WidgetKey key{meta->ordinal, -1};
         seenKeys.insert(key);
         Fl_Widget *widget = ensureWidget(key, *meta);
-        positionWidget(widget, command->boundingBox, !containerStack_.empty());
+        positionWidget(widget, command->boundingBox, cacheContainerChildPositions());
         pendingLabelTarget = widget;
         pendingKind = meta->kind;
         pendingIconTrailing = meta->iconTrailing;
@@ -178,7 +178,7 @@ public:
         WidgetKey key{meta->ordinal, -1};
         seenKeys.insert(key);
         Fl_Widget *widget = ensureWidget(key, *meta);
-        positionWidget(widget, command->boundingBox, !containerStack_.empty());
+        positionWidget(widget, command->boundingBox, cacheContainerChildPositions());
         if (meta->kind == NativeWidgetKind::Icon) {
           ensureIconImage(static_cast<Fl_Box *>(widget), *meta);
         } else {
@@ -227,7 +227,7 @@ public:
         std::string displayText = (flags && flags->strikethrough) ? withCombiningStrikethrough(text) : text;
         label->copy_label(displayText.c_str());
         label->labelfont(FL_HELVETICA + ((flags && flags->bold) ? 1 : 0) + ((flags && flags->italic) ? 2 : 0));
-        positionWidget(label, command->boundingBox, !containerStack_.empty());
+        positionWidget(label, command->boundingBox, cacheContainerChildPositions());
         pendingLabelTarget = nullptr;
         continue;
       }
@@ -448,9 +448,12 @@ private:
 
   struct ContainerFrame {
     Fl_Group *scroll = nullptr;
+    bool skipRedundantResize = true;
   };
 
   Fl_Group *currentGroup() const { return containerStack_.empty() ? static_cast<Fl_Group *>(window_) : containerStack_.back().scroll; }
+
+  bool cacheContainerChildPositions() const { return !containerStack_.empty() && containerStack_.back().skipRedundantResize; }
 
   void ensureScrollContainer(uint32_t id, const Clay_BoundingBox &box, const Clay_ClipRenderData &clip) {
     auto it = scrollContainers_.find(id);
@@ -479,7 +482,7 @@ private:
       group->box(FL_UP_BOX);
       group->end();
       currentGroup()->add(group);
-      it = sidebarGroups_.emplace(id, ContainerFrame{group}).first;
+      it = sidebarGroups_.emplace(id, ContainerFrame{group, /*skipRedundantResize=*/false}).first;
     }
     it->second.scroll->resize((int)box.x, (int)box.y, (int)box.width, (int)box.height);
 
@@ -527,6 +530,8 @@ private:
         auto *sliderWidget = static_cast<Fl_Slider *>(it->second);
         sliderWidget->bounds(meta.sliderMin, meta.sliderMax);
         if (sliderWidget->value() != *meta.sliderValue) sliderWidget->value(*meta.sliderValue);
+      } else if (meta.kind == NativeWidgetKind::Panel && meta.panelRole != n8v::PanelRole::ListItem) {
+        applyPanelStyle(static_cast<Fl_Box *>(it->second), meta);
       }
       return it->second;
     }
@@ -593,6 +598,16 @@ private:
       widget = sliderWidget;
     } else if (meta.kind == NativeWidgetKind::Image || meta.kind == NativeWidgetKind::Icon) {
       widget = new Fl_Box(0, 0, 1, 1);
+    } else if (meta.kind == NativeWidgetKind::Panel && meta.panelRole == n8v::PanelRole::ListItem) {
+      auto *button = new Fl_Button(0, 0, 1, 1);
+      button->box(FL_FLAT_BOX);
+      button->down_box(FL_FLAT_BOX);
+      button->clear_visible_focus();
+      widget = button;
+    } else if (meta.kind == NativeWidgetKind::Panel) {
+      auto *box = new Fl_Box(0, 0, 1, 1);
+      applyPanelStyle(box, meta);
+      widget = box;
     } else {
       auto *button = new Fl_Button(0, 0, 1, 1);
       action.isLink = true;
@@ -607,6 +622,11 @@ private:
     currentGroup()->add(widget);
     widgets_[key] = widget;
     return widget;
+  }
+
+  void applyPanelStyle(Fl_Box *box, const NativeWidgetMeta &meta) {
+    box->box(FL_ENGRAVED_BOX);
+    box->color(FL_BACKGROUND_COLOR);
   }
 
   Fl_Box *ensureLabel(const WidgetKey &key) {

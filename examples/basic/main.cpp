@@ -30,6 +30,16 @@ int main() {
             text({.bold = true})("n8v basic example");
             text({.strikethrough = true})("strikethrough example");
 
+            panel({.role = PanelRole::Card, .gap = 4, .width = Sizing::grow()}) {
+              text({.bold = true})("Card panel");
+              panel({.role = PanelRole::ListItem, .width = Sizing::grow()}) {
+                text("Row one");
+              }
+              panel({.role = PanelRole::ListItem, .width = Sizing::grow()}) {
+                text("Row two");
+              }
+            }
+
             button({.style = ButtonStyle::Primary, .onClick = [&clickCount] {
                     ++clickCount;
                     std::cout << std::to_string(clickCount) << std::endl;

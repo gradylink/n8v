@@ -79,6 +79,16 @@ public:
 
     g_signal_connect_data(window_, "close-request", G_CALLBACK(&Gtk4Backend::onCloseRequest), this, nullptr, (GConnectFlags)0);
 
+    GtkEventController *motion = gtk_event_controller_motion_new();
+    g_signal_connect_data(motion, "motion", G_CALLBACK(&Gtk4Backend::onPointerMotion), this, nullptr, (GConnectFlags)0);
+    gtk_widget_add_controller(fixed_, motion);
+
+    GtkGesture *click = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(click), 0);
+    g_signal_connect_data(click, "pressed", G_CALLBACK(&Gtk4Backend::onPointerPressed), this, nullptr, (GConnectFlags)0);
+    g_signal_connect_data(click, "released", G_CALLBACK(&Gtk4Backend::onPointerReleased), this, nullptr, (GConnectFlags)0);
+    gtk_widget_add_controller(fixed_, GTK_EVENT_CONTROLLER(click));
+
     gtk_window_present(GTK_WINDOW(window_));
 
     measureLabel_ = gtk_label_new("");
@@ -110,6 +120,9 @@ public:
     measureSwitch_ = gtk_switch_new();
     g_object_ref_sink(measureSwitch_);
 
+    panelCssProvider_ = gtk_css_provider_new();
+    gtk_style_context_add_provider_for_display(gtk_widget_get_display(window_), GTK_STYLE_PROVIDER(panelCssProvider_), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
     return true;
   }
 
@@ -121,7 +134,7 @@ public:
     return !closeRequested_;
   }
 
-  bool pointerDown() const override { return false; }
+  bool pointerDown() const override { return pointerDown_; }
 
   Clay_Dimensions windowSize() const override { return {(float)gtk_widget_get_width(window_), (float)gtk_widget_get_height(window_)}; }
 
@@ -189,7 +202,7 @@ public:
     return {(float)natW, (float)natH};
   }
 
-  void beginFrame() override {}
+  void beginFrame() override { Clay_SetPointerState({pointerX_, pointerY_}, false); }
 
   void present(Clay_RenderCommandArray commands) override {
     std::map<int, int> wrapLineCounts;
@@ -366,6 +379,10 @@ public:
         sliderStates_.erase(it->first.ordinal);
         switchStates_.erase(it->first.ordinal);
         buttonIconStates_.erase(it->first.ordinal);
+        if (panelStates_.erase(it->first.ordinal)) {
+          panelCssRules_.erase(it->first.ordinal);
+          reloadPanelCss();
+        }
         imageTextureSources_.erase(it->second);
         it = widgets_.erase(it);
       } else {
@@ -440,6 +457,14 @@ private:
     static_cast<Gtk4Backend *>(userData)->closeRequested_ = true;
     return TRUE;
   }
+
+  static void onPointerMotion(GtkEventControllerMotion *, gdouble x, gdouble y, gpointer userData) {
+    auto *backend = static_cast<Gtk4Backend *>(userData);
+    backend->pointerX_ = (float)x;
+    backend->pointerY_ = (float)y;
+  }
+  static void onPointerPressed(GtkGestureClick *, gint, gdouble, gdouble, gpointer userData) { static_cast<Gtk4Backend *>(userData)->pointerDown_ = true; }
+  static void onPointerReleased(GtkGestureClick *, gint, gdouble, gdouble, gpointer userData) { static_cast<Gtk4Backend *>(userData)->pointerDown_ = false; }
 
   struct OrdinalRef {
     Gtk4Backend *backend;
@@ -613,6 +638,8 @@ private:
         guint wantSelected = *meta.dropdownSelected >= 0 ? (guint)*meta.dropdownSelected : GTK_INVALID_LIST_POSITION;
         guint current = gtk_drop_down_get_selected(GTK_DROP_DOWN(it->second));
         if (current != wantSelected) gtk_drop_down_set_selected(GTK_DROP_DOWN(it->second), wantSelected);
+      } else if (meta.kind == NativeWidgetKind::Panel) {
+        if (meta.panelRole != n8v::PanelRole::ListItem) ensurePanelStyle(it->second, meta);
       } else if (meta.kind == NativeWidgetKind::Slider && meta.sliderValue) {
         SliderState &state = sliderStates_[meta.ordinal];
         state.value = meta.sliderValue;
@@ -693,6 +720,16 @@ private:
       gtk_picture_set_content_fit(GTK_PICTURE(widget), GTK_CONTENT_FIT_FILL);
     } else if (meta.kind == NativeWidgetKind::Icon) {
       widget = gtk_image_new();
+    } else if (meta.kind == NativeWidgetKind::Panel) {
+      if (meta.panelRole == n8v::PanelRole::ListItem) {
+        widget = gtk_button_new();
+        gtk_widget_add_css_class(widget, "flat");
+        gtk_widget_set_focusable(widget, FALSE);
+      } else {
+        widget = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+        gtk_widget_set_can_target(widget, FALSE);
+        ensurePanelStyle(widget, meta);
+      }
     } else {
       widget = gtk_label_new("");
       gtk_label_set_use_markup(GTK_LABEL(widget), TRUE);
@@ -704,6 +741,56 @@ private:
     gtk_widget_set_visible(widget, TRUE);
     widgets_[key] = widget;
     return widget;
+  }
+
+  void ensurePanelStyle(GtkWidget *widget, const NativeWidgetMeta &meta) {
+#ifdef N8V_HAVE_ADWAITA
+    gtk_widget_add_css_class(widget, "card");
+    return;
+#endif
+    PanelState &state = panelStates_[meta.ordinal];
+    bool changed = !state.initialized || state.background.r != meta.panelBackground.r || state.background.g != meta.panelBackground.g ||
+                   state.background.b != meta.panelBackground.b || state.background.a != meta.panelBackground.a || state.borderColor.r != meta.panelBorderColor.r ||
+                   state.borderColor.g != meta.panelBorderColor.g || state.borderColor.b != meta.panelBorderColor.b || state.borderColor.a != meta.panelBorderColor.a ||
+                   state.borderWidth != meta.panelBorderWidth || state.cornerRadius.topLeft != meta.panelCornerRadius.topLeft ||
+                   state.cornerRadius.topRight != meta.panelCornerRadius.topRight || state.cornerRadius.bottomLeft != meta.panelCornerRadius.bottomLeft ||
+                   state.cornerRadius.bottomRight != meta.panelCornerRadius.bottomRight;
+    if (!changed) return;
+    state.initialized = true;
+    state.background = meta.panelBackground;
+    state.borderColor = meta.panelBorderColor;
+    state.borderWidth = meta.panelBorderWidth;
+    state.cornerRadius = meta.panelCornerRadius;
+
+    if (!state.named) {
+      std::string name = "n8v-panel-" + std::to_string(meta.ordinal);
+      gtk_widget_set_name(widget, name.c_str());
+      state.named = true;
+    }
+
+    char rule[512];
+    std::snprintf(
+      rule,
+      sizeof(rule),
+      "#n8v-panel-%d { background-color: rgba(%d,%d,%d,%.4f); border-style: solid; border-color: rgba(%d,%d,%d,%.4f); border-width: %.1fpx; "
+      "border-top-left-radius: %.1fpx; border-top-right-radius: %.1fpx; border-bottom-left-radius: %.1fpx; border-bottom-right-radius: %.1fpx; }\n",
+      meta.ordinal,
+      (int)meta.panelBackground.r,
+      (int)meta.panelBackground.g,
+      (int)meta.panelBackground.b,
+      meta.panelBackground.a / 255.0f,
+      (int)meta.panelBorderColor.r,
+      (int)meta.panelBorderColor.g,
+      (int)meta.panelBorderColor.b,
+      meta.panelBorderColor.a / 255.0f,
+      meta.panelBorderWidth,
+      meta.panelCornerRadius.topLeft,
+      meta.panelCornerRadius.topRight,
+      meta.panelCornerRadius.bottomLeft,
+      meta.panelCornerRadius.bottomRight
+    );
+    panelCssRules_[meta.ordinal] = rule;
+    reloadPanelCss();
   }
 
   GtkWidget *ensureButtonIcon(GtkWidget *button, const NativeWidgetMeta &meta) {
@@ -967,6 +1054,14 @@ private:
 
   GtkWidget *window_ = nullptr;
   GtkWidget *fixed_ = nullptr;
+  GtkCssProvider *panelCssProvider_ = nullptr;
+  std::unordered_map<int, std::string> panelCssRules_;
+
+  void reloadPanelCss() {
+    std::string css;
+    for (const auto &[ordinal, rule] : panelCssRules_) css += rule;
+    gtk_css_provider_load_from_string(panelCssProvider_, css.c_str());
+  }
   GtkWidget *sidebarBox_ = nullptr;
   GtkWidget *titleLabel_ = nullptr;
   GtkWidget *sidebarListBox_ = nullptr;
@@ -984,6 +1079,9 @@ private:
   GtkWidget *measureSlider_ = nullptr;
   GtkWidget *measureSwitch_ = nullptr;
   bool closeRequested_ = false;
+  float pointerX_ = 0.0f;
+  float pointerY_ = 0.0f;
+  bool pointerDown_ = false;
 
   std::map<WidgetKey, GtkWidget *> widgets_;
   std::unordered_map<int, GtkWidget *> actionRows_;
@@ -1006,6 +1104,15 @@ private:
     const void *fallbackSource = nullptr;
   };
   std::unordered_map<int, ButtonIconState> buttonIconStates_;
+  struct PanelState {
+    bool initialized = false;
+    bool named = false;
+    n8v::Color background{};
+    n8v::Color borderColor{};
+    float borderWidth = -1.0f;
+    n8v::CornerRadius cornerRadius{};
+  };
+  std::unordered_map<int, PanelState> panelStates_;
   std::unordered_map<uint32_t, ContainerFrame> scrollContainers_;
   std::vector<ContainerFrame> containerStack_;
   std::set<uint32_t> touchedScrollContainers_;

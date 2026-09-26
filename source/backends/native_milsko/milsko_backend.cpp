@@ -78,6 +78,9 @@ public:
     regularFont_ = MwFontLoad(&MwTTFData, MwTTFDataSize);
     boldFont_ = MwFontLoad(&MwBoldTTFData, MwBoldTTFDataSize);
 
+    MwAddUserHandler(window_, MwNmouseDownHandler, onWindowMouseDown, this);
+    MwAddUserHandler(window_, MwNmouseUpHandler, onWindowMouseUp, this);
+
     return true;
   }
 
@@ -88,7 +91,7 @@ public:
     return !MwWindowShouldClose(window_);
   }
 
-  bool pointerDown() const override { return false; }
+  bool pointerDown() const override { return pointerDown_; }
 
   bool aliasesSwitchAsCheckbox() const override { return true; }
 
@@ -126,7 +129,11 @@ public:
     return {(float)width, (float)MwTextHeight(measureLabel_, nullptr, s.c_str())};
   }
 
-  void beginFrame() override {}
+  void beginFrame() override {
+    MwPoint point{};
+    MwGetCursorCoord(window_, &point);
+    Clay_SetPointerState({(float)point.x, (float)point.y}, false);
+  }
 
   void present(Clay_RenderCommandArray commands) override {
     std::map<int, int> wrapLineCounts;
@@ -145,6 +152,10 @@ public:
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_RECTANGLE) {
         auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
         if (!meta || meta->kind == NativeWidgetKind::Sidebar) {
+          pendingLabelTarget = nullptr;
+          continue;
+        }
+        if (meta->kind == NativeWidgetKind::Panel && meta->panelRole != n8v::PanelRole::ListItem) {
           pendingLabelTarget = nullptr;
           continue;
         }
@@ -330,6 +341,18 @@ private:
     MwSetInteger(handle, MwNchecked, 1);
   }
 
+  static void MWAPI onWindowMouseDown(MwWidget, void *userData, void *callData) {
+    auto *mouse = static_cast<MwMouse *>(callData);
+    if (mouse && mouse->button != MwMOUSE_LEFT) return;
+    static_cast<MilskoBackend *>(userData)->pointerDown_ = true;
+  }
+
+  static void MWAPI onWindowMouseUp(MwWidget, void *userData, void *callData) {
+    auto *mouse = static_cast<MwMouse *>(callData);
+    if (mouse && mouse->button != MwMOUSE_LEFT) return;
+    static_cast<MilskoBackend *>(userData)->pointerDown_ = false;
+  }
+
   static void MWAPI onDropdownChanged(MwWidget handle, void *userData, void * /*callData*/) {
     auto *action = static_cast<ClickAction *>(userData);
     if (!action || !action->dropdownSelected) return;
@@ -444,6 +467,7 @@ private:
         action.sliderMax = meta.sliderMax;
         action.onSliderChange = toStdFunction(meta.onSliderChange, meta.onSliderChangeUserdata);
         MwSetInteger(it->second, MwNvalue, sliderPositionFor(*meta.sliderValue, meta.sliderMin, meta.sliderMax));
+      } else if (meta.kind == NativeWidgetKind::Panel) {
       } else {
         action.url = meta.url ? *meta.url : std::string();
       }
@@ -492,6 +516,9 @@ private:
       MwAddUserHandler(widget, MwNchangedHandler, onSliderChanged, &action);
     } else if (meta.kind == NativeWidgetKind::Image || meta.kind == NativeWidgetKind::Icon) {
       widget = MwCreateWidget(MwImageClass, "n8v-image", currentParent(), 0, 0, 1, 1);
+    } else if (meta.kind == NativeWidgetKind::Panel) {
+      widget = MwCreateWidget(MwButtonClass, "n8v-widget", currentParent(), 0, 0, 1, 1);
+      MwSetInteger(widget, MwNflat, 1);
     } else {
       if (action.isLink) {
         action.url = meta.url ? *meta.url : std::string();
@@ -592,6 +619,7 @@ private:
   }
 
   MwWidget window_ = nullptr;
+  bool pointerDown_ = false;
   MwWidget measureLabel_ = nullptr;
   void *regularFont_ = nullptr;
   void *boldFont_ = nullptr;

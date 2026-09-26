@@ -161,6 +161,20 @@ public:
     return paint;
   }
 
+  PanelPaint panel(PanelRole role, bool hovered, bool /*pressed*/) const override {
+    PanelPaint paint{};
+    if (role == PanelRole::ListItem) {
+      paint.background = hovered ? Color{103, 80, 164, 20} : Color{0, 0, 0, 0};
+      paint.cornerRadius = {12, 12, 12, 12};
+      paint.padding = {12, 16, 12, 16};
+      return paint;
+    }
+    paint.background = {247, 242, 250, 255}; // surface container low
+    paint.cornerRadius = {12, 12, 12, 12};
+    paint.padding = {16, 16, 16, 16};
+    return paint;
+  }
+
 private:
   static constexpr float RoundRadius = 20.0f;
   static constexpr float PressedRadius = 8.0f;

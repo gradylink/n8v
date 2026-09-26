@@ -70,6 +70,11 @@ struct NativeWidgetMeta {
   float switchKnobSize = 0.0f;         // Switch only - eased knob diameter (Material 3 Expressive grows it when on)
   float switchTrackWidth = 0.0f;       // Switch only
   float switchTrackHeight = 0.0f;      // Switch only
+  n8v::PanelRole panelRole = n8v::PanelRole::Card; // Panel only
+  n8v::Color panelBackground{};        // Panel only
+  n8v::Color panelBorderColor{};       // Panel only
+  float panelBorderWidth = 0.0f;       // Panel only
+  n8v::CornerRadius panelCornerRadius{}; // Panel only
 };
 
 inline std::function<void()> toStdFunction(n8v_click_fn fn, void *userdata) {

@@ -58,6 +58,12 @@ enum class NativeWidgetKind {
   Icon,
   Switch,
   Sidebar,
+  Panel,
+};
+
+enum class PanelRole {
+  Card,
+  ListItem,
 };
 
 enum class IconVariant {

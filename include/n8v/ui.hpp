@@ -16,6 +16,8 @@
 namespace n8v::detail {
 
 inline n8v_direction toC(Direction d) { return d == Direction::Horizontal ? N8V_DIRECTION_HORIZONTAL : N8V_DIRECTION_VERTICAL; }
+inline n8v_panel_role toC(PanelRole r) { return r == PanelRole::ListItem ? N8V_PANEL_ROLE_LIST_ITEM : N8V_PANEL_ROLE_CARD; }
+inline PanelRole fromC(n8v_panel_role r) { return r == N8V_PANEL_ROLE_LIST_ITEM ? PanelRole::ListItem : PanelRole::Card; }
 
 inline n8v_align toC(Align a) {
   switch (a) {
@@ -51,6 +53,7 @@ inline ButtonStyle fromC(n8v_button_style s) {
   }
   return ButtonStyle::Primary;
 }
+
 
 inline n8v_icon_variant toC(IconVariant v) { return v == IconVariant::Outline ? N8V_ICON_VARIANT_OUTLINE : N8V_ICON_VARIANT_FILLED; }
 
@@ -448,6 +451,26 @@ inline SidebarPaint fromC(n8v_sidebar_paint p) {
   };
 }
 
+inline n8v_panel_paint toC(const PanelPaint &p) {
+  return n8v_panel_paint{
+    .background = toC(p.background),
+    .border_color = toC(p.borderColor),
+    .border_width = p.borderWidth,
+    .corner_radius = toC(p.cornerRadius),
+    .padding = toC(p.padding),
+  };
+}
+
+inline PanelPaint fromC(n8v_panel_paint p) {
+  return PanelPaint{
+    .background = fromC(p.background),
+    .borderColor = fromC(p.border_color),
+    .borderWidth = p.border_width,
+    .cornerRadius = fromC(p.corner_radius),
+    .padding = fromC(p.padding),
+  };
+}
+
 class BuiltinPaint final : public Paint {
 public:
   explicit BuiltinPaint(n8v_style_family family) : family_(family) {}
@@ -465,6 +488,7 @@ public:
   ImagePaint image() const override { return fromC(n8v_style_image_paint(family_)); }
   IconPaint icon() const override { return fromC(n8v_style_icon_paint(family_)); }
   SidebarPaint sidebar() const override { return fromC(n8v_style_sidebar_paint(family_)); }
+  PanelPaint panel(PanelRole role, bool hovered, bool pressed) const override { return fromC(n8v_style_panel_paint(family_, toC(role), hovered, pressed)); }
 
 private:
   n8v_style_family family_;
@@ -500,6 +524,9 @@ extern "C" inline n8v_slider_paint _n8v_custom_paint_slider_trampoline(bool hove
 extern "C" inline n8v_image_paint _n8v_custom_paint_image_trampoline(void *userdata) { return toC(static_cast<const Paint *>(userdata)->image()); }
 extern "C" inline n8v_icon_paint _n8v_custom_paint_icon_trampoline(void *userdata) { return toC(static_cast<const Paint *>(userdata)->icon()); }
 extern "C" inline n8v_sidebar_paint _n8v_custom_paint_sidebar_trampoline(void *userdata) { return toC(static_cast<const Paint *>(userdata)->sidebar()); }
+extern "C" inline n8v_panel_paint _n8v_custom_paint_panel_trampoline(n8v_panel_role role, bool hovered, bool pressed, void *userdata) {
+  return toC(static_cast<const Paint *>(userdata)->panel(fromC(role), hovered, pressed));
+}
 
 inline void beginFrame() {
   n8v_begin_frame();
@@ -523,6 +550,22 @@ inline void openFlex(const FlexOptions &options) {
 }
 
 inline void closeFlex() { n8v_close_flex(); }
+
+inline void openPanel(const PanelOptions &options) {
+  n8v_panel_options c_opts{};
+  c_opts.role = toC(options.role);
+  c_opts.direction = toC(options.direction);
+  c_opts.gap = options.gap;
+  c_opts.h_align = toC(options.hAlign);
+  c_opts.v_align = toC(options.vAlign);
+  c_opts.width = toC(options.width);
+  c_opts.height = toC(options.height);
+  c_opts.clip_horizontal = options.clipHorizontal;
+  c_opts.clip_vertical = options.clipVertical;
+  n8v_open_panel(c_opts);
+}
+
+inline void closePanel() { n8v_close_panel(); }
 
 inline void openSidebar(const SidebarOptions &options) {
   std::string titleStorage(options.title);
@@ -814,6 +857,7 @@ inline void setCustomPaint(Paint &paint) {
   vtable.image = detail::_n8v_custom_paint_image_trampoline;
   vtable.icon = detail::_n8v_custom_paint_icon_trampoline;
   vtable.sidebar = detail::_n8v_custom_paint_sidebar_trampoline;
+  vtable.panel = detail::_n8v_custom_paint_panel_trampoline;
   n8v_set_custom_paint(&vtable, &paint);
 }
 
@@ -822,6 +866,8 @@ inline void setCustomPaint(Paint &paint) {
 #define UI() for (uint8_t n8v_uiLatch = (n8v::detail::beginFrame(), 0); n8v_uiLatch < 1; n8v_uiLatch = 1, n8v::detail::endFrame())
 
 #define flex(...) for (uint8_t n8v_flexLatch = (n8v::detail::openFlex(__VA_ARGS__), 0); n8v_flexLatch < 1; n8v_flexLatch = 1, n8v::detail::closeFlex())
+
+#define panel(...) for (uint8_t n8v_panelLatch = (n8v::detail::openPanel(__VA_ARGS__), 0); n8v_panelLatch < 1; n8v_panelLatch = 1, n8v::detail::closePanel())
 
 #define sidebar(...) for (uint8_t n8v_sidebarLatch = (n8v::detail::openSidebar(__VA_ARGS__), 0); n8v_sidebarLatch < 1; n8v_sidebarLatch = 1, n8v::detail::closeSidebar())
 

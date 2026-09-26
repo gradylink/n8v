@@ -56,6 +56,25 @@ inline n8v_button_style toC(ButtonStyle s) {
   }
   return N8V_BUTTON_STYLE_PRIMARY;
 }
+inline n8v_panel_role toC(PanelRole r) {
+  switch (r) {
+  case PanelRole::ListItem:
+    return N8V_PANEL_ROLE_LIST_ITEM;
+  case PanelRole::Card:
+    return N8V_PANEL_ROLE_CARD;
+  }
+  return N8V_PANEL_ROLE_CARD;
+}
+inline PanelRole fromC(n8v_panel_role r) {
+  switch (r) {
+  case N8V_PANEL_ROLE_LIST_ITEM:
+    return PanelRole::ListItem;
+  case N8V_PANEL_ROLE_CARD:
+    return PanelRole::Card;
+  }
+  return PanelRole::Card;
+}
+
 inline ButtonStyle fromC(n8v_button_style s) {
   switch (s) {
   case N8V_BUTTON_STYLE_SECONDARY:
@@ -353,6 +372,26 @@ inline SidebarPaint fromC(n8v_sidebar_paint p) {
     .cornerRadius = fromC(p.corner_radius),
     .padding = fromC(p.padding),
     .rowGap = p.row_gap,
+  };
+}
+
+inline n8v_panel_paint toC(const PanelPaint &p) {
+  return n8v_panel_paint{
+    .background = toC(p.background),
+    .border_color = toC(p.borderColor),
+    .border_width = p.borderWidth,
+    .corner_radius = toC(p.cornerRadius),
+    .padding = toC(p.padding),
+  };
+}
+
+inline PanelPaint fromC(n8v_panel_paint p) {
+  return PanelPaint{
+    .background = fromC(p.background),
+    .borderColor = fromC(p.border_color),
+    .borderWidth = p.border_width,
+    .cornerRadius = fromC(p.corner_radius),
+    .padding = fromC(p.padding),
   };
 }
 
