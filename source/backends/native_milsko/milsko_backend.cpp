@@ -13,7 +13,6 @@
 
 #include <Mw/Milsko.h>
 
-typedef void (*MwLLDestroyPixmapFn)(MwLLPixmap);
 #include "milsko_lazy_vars.h"
 
 #include <algorithm>
@@ -262,7 +261,7 @@ public:
         auto pixmapIt = imagePixmapSources_.find(it->second);
         if (pixmapIt != imagePixmapSources_.end()) {
           MwLLPixmap pixmap = static_cast<MwLLPixmap>(MwGetVoid(it->second, MwNpixmap));
-          if (pixmap) MwLLDestroyPixmap(pixmap);
+          if (pixmap) MwDestroyPixmap(pixmap);
           imagePixmapSources_.erase(pixmapIt);
         }
         MwDestroyWidget(it->second);
@@ -414,7 +413,7 @@ private:
     MwLLPixmap oldPixmap = static_cast<MwLLPixmap>(MwGetVoid(widget, MwNpixmap));
     MwLLPixmap newPixmap = MwLoadRaw(widget, const_cast<unsigned char *>(icon->rgba), icon->width, icon->height);
     MwVaApply(widget, MwNpixmap, newPixmap, NULL);
-    if (oldPixmap) MwLLDestroyPixmap(oldPixmap);
+    if (oldPixmap) MwDestroyPixmap(oldPixmap);
     imagePixmapSources_[widget] = icon;
   }
 
@@ -428,7 +427,7 @@ private:
     MwLLPixmap oldPixmap = static_cast<MwLLPixmap>(MwGetVoid(widget, MwNpixmap));
     MwLLPixmap newPixmap = MwLoadRaw(widget, const_cast<unsigned char *>(image->rgba), image->width, image->height);
     MwVaApply(widget, MwNpixmap, newPixmap, NULL);
-    if (oldPixmap) MwLLDestroyPixmap(oldPixmap);
+    if (oldPixmap) MwDestroyPixmap(oldPixmap);
     imagePixmapSources_[widget] = image;
   }
 
