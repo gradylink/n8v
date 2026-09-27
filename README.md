@@ -25,3 +25,8 @@ widgets when available and if needed can fall back to built-in styles.
 
 - WinUI
 - Cocoa
+
+## Bindings
+
+- Go
+- [JavaScript](bindings/js/README.md)
