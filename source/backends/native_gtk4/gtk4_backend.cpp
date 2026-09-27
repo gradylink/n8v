@@ -230,6 +230,7 @@ public:
     NativeWidgetKind pendingKind = NativeWidgetKind::Button;
     std::string pendingLinkUrl;
     std::set<int> seenActionRowOrdinals;
+    std::set<int> seenSidebarOrdinals;
     containerStack_.clear();
     touchedScrollContainers_.clear();
 
@@ -290,7 +291,8 @@ public:
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_SCISSOR_START) {
         auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
         if (meta && meta->kind == NativeWidgetKind::Sidebar) {
-          ensureSidebarPanel(command->boundingBox, meta->sidebarCompact);
+          seenSidebarOrdinals.insert(meta->ordinal);
+          ensureSidebarPanel(meta->ordinal, command->boundingBox, meta->sidebarCompact);
         } else {
           ensureScrollContainer(command->id, command->boundingBox, command->renderData.clip);
         }
@@ -344,7 +346,7 @@ public:
         }
 
         if (!containerStack_.empty() && containerStack_.back().rowListBox) {
-          setPlainLabelText(titleLabel_, text, flags && flags->bold, flags && flags->italic, flags && flags->strikethrough);
+          setPlainLabelText(containerStack_.back().sidebarTitleLabel, text, flags && flags->bold, flags && flags->italic, flags && flags->strikethrough);
           pendingLabelTarget = nullptr;
           pendingButtonIconLabel = nullptr;
           pendingSwitchLabel = nullptr;
@@ -401,6 +403,15 @@ public:
         ++it;
       }
     }
+
+    for (auto it = sidebarPanels_.begin(); it != sidebarPanels_.end();) {
+      if (!it->second.isPrimary && !seenSidebarOrdinals.count(it->first)) {
+        gtk_widget_unparent(it->second.root);
+        it = sidebarPanels_.erase(it);
+      } else {
+        ++it;
+      }
+    }
   }
 
   void setCursor(CursorKind) override {}
@@ -446,9 +457,8 @@ public:
       gtk_window_destroy(GTK_WINDOW(window_));
       window_ = nullptr;
       fixed_ = nullptr;
-      sidebarBox_ = nullptr;
-      titleLabel_ = nullptr;
-      sidebarListBox_ = nullptr;
+      sidebarPanels_.clear();
+      primarySidebarOrdinal_ = -1;
 #ifdef N8V_HAVE_ADWAITA
       splitView_ = nullptr;
 #endif
@@ -970,6 +980,14 @@ private:
     float originX = 0.0f;
     float originY = 0.0f;
     GtkWidget *rowListBox = nullptr;
+    GtkWidget *sidebarTitleLabel = nullptr;
+  };
+
+  struct SidebarPanel {
+    GtkWidget *root = nullptr;
+    GtkWidget *titleLabel = nullptr;
+    GtkWidget *listBox = nullptr;
+    bool isPrimary = false;
   };
 
   void ensureScrollContainer(uint32_t id, const Clay_BoundingBox &box, const Clay_ClipRenderData &clip) {
@@ -1015,61 +1033,82 @@ private:
     if (!containerStack_.empty()) containerStack_.pop_back();
   }
 
-  void ensureSidebarRoot() {
-    if (sidebarBox_) return;
-    sidebarBox_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  SidebarPanel &ensureSidebarPanel(int ordinal, const Clay_BoundingBox &box, bool /*compact*/) {
+    if (primarySidebarOrdinal_ < 0) primarySidebarOrdinal_ = ordinal;
+    bool isPrimary = ordinal == primarySidebarOrdinal_;
 
-    titleLabel_ = gtk_label_new("");
-    gtk_widget_add_css_class(titleLabel_, "heading");
-    gtk_label_set_xalign(GTK_LABEL(titleLabel_), 0.5f);
-    gtk_widget_set_margin_top(titleLabel_, 12);
-    gtk_widget_set_margin_bottom(titleLabel_, 12);
-    gtk_box_append(GTK_BOX(sidebarBox_), titleLabel_);
+    auto it = sidebarPanels_.find(ordinal);
+    if (it == sidebarPanels_.end()) {
+      SidebarPanel panel;
+      panel.isPrimary = isPrimary;
 
-    sidebarListBox_ = gtk_list_box_new();
-    gtk_widget_add_css_class(sidebarListBox_, "navigation-sidebar");
-    gtk_list_box_set_selection_mode(GTK_LIST_BOX(sidebarListBox_), GTK_SELECTION_SINGLE);
-    gtk_list_box_set_sort_func(GTK_LIST_BOX(sidebarListBox_), compareActionRowOrdinals, nullptr, nullptr);
-    g_signal_connect_data(sidebarListBox_, "row-activated", G_CALLBACK(&Gtk4Backend::onSidebarRowActivated), this, nullptr, (GConnectFlags)0);
-    gtk_box_append(GTK_BOX(sidebarBox_), sidebarListBox_);
+      panel.titleLabel = gtk_label_new("");
+      gtk_widget_add_css_class(panel.titleLabel, "heading");
+      gtk_label_set_xalign(GTK_LABEL(panel.titleLabel), 0.5f);
+      gtk_widget_set_margin_top(panel.titleLabel, 12);
+      gtk_widget_set_margin_bottom(panel.titleLabel, 12);
 
+      panel.listBox = gtk_list_box_new();
+      gtk_widget_add_css_class(panel.listBox, "navigation-sidebar");
+      gtk_list_box_set_selection_mode(GTK_LIST_BOX(panel.listBox), GTK_SELECTION_SINGLE);
+      gtk_list_box_set_sort_func(GTK_LIST_BOX(panel.listBox), compareActionRowOrdinals, nullptr, nullptr);
+      g_signal_connect_data(panel.listBox, "row-activated", G_CALLBACK(&Gtk4Backend::onSidebarRowActivated), this, nullptr, (GConnectFlags)0);
+
+      panel.root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+      gtk_box_append(GTK_BOX(panel.root), panel.titleLabel);
+      gtk_box_append(GTK_BOX(panel.root), panel.listBox);
+
+      if (isPrimary) {
 #ifdef N8V_HAVE_ADWAITA
-    g_object_ref(fixed_);
-    gtk_window_set_child(GTK_WINDOW(window_), nullptr);
+        g_object_ref(fixed_);
+        gtk_window_set_child(GTK_WINDOW(window_), nullptr);
 
-    GtkWidget *splitViewWidget = adw_navigation_split_view_new();
-    splitView_ = ADW_NAVIGATION_SPLIT_VIEW(splitViewWidget);
-    AdwNavigationPage *sidebarPage = adw_navigation_page_new(sidebarBox_, "Sidebar");
-    AdwNavigationPage *contentPage = adw_navigation_page_new(fixed_, "Content");
-    adw_navigation_split_view_set_sidebar(splitView_, sidebarPage);
-    adw_navigation_split_view_set_content(splitView_, contentPage);
-    g_object_unref(fixed_);
+        GtkWidget *splitViewWidget = adw_navigation_split_view_new();
+        splitView_ = ADW_NAVIGATION_SPLIT_VIEW(splitViewWidget);
+        AdwNavigationPage *sidebarPage = adw_navigation_page_new(panel.root, "Sidebar");
+        AdwNavigationPage *contentPage = adw_navigation_page_new(fixed_, "Content");
+        adw_navigation_split_view_set_sidebar(splitView_, sidebarPage);
+        adw_navigation_split_view_set_content(splitView_, contentPage);
+        g_object_unref(fixed_);
 
-    gtk_window_set_child(GTK_WINDOW(window_), splitViewWidget);
+        gtk_window_set_child(GTK_WINDOW(window_), splitViewWidget);
 #else
-    g_object_ref(fixed_);
-    gtk_window_set_child(GTK_WINDOW(window_), nullptr);
+        g_object_ref(fixed_);
+        gtk_window_set_child(GTK_WINDOW(window_), nullptr);
 
-    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_widget_add_css_class(sidebarBox_, "sidebar");
-    gtk_box_append(GTK_BOX(box), sidebarBox_);
-    gtk_box_append(GTK_BOX(box), fixed_);
-    g_object_unref(fixed_);
+        GtkWidget *box_ = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+        gtk_widget_add_css_class(panel.root, "sidebar");
+        gtk_box_append(GTK_BOX(box_), panel.root);
+        gtk_box_append(GTK_BOX(box_), fixed_);
+        g_object_unref(fixed_);
 
-    gtk_window_set_child(GTK_WINDOW(window_), box);
+        gtk_window_set_child(GTK_WINDOW(window_), box_);
 #endif
-  }
+      } else {
+        gtk_widget_add_css_class(panel.root, "sidebar");
+        gtk_widget_set_overflow(panel.root, GTK_OVERFLOW_HIDDEN);
+        gtk_fixed_put(GTK_FIXED(currentFixed()), panel.root, 0, 0);
+        gtk_widget_set_visible(panel.root, TRUE);
+      }
 
-  void ensureSidebarPanel(const Clay_BoundingBox &box, bool /*compact*/) {
-    ensureSidebarRoot();
-    rootOriginX_ = box.width;
-#ifdef N8V_HAVE_ADWAITA
-    if (splitView_) {
-      adw_navigation_split_view_set_min_sidebar_width(splitView_, box.width);
-      adw_navigation_split_view_set_max_sidebar_width(splitView_, box.width);
+      it = sidebarPanels_.emplace(ordinal, panel).first;
     }
+
+    SidebarPanel &panel = it->second;
+    if (panel.isPrimary) {
+      rootOriginX_ = box.width;
+#ifdef N8V_HAVE_ADWAITA
+      if (splitView_) {
+        adw_navigation_split_view_set_min_sidebar_width(splitView_, box.width);
+        adw_navigation_split_view_set_max_sidebar_width(splitView_, box.width);
+      }
 #endif
-    containerStack_.push_back(ContainerFrame{nullptr, nullptr, box.x, box.y, sidebarListBox_});
+    } else {
+      positionWidget(panel.root, box);
+    }
+
+    containerStack_.push_back(ContainerFrame{nullptr, nullptr, box.x, box.y, panel.listBox, panel.titleLabel});
+    return panel;
   }
 
   GtkWidget *ensureActionRow(ContainerFrame &listFrame, const NativeWidgetMeta &meta) {
@@ -1154,9 +1193,8 @@ private:
     for (const auto &[ordinal, rule] : panelCssRules_) css += rule;
     gtk_css_provider_load_from_string(panelCssProvider_, css.c_str());
   }
-  GtkWidget *sidebarBox_ = nullptr;
-  GtkWidget *titleLabel_ = nullptr;
-  GtkWidget *sidebarListBox_ = nullptr;
+  std::unordered_map<int, SidebarPanel> sidebarPanels_;
+  int primarySidebarOrdinal_ = -1;
   float rootOriginX_ = 0.0f;
 #ifdef N8V_HAVE_ADWAITA
   AdwNavigationSplitView *splitView_ = nullptr;

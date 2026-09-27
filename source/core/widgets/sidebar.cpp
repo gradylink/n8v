@@ -98,7 +98,7 @@ void n8v_open_sidebar(n8v_sidebar_options opts) {
   Clay_ElementDeclaration anchorDecl = {};
   anchorDecl.layout.sizing.width = CLAY_SIZING_FIXED(windowSize.width - listWidthPx);
   anchorDecl.layout.sizing.height = CLAY_SIZING_FIXED(windowSize.height);
-  anchorDecl.floating.attachTo = CLAY_ATTACH_TO_ROOT;
+  anchorDecl.floating.attachTo = CLAY_ATTACH_TO_PARENT;
   anchorDecl.floating.offset = {listWidthPx, 0};
   anchorDecl.floating.attachPoints.element = CLAY_ATTACH_POINT_LEFT_TOP;
   anchorDecl.floating.attachPoints.parent = CLAY_ATTACH_POINT_LEFT_TOP;
@@ -214,7 +214,7 @@ bool n8v_open_page(n8v_page_options opts) {
   Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Button, nameView, paint.fontSize, rowImage != nullptr);
   if (nativeSize.height > 0) decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
 
-  PageClickState *clickState = &pageClickStates[thisOrdinal];
+  PageClickState *clickState = &pageClickStates[rowOrdinal];
   clickState->selectedPtr = ctx.selectedPtr;
   clickState->onChange = ctx.onChange;
   clickState->value = thisOrdinal;

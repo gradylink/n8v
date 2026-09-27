@@ -21,6 +21,7 @@ int main() {
   std::string potatoPath = N8V_EXAMPLE_ASSET_DIR "/potato.png";
 
   int selectedSection = 0;
+  int selectedCategory = 0;
 
   while (pumpEvents()) {
     UI() {
@@ -94,9 +95,25 @@ int main() {
         }
 
         page({.name = "Settings", .icon = "settings"}) {
-          flex({.direction = Direction::Vertical, .gap = 12, .padding = {20, 20, 20, 20}, .width = Sizing::grow()}) {
-            text({.bold = true})("Settings");
-            text("Nothing to configure yet.");
+          sidebar({.title = "Categories", .selected = &selectedCategory, .width = Sizing::fixed(160), .compact = true}) {
+            page({.name = "Appearance"}) {
+              flex({.direction = Direction::Vertical, .gap = 8, .padding = {20, 20, 20, 20}}) {
+                text({.bold = true})("Appearance");
+                text("Theme, colors, and font size go here.");
+              }
+            }
+            page({.name = "Notifications"}) {
+              flex({.direction = Direction::Vertical, .gap = 8, .padding = {20, 20, 20, 20}}) {
+                text({.bold = true})("Notifications");
+                text("Alert sounds and badges go here.");
+              }
+            }
+            page({.name = "Privacy"}) {
+              flex({.direction = Direction::Vertical, .gap = 8, .padding = {20, 20, 20, 20}}) {
+                text({.bold = true})("Privacy");
+                text("Data and permissions go here.");
+              }
+            }
           }
         }
 
