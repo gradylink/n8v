@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "jsxImportSource": "n8v",
+    "strict": true,
+    "skipLibCheck": true,
+    "paths": {
+      "n8v/jsx-runtime": ["./jsx-runtime.ts"],
+      "n8v/jsx-dev-runtime": ["./jsx-dev-runtime.ts"]
+    }
+  }
+}

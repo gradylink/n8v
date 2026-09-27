@@ -1,0 +1,47 @@
+{
+  "name": "n8v",
+  "version": "0.1.0",
+  "description": "TypeScript (and JSX!) bindings for n8v, an immediate-mode native UI library.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gradylink/n8v.git",
+    "directory": "bindings/js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/mod.d.ts",
+      "import": "./dist/mod.js"
+    },
+    "./jsx-runtime": {
+      "types": "./dist/jsx-runtime.d.ts",
+      "import": "./dist/jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./dist/jsx-dev-runtime.d.ts",
+      "import": "./dist/jsx-dev-runtime.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "optionalDependencies": {
+    "n8v-linux-x64": "0.1.0",
+    "n8v-linux-arm64": "0.1.0",
+    "n8v-darwin-x64": "0.1.0",
+    "n8v-darwin-arm64": "0.1.0",
+    "n8v-win32-x64": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.0"
+  }
+}

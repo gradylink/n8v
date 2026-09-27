@@ -1,0 +1,9 @@
+{
+  "name": "n8v-linux-x64",
+  "version": "0.1.0",
+  "description": "Prebuilt n8v native addon (linux-x64) - installed automatically as an optionalDependency of the n8v package, not meant to be depended on directly.",
+  "license": "MIT",
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "files": ["n8v.node"]
+}

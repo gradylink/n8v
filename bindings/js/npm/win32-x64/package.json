@@ -1,0 +1,9 @@
+{
+  "name": "n8v-win32-x64",
+  "version": "0.1.0",
+  "description": "Prebuilt n8v native addon (win32-x64) - installed automatically as an optionalDependency of the n8v package, not meant to be depended on directly.",
+  "license": "MIT",
+  "os": ["win32"],
+  "cpu": ["x64"],
+  "files": ["n8v.node"]
+}

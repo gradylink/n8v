@@ -1,0 +1,167 @@
+name: Publish JS bindings
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (no leading v), e.g. 0.1.1"
+        required: true
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - id: resolve
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+          - os: windows-latest
+            platform: win32
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-dev libgtk-4-dev libadwaita-1-dev qt6-base-dev \
+            libwayland-dev wayland-protocols libx11-dev libxrender-dev libdbus-1-dev libfreetype-dev
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install sdl2
+
+      - name: Install vcpkg (Windows)
+        if: runner.os == 'Windows'
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: "3508985146f1b1d248c67ead13f8f54be5b4f5e7"
+
+      - name: Install SDL2 via vcpkg (Windows)
+        if: runner.os == 'Windows'
+        run: ${{ github.workspace }}/vcpkg/vcpkg install sdl2:x64-windows
+
+      - name: Build & install Milsko
+        if: runner.os == 'Linux' || runner.os == 'Windows' # Their macOS backend is non-functional atm
+        shell: bash
+        run: |
+          git clone --depth 1 https://forgejo.nishi.boats/pyrite-dev/milsko.git "$RUNNER_TEMP/milsko"
+          cmake -B "$RUNNER_TEMP/milsko/build" -S "$RUNNER_TEMP/milsko" \
+            -DCMAKE_BUILD_TYPE=Release -DMW_BUILD_EXAMPLES=OFF \
+            -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/milsko-install"
+          cmake --build "$RUNNER_TEMP/milsko/build" --config Release
+          cmake --install "$RUNNER_TEMP/milsko/build" --config Release
+
+      - name: Configure
+        shell: bash
+        run: |
+          EXTRA=""
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            EXTRA="$EXTRA -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+          fi
+          if [ "${{ runner.os }}" = "Linux" ] || [ "${{ runner.os }}" = "Windows" ]; then
+            EXTRA="$EXTRA -DCMAKE_PREFIX_PATH=${{ github.workspace }}/milsko-install"
+          fi
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DN8V_EXAMPLES=OFF -DN8V_BUILD_JS_BINDING=ON $EXTRA
+
+      - name: Build n8v.node
+        run: cmake --build build --target n8v_napi --config Release
+
+      - name: Stage artifact
+        shell: bash
+        run: |
+          mkdir -p out
+          find build -name "n8v.node" -exec cp {} out/ \;
+          ls -la out/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: n8v-${{ matrix.platform }}-${{ matrix.arch }}
+          path: out/n8v.node
+          if-no-files-found: error
+
+  publish-native:
+    needs: [version, build-native]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - platform: linux
+            arch: x64
+          - platform: linux
+            arch: arm64
+          - platform: darwin
+            arch: x64
+          - platform: darwin
+            arch: arm64
+          - platform: win32
+            arch: x64
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: n8v-${{ matrix.platform }}-${{ matrix.arch }}
+          path: bindings/js/npm/${{ matrix.platform }}-${{ matrix.arch }}
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Set version
+        run: bun bindings/js/scripts/set-version.mjs "${{ needs.version.outputs.version }}" bindings/js/npm/${{ matrix.platform }}-${{ matrix.arch }}/package.json
+
+      - name: Publish
+        working-directory: bindings/js/npm/${{ matrix.platform }}-${{ matrix.arch }}
+        run: bun publish --access public
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-main:
+    needs: [version, publish-native]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Set version
+        run: bun bindings/js/scripts/set-version.mjs "${{ needs.version.outputs.version }}" bindings/js/package.json
+
+      - name: Install & build
+        working-directory: bindings/js
+        run: |
+          bun install
+          bun run build
+
+      - name: Publish
+        working-directory: bindings/js
+        run: bun publish --access public
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}

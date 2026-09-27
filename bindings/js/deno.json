@@ -1,0 +1,19 @@
+{
+  "name": "n8v",
+  "version": "0.0.0",
+  "exports": "./mod.ts",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "n8v"
+  },
+  "imports": {
+    "n8v/jsx-runtime": "./jsx-runtime.ts",
+    "n8v/jsx-dev-runtime": "./jsx-dev-runtime.ts"
+  },
+  "tasks": {
+    "build:addon": "cd ../.. && cmake -B build -DCMAKE_BUILD_TYPE=Release -DN8V_EXAMPLES=OFF -DN8V_BUILD_JS_BINDING=ON && cmake --build build --target n8v_napi && cp build/bindings/js/native/n8v.node bindings/js/",
+    "example:basic": "deno run --allow-ffi --allow-read --allow-env examples/basic.ts",
+    "example:jsx": "deno run --allow-ffi --allow-read --allow-env examples/jsx_app.tsx"
+  },
+  "exclude": ["build/", "native/"]
+}

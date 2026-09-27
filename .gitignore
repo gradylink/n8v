@@ -1,3 +1,13 @@
 build*/
 .cache/
 perf.data*
+
+*.a
+*.so
+*.exe
+*.node
+
+bindings/js/dist/
+bindings/js/node_modules/
+bindings/js/bun.lock*
+bindings/js/package-lock.json

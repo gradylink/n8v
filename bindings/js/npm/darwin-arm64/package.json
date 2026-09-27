@@ -1,0 +1,9 @@
+{
+  "name": "n8v-darwin-arm64",
+  "version": "0.1.0",
+  "description": "Prebuilt n8v native addon (darwin-arm64) - installed automatically as an optionalDependency of the n8v package, not meant to be depended on directly.",
+  "license": "MIT",
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "files": ["n8v.node"]
+}

@@ -276,6 +276,7 @@ set(N8V_SOURCES
   source/core/open_url.cpp
   source/core/ui_core.cpp
   source/core/ui_core_c_api.cpp
+  source/core/n8v_ffi.c
   source/core/image_loader.cpp
   source/core/icon_registry.cpp
   source/core/icon_loader.cpp
@@ -399,4 +400,9 @@ if(N8V_EXAMPLES)
   add_subdirectory(examples/basic)
   add_subdirectory(examples/basic_c)
   add_subdirectory(examples/custom_style)
+endif()
+
+option(N8V_BUILD_JS_BINDING "Build the n8v.node N-API addon for the JS/TS bindings (bindings/js)." OFF)
+if(N8V_BUILD_JS_BINDING)
+  add_subdirectory(bindings/js/native)
 endif()
