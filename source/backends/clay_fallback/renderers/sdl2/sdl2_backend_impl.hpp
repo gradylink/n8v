@@ -46,6 +46,8 @@ private:
     n8v_string_buf *buf = nullptr;
     n8v_text_change_fn onChange = nullptr;
     void *onChangeUserdata = nullptr;
+    n8v_click_fn onSubmit = nullptr;
+    void *onSubmitUserdata = nullptr;
     int ordinal = -1;
     size_t cursor = 0;
     size_t anchor = 0;

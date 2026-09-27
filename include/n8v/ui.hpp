@@ -710,6 +710,7 @@ inline void entry(EntryOptions options) {
   c_opts.value = buf;
 
   if (options.onChange) callback_bridge::bridgeTextChange(std::move(options.onChange), c_opts.on_change, c_opts.on_change_userdata);
+  if (options.onSubmit) callback_bridge::bridge(callback_bridge::clickClosures, std::move(options.onSubmit), c_opts.on_submit, c_opts.on_submit_userdata);
 
   n8v_entry(c_opts);
 

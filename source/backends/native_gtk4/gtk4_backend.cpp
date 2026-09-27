@@ -574,13 +574,21 @@ private:
   struct EntryState {
     std::string *value = nullptr;
     std::function<void(std::string_view)> onChange;
+    std::function<void()> onSubmit;
     std::string lastSynced;
   };
+
+  static void onEntryActivated(GtkEntry *, gpointer userData) {
+    auto *ref = static_cast<OrdinalRef *>(userData);
+    auto it = ref->backend->entryStates_.find(ref->ordinal);
+    if (it != ref->backend->entryStates_.end() && it->second.onSubmit) it->second.onSubmit();
+  }
 
   static void syncEntry(GtkWidget *widget, const NativeWidgetMeta &meta, EntryState &state) {
     if (!meta.entryValue) return;
     state.value = meta.entryValue;
     state.onChange = toStdFunction(meta.onEntryChange, meta.onEntryChangeUserdata);
+    state.onSubmit = toStdFunction(meta.onEntrySubmit, meta.onEntrySubmitUserdata);
 
     std::string widgetText = gtk_editable_get_text(GTK_EDITABLE(widget));
     if (widgetText != state.lastSynced) {
@@ -668,6 +676,7 @@ private:
       gtk_entry_set_visibility(GTK_ENTRY(widget), !meta.password);
       gtk_entry_set_placeholder_text(GTK_ENTRY(widget), meta.placeholder ? meta.placeholder->c_str() : "");
       syncEntry(widget, meta, entryStates_[meta.ordinal]);
+      connectOrdinal(widget, "activate", G_CALLBACK(&Gtk4Backend::onEntryActivated), this, meta.ordinal);
     } else if (meta.kind == NativeWidgetKind::Radio) {
       widget = gtk_check_button_new();
       RadioState &state = radioStates_[meta.ordinal];

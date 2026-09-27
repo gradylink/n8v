@@ -34,6 +34,8 @@ void Sdl2Backend::handleEntryClick(NativeWidgetMeta *meta, size_t hitOffset) {
   entry_.buf = meta->entryBuf;
   entry_.onChange = meta->onEntryChange;
   entry_.onChangeUserdata = meta->onEntryChangeUserdata;
+  entry_.onSubmit = meta->onEntrySubmit;
+  entry_.onSubmitUserdata = meta->onEntrySubmitUserdata;
   entry_.ordinal = meta->ordinal;
 
   const std::string &value = *meta->entryValue;
@@ -86,6 +88,11 @@ void Sdl2Backend::handleEntryKey(SDL_Keysym keysym) {
   bool shift = (keysym.mod & KMOD_SHIFT) != 0;
 
   switch (keysym.sym) {
+  case SDLK_RETURN:
+  case SDLK_RETURN2:
+  case SDLK_KP_ENTER:
+    if (entry_.onSubmit) entry_.onSubmit(entry_.onSubmitUserdata);
+    break;
   case SDLK_LEFT: {
     size_t target = (!shift && entry_.hasSelection()) ? entry_.selStart() : (ctrl ? wordLeft(s, entry_.cursor) : prevCodepointStart(s, entry_.cursor));
     moveEntryCursor(target, shift);

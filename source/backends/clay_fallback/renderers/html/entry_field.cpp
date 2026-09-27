@@ -14,6 +14,8 @@ void HtmlBackend::syncEntryInput(NativeWidgetMeta &meta, const Clay_BoundingBox 
   binding.entryBuf = meta.entryBuf;
   binding.onChange = meta.onEntryChange;
   binding.onChangeUserdata = meta.onEntryChangeUserdata;
+  binding.onSubmit = meta.onEntrySubmit;
+  binding.onSubmitUserdata = meta.onEntrySubmitUserdata;
 
   auto it = entryElements_.find(meta.ordinal);
   emscripten::val el;
@@ -85,6 +87,12 @@ void HtmlBackend::onEntryInput(int ordinal, std::string_view value) {
   binding.entryValue->assign(value);
   if (binding.entryBuf) ui_internal::writeToStringBuf(*binding.entryValue, *binding.entryBuf);
   if (binding.onChange) binding.onChange(binding.entryValue->c_str(), binding.entryValue->size(), binding.onChangeUserdata);
+}
+
+void HtmlBackend::onEntrySubmit(int ordinal) {
+  auto it = entryBindings_.find(ordinal);
+  if (it == entryBindings_.end() || !it->second.onSubmit) return;
+  it->second.onSubmit(it->second.onSubmitUserdata);
 }
 
 void HtmlBackend::removeUntouchedEntryInputs() {

@@ -50,6 +50,7 @@ public:
   void onPointerMove(float x, float y);
   void onPointerDown(bool down);
   void onEntryInput(int ordinal, std::string_view value);
+  void onEntrySubmit(int ordinal);
 
 private:
   struct EntryBinding {
@@ -57,6 +58,8 @@ private:
     n8v_string_buf *entryBuf = nullptr;
     n8v_text_change_fn onChange = nullptr;
     void *onChangeUserdata = nullptr;
+    n8v_click_fn onSubmit = nullptr;
+    void *onSubmitUserdata = nullptr;
   };
 
   using ElementKey = uint64_t;

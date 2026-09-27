@@ -510,6 +510,7 @@ private:
         auto *input = static_cast<Fl_Input *>(it->second);
         input->input_type(meta.password ? FL_SECRET_INPUT : FL_NORMAL_INPUT);
         syncEntry(input, meta, entryStates_[meta.ordinal]);
+        action.callback = toStdFunction(meta.onEntrySubmit, meta.onEntrySubmitUserdata);
       } else if (meta.kind == NativeWidgetKind::Radio && meta.radioSelected) {
         action.radioSelected = meta.radioSelected;
         action.radioValue = meta.radioValue;
@@ -567,6 +568,9 @@ private:
       auto *input = new Fl_Input(0, 0, 1, 1);
       input->input_type(meta.password ? FL_SECRET_INPUT : FL_NORMAL_INPUT);
       syncEntry(input, meta, entryStates_[meta.ordinal]);
+      action.callback = toStdFunction(meta.onEntrySubmit, meta.onEntrySubmitUserdata);
+      input->when(FL_WHEN_ENTER_KEY);
+      input->callback(&FltkBackend::onButtonClicked, &action);
       widget = input;
     } else if (meta.kind == NativeWidgetKind::Radio) {
       auto *button = new Fl_Round_Button(0, 0, 1, 1);

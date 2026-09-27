@@ -245,6 +245,8 @@ typedef struct n8v_entry_options {
   bool password;
   n8v_text_change_fn on_change;
   void *on_change_userdata;
+  n8v_click_fn on_submit;
+  void *on_submit_userdata;
 } n8v_entry_options;
 
 typedef struct n8v_dropdown_options {

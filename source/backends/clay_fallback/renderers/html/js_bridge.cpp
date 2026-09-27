@@ -29,6 +29,10 @@ EMSCRIPTEN_KEEPALIVE void n8v_html_entry_input(int ordinal, const char *value) {
   if (n8v::detail::HtmlBackend *b = n8v::detail::n8vHtmlInstance()) b->onEntryInput(ordinal, value ? value : "");
 }
 
+EMSCRIPTEN_KEEPALIVE void n8v_html_entry_submit(int ordinal) {
+  if (n8v::detail::HtmlBackend *b = n8v::detail::n8vHtmlInstance()) b->onEntrySubmit(ordinal);
+}
+
 } // extern "C"
 
 // clang-format off
@@ -61,6 +65,13 @@ EM_JS(void, n8vHtmlInstallListeners, (), {
     if (el && el.tagName === 'INPUT' && el.hasAttribute('data-n8v-ordinal')) {
       var ordinal = parseInt(el.getAttribute('data-n8v-ordinal'), 10);
       Module.ccall('n8v_html_entry_input', null, ['number', 'string'], [ordinal, el.value]);
+    }
+  });
+  document.addEventListener('keydown', function(e) {
+    var el = e.target;
+    if (e.key === 'Enter' && el && el.tagName === 'INPUT' && el.hasAttribute('data-n8v-ordinal')) {
+      var ordinal = parseInt(el.getAttribute('data-n8v-ordinal'), 10);
+      Module.ccall('n8v_html_entry_submit', null, ['number'], [ordinal]);
     }
   });
   document.addEventListener('click', function(e) {

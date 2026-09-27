@@ -29,6 +29,8 @@ struct NativeWidgetMeta {
   bool password = false;                                    // Entry only
   n8v_text_change_fn onEntryChange = nullptr;               // Entry only
   void *onEntryChangeUserdata = nullptr;                    // Entry only
+  n8v_click_fn onEntrySubmit = nullptr;                     // Entry only - fires on Enter/Return
+  void *onEntrySubmitUserdata = nullptr;                    // Entry only
   bool entryHasCustomBorder = false;                        // Entry only - skip the generic focus ring; the style's own border already changes color/width on focus
   int *radioSelected = nullptr;                             // Radio only
   int radioValue = 0;                                       // Radio only

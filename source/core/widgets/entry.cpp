@@ -112,6 +112,8 @@ void n8v_entry(n8v_entry_options options) {
   meta.entryBuf = options.value;
   meta.onEntryChange = options.on_change;
   meta.onEntryChangeUserdata = options.on_change_userdata;
+  meta.onEntrySubmit = options.on_submit;
+  meta.onEntrySubmitUserdata = options.on_submit_userdata;
   decl.userData = &meta;
 
   Clay__ConfigureOpenElement(decl);

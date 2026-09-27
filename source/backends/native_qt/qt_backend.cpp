@@ -19,6 +19,7 @@
 #include <QFrame>
 #include <QIcon>
 #include <QImage>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMouseEvent>
@@ -117,6 +118,18 @@ protected:
     if (!selectedPtr || !isChecked() || *selectedPtr == value) return;
     *selectedPtr = value;
     if (onChange) onChange(value);
+  }
+};
+
+class N8VLineEdit final : public QLineEdit {
+public:
+  using QLineEdit::QLineEdit;
+  std::function<void()> *onSubmit = nullptr;
+
+protected:
+  void keyPressEvent(QKeyEvent *event) override {
+    QLineEdit::keyPressEvent(event);
+    if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) && onSubmit && *onSubmit) (*onSubmit)();
   }
 };
 
@@ -495,6 +508,7 @@ private:
   struct EntryState {
     std::string *value = nullptr;
     std::function<void(std::string_view)> onChange;
+    std::function<void()> onSubmit;
     std::string lastSynced;
   };
 
@@ -502,6 +516,7 @@ private:
     if (!meta.entryValue) return;
     state.value = meta.entryValue;
     state.onChange = toStdFunction(meta.onEntryChange, meta.onEntryChangeUserdata);
+    state.onSubmit = toStdFunction(meta.onEntrySubmit, meta.onEntrySubmitUserdata);
 
     std::string widgetText = widget->text().toStdString();
     if (widgetText != state.lastSynced) {
@@ -712,10 +727,11 @@ private:
         sw->onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
         if (sw->isChecked() != *meta.checked) sw->setChecked(*meta.checked);
       } else if (meta.kind == NativeWidgetKind::Entry) {
-        auto *lineEdit = static_cast<QLineEdit *>(it->second);
+        auto *lineEdit = static_cast<N8VLineEdit *>(it->second);
         lineEdit->setEchoMode(meta.password ? QLineEdit::Password : QLineEdit::Normal);
         lineEdit->setPlaceholderText(meta.placeholder ? QString::fromStdString(*meta.placeholder) : QString());
         syncEntry(lineEdit, meta, entryStates_[meta.ordinal]);
+        lineEdit->onSubmit = &entryStates_[meta.ordinal].onSubmit;
       } else if (meta.kind == NativeWidgetKind::Radio && meta.radioSelected) {
         auto *radio = static_cast<N8VRadioButton *>(it->second);
         radio->selectedPtr = meta.radioSelected;
@@ -754,10 +770,11 @@ private:
       sw->setChecked(meta.checked && *meta.checked);
       widget = sw;
     } else if (meta.kind == NativeWidgetKind::Entry) {
-      auto *lineEdit = new QLineEdit(currentParent());
+      auto *lineEdit = new N8VLineEdit(currentParent());
       lineEdit->setEchoMode(meta.password ? QLineEdit::Password : QLineEdit::Normal);
       lineEdit->setPlaceholderText(meta.placeholder ? QString::fromStdString(*meta.placeholder) : QString());
       syncEntry(lineEdit, meta, entryStates_[meta.ordinal]);
+      lineEdit->onSubmit = &entryStates_[meta.ordinal].onSubmit;
       widget = lineEdit;
     } else if (meta.kind == NativeWidgetKind::Radio) {
       auto *radio = new N8VRadioButton(currentParent());

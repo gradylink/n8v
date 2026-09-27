@@ -76,6 +76,7 @@ struct EntryOptions {
   std::string_view placeholder = {};
   bool password = false;
   std::function<void(std::string_view)> onChange = nullptr;
+  std::function<void()> onSubmit = nullptr;
 };
 
 struct DropdownOptions {

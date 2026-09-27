@@ -451,6 +451,7 @@ private:
       } else if (meta.kind == NativeWidgetKind::Entry) {
         MwSetInteger(it->second, MwNhideInput, meta.password ? 1 : 0);
         syncEntry(it->second, meta, entryStates_[meta.ordinal]);
+        action.callback = toStdFunction(meta.onEntrySubmit, meta.onEntrySubmitUserdata);
       } else if (meta.kind == NativeWidgetKind::Radio && meta.radioSelected) {
         action.radioSelected = meta.radioSelected;
         action.radioValue = meta.radioValue;
@@ -487,6 +488,8 @@ private:
       widget = MwCreateWidget(MwEntryClass, "n8v-entry", currentParent(), 0, 0, 1, 1);
       MwSetInteger(widget, MwNhideInput, meta.password ? 1 : 0);
       syncEntry(widget, meta, entryStates_[meta.ordinal]);
+      action.callback = toStdFunction(meta.onEntrySubmit, meta.onEntrySubmitUserdata);
+      MwAddUserHandler(widget, MwNactivateHandler, onActivate, &action);
     } else if (meta.kind == NativeWidgetKind::Radio) {
       action.radioSelected = meta.radioSelected;
       action.radioValue = meta.radioValue;
