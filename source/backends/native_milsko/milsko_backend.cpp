@@ -220,7 +220,7 @@ public:
           WidgetKey labelKey{pendingCheckboxOrdinal, -2};
           seenKeys.insert(labelKey);
           MwWidget label = ensureLabel(labelKey);
-          MwSetText(label, MwNtext, text.c_str());
+          MwSetString(label, MwNtext, text.c_str());
           applyBold(label, flags->bold);
           applyStrikethrough(label, flags->strikethrough);
           positionWidget(label, box);
@@ -232,7 +232,7 @@ public:
 
         if (flags && flags->ownedByWidget) {
           if (pendingLabelTarget && pendingKind != NativeWidgetKind::Entry && pendingKind != NativeWidgetKind::Dropdown) {
-            MwSetText(pendingLabelTarget, MwNtext, text.c_str());
+            MwSetString(pendingLabelTarget, MwNtext, text.c_str());
             applyBold(pendingLabelTarget, flags->bold);
             applyStrikethrough(pendingLabelTarget, flags->strikethrough);
           }
@@ -245,7 +245,7 @@ public:
         WidgetKey key{ordinal, wrapLineIndex};
         seenKeys.insert(key);
         MwWidget label = ensureLabel(key);
-        MwSetText(label, MwNtext, text.c_str());
+        MwSetString(label, MwNtext, text.c_str());
         applyBold(label, flags && flags->bold);
         applyStrikethrough(label, flags && flags->strikethrough);
         positionWidget(label, command->boundingBox);
@@ -260,7 +260,7 @@ public:
       if (!seenKeys.count(it->first)) {
         auto pixmapIt = imagePixmapSources_.find(it->second);
         if (pixmapIt != imagePixmapSources_.end()) {
-          MwLLPixmap pixmap = static_cast<MwLLPixmap>(MwGetVoid(it->second, MwNpixmap));
+          MwPixmap pixmap = static_cast<MwPixmap>(MwGetPointer(it->second, MwNpixmap));
           if (pixmap) MwDestroyPixmap(pixmap);
           imagePixmapSources_.erase(pixmapIt);
         }
@@ -383,7 +383,7 @@ private:
     state.value = meta.entryValue;
     state.onChange = toStdFunction(meta.onEntryChange, meta.onEntryChangeUserdata);
 
-    const char *raw = MwGetText(widget, MwNtext);
+    const char *raw = MwGetString(widget, MwNtext);
     std::string widgetText = raw ? raw : "";
     if (widgetText != state.lastSynced) {
       *state.value = widgetText;
@@ -391,7 +391,7 @@ private:
       if (meta.entryBuf) ui_internal::writeToStringBuf(*state.value, *meta.entryBuf);
       if (state.onChange) state.onChange(widgetText);
     } else if (*state.value != state.lastSynced) {
-      MwSetText(widget, MwNtext, state.value->c_str());
+      MwSetString(widget, MwNtext, state.value->c_str());
       state.lastSynced = *state.value;
     }
   }
@@ -410,8 +410,8 @@ private:
     auto it = imagePixmapSources_.find(widget);
     if (it != imagePixmapSources_.end() && it->second == icon) return;
 
-    MwLLPixmap oldPixmap = static_cast<MwLLPixmap>(MwGetVoid(widget, MwNpixmap));
-    MwLLPixmap newPixmap = MwLoadRaw(widget, const_cast<unsigned char *>(icon->rgba), icon->width, icon->height);
+    MwPixmap oldPixmap = static_cast<MwPixmap>(MwGetPointer(widget, MwNpixmap));
+    MwPixmap newPixmap = MwLoadRaw(widget, const_cast<unsigned char *>(icon->rgba), icon->width, icon->height);
     MwVaApply(widget, MwNpixmap, newPixmap, NULL);
     if (oldPixmap) MwDestroyPixmap(oldPixmap);
     imagePixmapSources_[widget] = icon;
@@ -424,8 +424,8 @@ private:
     auto it = imagePixmapSources_.find(widget);
     if (it != imagePixmapSources_.end() && it->second == image) return;
 
-    MwLLPixmap oldPixmap = static_cast<MwLLPixmap>(MwGetVoid(widget, MwNpixmap));
-    MwLLPixmap newPixmap = MwLoadRaw(widget, const_cast<unsigned char *>(image->rgba), image->width, image->height);
+    MwPixmap oldPixmap = static_cast<MwPixmap>(MwGetPointer(widget, MwNpixmap));
+    MwPixmap newPixmap = MwLoadRaw(widget, const_cast<unsigned char *>(image->rgba), image->width, image->height);
     MwVaApply(widget, MwNpixmap, newPixmap, NULL);
     if (oldPixmap) MwDestroyPixmap(oldPixmap);
     imagePixmapSources_[widget] = image;
@@ -531,7 +531,7 @@ private:
       widget = MwCreateWidget(MwButtonClass, "n8v-widget", currentParent(), 0, 0, 1, 1);
       if (action.isLink) {
         MwSetInteger(widget, MwNflat, 1);
-        MwSetText(widget, MwNforeground, "#4287f5");
+        MwSetString(widget, MwNforeground, "#4287f5");
       } else if (meta.kind == NativeWidgetKind::Button && meta.buttonFlat) {
         MwSetInteger(widget, MwNflat, 1);
       }
