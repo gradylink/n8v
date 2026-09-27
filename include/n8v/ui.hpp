@@ -576,6 +576,7 @@ inline void openSidebar(const SidebarOptions &options) {
   c_opts.width = toC(options.width);
   c_opts.min_width = options.minWidth;
   c_opts.max_width = options.maxWidth;
+  c_opts.compact = options.compact;
   n8v_open_sidebar(c_opts);
 }
 

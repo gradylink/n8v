@@ -304,6 +304,7 @@ typedef struct n8v_sidebar_options {
   n8v_sizing width;
   float min_width;
   float max_width;
+  bool compact;
 } n8v_sidebar_options;
 
 typedef struct n8v_page_options {

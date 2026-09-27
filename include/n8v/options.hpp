@@ -123,6 +123,8 @@ struct SidebarOptions {
   float minWidth = 0.0f;
   /** 0 = unbounded. Only affects backends with a resizable sidebar (e.g. GTK4/Adwaita). */
   float maxWidth = 0.0f;
+  /** Only affects backends with a native sidebar list (e.g. GTK4/Adwaita). */
+  bool compact = false;
 };
 
 struct PageOptions {

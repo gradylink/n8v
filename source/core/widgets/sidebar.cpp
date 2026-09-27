@@ -41,6 +41,7 @@ struct SidebarContext {
   std::function<void(int)> onChange;
   int pageOrdinal = 0;
   int ordinal = 0;
+  bool compact = false;
 };
 
 std::vector<SidebarContext> sidebarStack;
@@ -133,6 +134,7 @@ void n8v_open_sidebar(n8v_sidebar_options opts) {
   n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
   meta.kind = n8v::NativeWidgetKind::Sidebar;
   meta.ordinal = ordinal;
+  meta.sidebarCompact = opts.compact;
   decl.userData = &meta;
 
   Clay__ConfigureOpenElement(decl);
@@ -145,7 +147,7 @@ void n8v_open_sidebar(n8v_sidebar_options opts) {
     _n8v_text_commit(opts.title);
   }
 
-  sidebarStack.push_back(SidebarContext{opts.selected, n8v::detail::toStdFunction(opts.on_change, opts.on_change_userdata), 0, ordinal});
+  sidebarStack.push_back(SidebarContext{opts.selected, n8v::detail::toStdFunction(opts.on_change, opts.on_change_userdata), 0, ordinal, opts.compact});
 }
 
 void n8v_close_sidebar(void) {
@@ -227,6 +229,7 @@ bool n8v_open_page(n8v_page_options opts) {
   meta.iconName = hasIcon ? internCString(iconView) : nullptr;
   meta.iconVariant = n8v::IconVariant::Outline;
   meta.buttonSelected = selected;
+  meta.sidebarCompact = ctx.compact;
   decl.userData = &meta;
 
   Clay__ConfigureOpenElement(decl);

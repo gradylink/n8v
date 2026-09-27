@@ -39,7 +39,10 @@ if(N8V_BACKEND_GTK4)
         g_object_unref
         g_object_ref_sink
         g_object_ref
+        g_object_set_data
+        g_object_get_data
         g_type_check_instance_cast
+        g_type_check_instance_is_a
     )
     target_include_directories(gobject_lazy PUBLIC ${_N8V_GTK4_INCLUDE_DIRS})
 

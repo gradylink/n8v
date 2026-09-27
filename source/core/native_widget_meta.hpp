@@ -60,6 +60,7 @@ struct NativeWidgetMeta {
   bool iconTrailing = false;                                // Button only
   bool buttonFlat = false;                                  // Button only - true for ButtonStyle::Ghost; strip native chrome/border
   bool buttonSelected = false;                              // for sidebar
+  bool sidebarCompact = false;                              // Sidebar and its page rows
   n8v::Color iconTint{}; // Icon widget only - the tint used to decode `image`, so backends can re-decode a freedesktop-theme file (found on disk, not in the bundle) with the
                          // same color
   n8v::Color switchTrackColor{};       // Switch only - eased track fill (on/off interpolated)

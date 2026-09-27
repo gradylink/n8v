@@ -13,7 +13,7 @@ int main() {
 
   int clickCount = 0;
   bool passwordInput = false;
-  bool darkMode = false;
+  bool compactSidebar = false;
   std::string name;
   int favoriteColor = 0;
   int favoriteFruit = -1;
@@ -24,7 +24,7 @@ int main() {
 
   while (pumpEvents()) {
     UI() {
-      sidebar({.title = "Sections", .selected = &selectedSection, .width = Sizing::fixed(260)}) {
+      sidebar({.title = "Sections", .selected = &selectedSection, .width = Sizing::fixed(260), .compact = compactSidebar}) {
         page({.name = "Widgets", .icon = "home"}) {
           flex({.direction = Direction::Vertical, .gap = 12, .padding = {20, 20, 20, 20}, .width = Sizing::grow(), .height = Sizing::grow(), .clipVertical = true}) {
             text({.bold = true})("n8v basic example");
@@ -32,12 +32,8 @@ int main() {
 
             panel({.role = PanelRole::Card, .gap = 4, .width = Sizing::grow()}) {
               text({.bold = true})("Card panel");
-              panel({.role = PanelRole::ListItem, .width = Sizing::grow()}) {
-                text("Row one");
-              }
-              panel({.role = PanelRole::ListItem, .width = Sizing::grow()}) {
-                text("Row two");
-              }
+              panel({.role = PanelRole::ListItem, .width = Sizing::grow()}) { text("Row one"); }
+              panel({.role = PanelRole::ListItem, .width = Sizing::grow()}) { text("Row two"); }
             }
 
             button({.style = ButtonStyle::Primary, .onClick = [&clickCount] {
@@ -60,7 +56,7 @@ int main() {
 
             checkbox({.checked = &passwordInput})("Password mode.");
 
-            toggle({.checked = &darkMode})("Dark mode");
+            toggle({.checked = &compactSidebar})("Compact Sidebar");
 
             entry({.value = &name, .placeholder = passwordInput ? "Password" : "Your name", .password = passwordInput});
 
