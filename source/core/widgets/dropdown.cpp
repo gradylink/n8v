@@ -134,6 +134,7 @@ void n8v_dropdown(n8v_dropdown_options options) {
     Clay_TextElementConfig valueTextConfig = {};
     valueTextConfig.textColor = n8v::detail::toClay(paint.textColor);
     valueTextConfig.fontSize = paint.fontSize;
+    valueTextConfig.fontId = n8v::detail::textFontId(paint.font, false, false);
     valueTextConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
     valueTextConfig.userData = &textStyleStorage.back();
     CLAY_TEXT(internString(lineText), valueTextConfig);
@@ -179,6 +180,7 @@ void n8v_dropdown(n8v_dropdown_options options) {
       Clay_TextElementConfig labelTextConfig = {};
       labelTextConfig.textColor = n8v::detail::toClay(paint.labelColor);
       labelTextConfig.fontSize = labelFontSize;
+      labelTextConfig.fontId = n8v::detail::textFontId(paint.font, false, false);
       labelTextConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
       labelTextConfig.userData = &textStyleStorage.back();
       CLAY_TEXT(internString(placeholderView), labelTextConfig);
@@ -200,6 +202,7 @@ void n8v_dropdown(n8v_dropdown_options options) {
     Clay_TextElementConfig textConfig = {};
     textConfig.textColor = n8v::detail::toClay(hasSelection ? paint.textColor : paint.placeholderColor);
     textConfig.fontSize = paint.fontSize;
+    textConfig.fontId = n8v::detail::textFontId(paint.font, false, false);
     textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
     textConfig.userData = &textStyleStorage.back();
     CLAY_TEXT(internString(hasSelection ? selectedText : placeholderView), textConfig);
@@ -259,6 +262,7 @@ void n8v_dropdown(n8v_dropdown_options options) {
       Clay_TextElementConfig itemTextConfig = {};
       itemTextConfig.textColor = n8v::detail::toClay(paint.textColor);
       itemTextConfig.fontSize = paint.fontSize;
+      itemTextConfig.fontId = n8v::detail::textFontId(paint.font, false, false);
       itemTextConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
       itemTextConfig.userData = &textStyleStorage.back();
       CLAY_TEXT(internString(itemsCopy[i]), itemTextConfig);

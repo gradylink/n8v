@@ -145,6 +145,7 @@ void _n8v_button_commit(const char *label) {
     Clay_TextElementConfig textConfig = {};
     textConfig.textColor = n8v::detail::toClay(paint.textColor);
     textConfig.fontSize = paint.fontSize;
+    textConfig.fontId = n8v::detail::textFontId(paint.font, false, false);
     textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
     textConfig.userData = &textStyleStorage.back();
     CLAY_TEXT(internString(labelView), textConfig);
@@ -199,6 +200,7 @@ void _n8v_text_commit(const char *label) {
     Clay_TextElementConfig textConfig = {};
     textConfig.textColor = n8v::detail::toClay(textPaint.color);
     textConfig.fontSize = textPaint.fontSize;
+    textConfig.fontId = n8v::detail::textFontId(textPaint.font, opts.bold, opts.italic);
     textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
     textConfig.userData = &textStyleStorage.back();
     CLAY_TEXT(internString(labelView), textConfig);
@@ -216,6 +218,7 @@ void _n8v_text_commit(const char *label) {
     Clay_TextElementConfig textConfig = {};
     textConfig.textColor = n8v::detail::toClay(textPaint.color);
     textConfig.fontSize = textPaint.fontSize;
+    textConfig.fontId = n8v::detail::textFontId(textPaint.font, opts.bold, opts.italic);
     textConfig.userData = &textStyleStorage.back();
     CLAY_TEXT(internString(labelView), textConfig);
   }

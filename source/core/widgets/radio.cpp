@@ -92,6 +92,7 @@ void _n8v_radio_commit(const char *label) {
   Clay_TextElementConfig textConfig = {};
   textConfig.textColor = n8v::detail::toClay(labelPaint.color);
   textConfig.fontSize = labelPaint.fontSize;
+  textConfig.fontId = n8v::detail::textFontId(labelPaint.font, false, false);
   textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
   textConfig.userData = &textStyleStorage.back();
   CLAY_TEXT(internString(labelView), textConfig);

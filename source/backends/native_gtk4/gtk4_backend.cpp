@@ -90,7 +90,12 @@ public:
     gtk_window_set_default_size(GTK_WINDOW(window_), width, height);
 
     fixed_ = gtk_fixed_new();
-    gtk_window_set_child(GTK_WINDOW(window_), fixed_);
+    fixedScroll_ = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(fixedScroll_), GTK_POLICY_EXTERNAL, GTK_POLICY_EXTERNAL);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(fixedScroll_), fixed_);
+    gtk_widget_set_hexpand(fixedScroll_, TRUE);
+    gtk_widget_set_vexpand(fixedScroll_, TRUE);
+    gtk_window_set_child(GTK_WINDOW(window_), fixedScroll_);
 
     g_signal_connect_data(window_, "close-request", G_CALLBACK(&Gtk4Backend::onCloseRequest), this, nullptr, (GConnectFlags)0);
 
@@ -457,6 +462,7 @@ public:
       gtk_window_destroy(GTK_WINDOW(window_));
       window_ = nullptr;
       fixed_ = nullptr;
+      fixedScroll_ = nullptr;
       sidebarPanels_.clear();
       primarySidebarOrdinal_ = -1;
 #ifdef N8V_HAVE_ADWAITA
@@ -1054,33 +1060,38 @@ private:
       gtk_list_box_set_sort_func(GTK_LIST_BOX(panel.listBox), compareActionRowOrdinals, nullptr, nullptr);
       g_signal_connect_data(panel.listBox, "row-activated", G_CALLBACK(&Gtk4Backend::onSidebarRowActivated), this, nullptr, (GConnectFlags)0);
 
+      GtkWidget *scrolled = gtk_scrolled_window_new();
+      gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+      gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), panel.listBox);
+      gtk_widget_set_vexpand(scrolled, TRUE);
+
       panel.root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
       gtk_box_append(GTK_BOX(panel.root), panel.titleLabel);
-      gtk_box_append(GTK_BOX(panel.root), panel.listBox);
+      gtk_box_append(GTK_BOX(panel.root), scrolled);
 
       if (isPrimary) {
 #ifdef N8V_HAVE_ADWAITA
-        g_object_ref(fixed_);
+        g_object_ref(fixedScroll_);
         gtk_window_set_child(GTK_WINDOW(window_), nullptr);
 
         GtkWidget *splitViewWidget = adw_navigation_split_view_new();
         splitView_ = ADW_NAVIGATION_SPLIT_VIEW(splitViewWidget);
         AdwNavigationPage *sidebarPage = adw_navigation_page_new(panel.root, "Sidebar");
-        AdwNavigationPage *contentPage = adw_navigation_page_new(fixed_, "Content");
+        AdwNavigationPage *contentPage = adw_navigation_page_new(fixedScroll_, "Content");
         adw_navigation_split_view_set_sidebar(splitView_, sidebarPage);
         adw_navigation_split_view_set_content(splitView_, contentPage);
-        g_object_unref(fixed_);
+        g_object_unref(fixedScroll_);
 
         gtk_window_set_child(GTK_WINDOW(window_), splitViewWidget);
 #else
-        g_object_ref(fixed_);
+        g_object_ref(fixedScroll_);
         gtk_window_set_child(GTK_WINDOW(window_), nullptr);
 
         GtkWidget *box_ = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
         gtk_widget_add_css_class(panel.root, "sidebar");
         gtk_box_append(GTK_BOX(box_), panel.root);
-        gtk_box_append(GTK_BOX(box_), fixed_);
-        g_object_unref(fixed_);
+        gtk_box_append(GTK_BOX(box_), fixedScroll_);
+        g_object_unref(fixedScroll_);
 
         gtk_window_set_child(GTK_WINDOW(window_), box_);
 #endif
@@ -1185,6 +1196,7 @@ private:
 
   GtkWidget *window_ = nullptr;
   GtkWidget *fixed_ = nullptr;
+  GtkWidget *fixedScroll_ = nullptr;
   GtkCssProvider *panelCssProvider_ = nullptr;
   std::unordered_map<int, std::string> panelCssRules_;
 

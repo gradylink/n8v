@@ -14,4 +14,6 @@ struct TextStyleFlags {
   bool strikethrough = false;
 };
 
+constexpr uint16_t textFontId(FontFamily font, bool bold, bool italic) { return (uint16_t)(((uint16_t)font << 2) | (bold ? 1 : 0) | (italic ? 2 : 0)); }
+
 } // namespace n8v::detail

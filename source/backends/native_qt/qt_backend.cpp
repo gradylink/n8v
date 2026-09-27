@@ -9,6 +9,8 @@
 #include "core/text_style_flags.hpp"
 #include "core/ui_core_internal.hpp"
 
+#include <algorithm>
+
 #include <QApplication>
 #include <QButtonGroup>
 #include <QCheckBox>
@@ -403,7 +405,7 @@ public:
 
     for (auto it = sidebarPanels_.begin(); it != sidebarPanels_.end();) {
       if (!touchedSidebarPanels_.count(it->first)) {
-        delete it->second;
+        delete it->second.panel;
         it = sidebarPanels_.erase(it);
       } else {
         ++it;
@@ -647,6 +649,12 @@ private:
     float originY = 0.0f;
   };
 
+  struct SidebarPanel {
+    QFrame *panel = nullptr;
+    QScrollArea *scrollArea = nullptr;
+    QWidget *inner = nullptr;
+  };
+
   QWidget *currentParent() const { return containerStack_.empty() ? window_ : containerStack_.back().inner; }
 
   void ensureScrollContainer(uint32_t id, const Clay_BoundingBox &box, const Clay_ClipRenderData &clip) {
@@ -686,12 +694,20 @@ private:
   }
 
   void ensureSidebarPanel(uint32_t id, const Clay_BoundingBox &box) {
-    QFrame *&panel = sidebarPanels_[id];
-    if (!panel) {
-      panel = new QFrame(currentParent());
-      panel->setFrameShape(QFrame::StyledPanel);
-      panel->setFrameShadow(QFrame::Raised);
-      panel->setAutoFillBackground(true);
+    SidebarPanel &panel = sidebarPanels_[id];
+    if (!panel.panel) {
+      panel.panel = new QFrame(currentParent());
+      panel.panel->setFrameShape(QFrame::StyledPanel);
+      panel.panel->setFrameShadow(QFrame::Raised);
+      panel.panel->setAutoFillBackground(true);
+
+      panel.scrollArea = new QScrollArea(panel.panel);
+      panel.scrollArea->setWidgetResizable(false);
+      panel.scrollArea->setFrameShape(QFrame::NoFrame);
+      panel.scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+      panel.scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+      panel.inner = new QWidget();
+      panel.scrollArea->setWidget(panel.inner);
     }
 
     float originX = 0.0f, originY = 0.0f;
@@ -699,16 +715,27 @@ private:
       originX = containerStack_.back().originX;
       originY = containerStack_.back().originY;
     }
-    panel->setGeometry((int)(box.x - originX), (int)(box.y - originY), (int)box.width, (int)box.height);
-    panel->setVisible(true);
+    panel.panel->setGeometry((int)(box.x - originX), (int)(box.y - originY), (int)box.width, (int)box.height);
+    panel.panel->setVisible(true);
+    panel.scrollArea->setGeometry(0, 0, (int)box.width, (int)box.height);
+    panel.scrollArea->setVisible(true);
 
-    containerStack_.push_back(ContainerFrame{nullptr, panel, box.x, box.y});
+    int innerHeight = (int)box.height;
+    Clay_ScrollContainerData scrollData = Clay_GetScrollContainerData(Clay_ElementId{id});
+    if (scrollData.found) innerHeight = std::max(innerHeight, (int)scrollData.contentDimensions.height);
+    panel.inner->resize((int)box.width, innerHeight);
+
+    containerStack_.push_back(ContainerFrame{nullptr, panel.inner, box.x, box.y});
     touchedSidebarPanels_.insert(id);
   }
 
   QWidget *ensureWidget(const WidgetKey &key, const NativeWidgetMeta &meta) {
     auto it = widgets_.find(key);
     if (it != widgets_.end()) {
+      if (it->second->parent() != currentParent()) {
+        it->second->setParent(currentParent());
+        it->second->setVisible(true);
+      }
       if (meta.kind == NativeWidgetKind::Button) {
         callbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
         static_cast<N8VButton *>(it->second)->setFlat(meta.buttonFlat);
@@ -839,7 +866,13 @@ private:
 
   QLabel *ensureLabel(const WidgetKey &key) {
     auto it = widgets_.find(key);
-    if (it != widgets_.end()) return static_cast<QLabel *>(it->second);
+    if (it != widgets_.end()) {
+      if (it->second->parent() != currentParent()) {
+        it->second->setParent(currentParent());
+        it->second->setVisible(true);
+      }
+      return static_cast<QLabel *>(it->second);
+    }
 
     auto *label = new QLabel(currentParent());
     label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
@@ -887,7 +920,7 @@ private:
   std::unordered_map<uint32_t, ContainerFrame> scrollContainers_;
   std::vector<ContainerFrame> containerStack_;
   std::set<uint32_t> touchedScrollContainers_;
-  std::unordered_map<uint32_t, QFrame *> sidebarPanels_;
+  std::unordered_map<uint32_t, SidebarPanel> sidebarPanels_;
   std::set<uint32_t> touchedSidebarPanels_;
 };
 

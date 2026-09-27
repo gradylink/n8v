@@ -129,6 +129,9 @@ void n8v_open_sidebar(n8v_sidebar_options opts) {
   decl.border.color = n8v::detail::toClay(paint.borderColor);
   decl.border.width = {(uint16_t)paint.borderWidth, 0, 0, 0, 0};
   decl.clip.vertical = true;
+  if (n8v::activeBackend().ownsScrollMath()) {
+    decl.clip.childOffset = Clay_GetScrollOffset();
+  }
 
   widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
   n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
@@ -257,6 +260,7 @@ bool n8v_open_page(n8v_page_options opts) {
   Clay_TextElementConfig textConfig = {};
   textConfig.textColor = n8v::detail::toClay(paint.textColor);
   textConfig.fontSize = paint.fontSize;
+  textConfig.fontId = n8v::detail::textFontId(paint.font, false, false);
   textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
   textConfig.userData = &textStyleStorage.back();
   CLAY_TEXT(internString(nameView), textConfig);

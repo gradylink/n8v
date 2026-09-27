@@ -123,6 +123,7 @@ void n8v_entry(n8v_entry_options options) {
     Clay_TextElementConfig textConfig = {};
     textConfig.textColor = n8v::detail::toClay(hasValue ? paint.textColor : paint.placeholderColor);
     textConfig.fontSize = paint.fontSize;
+    textConfig.fontId = n8v::detail::textFontId(paint.font, false, false);
     textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
     textConfig.userData = &textStyleStorage.back();
     CLAY_TEXT(internString(displayText), textConfig);
@@ -156,6 +157,7 @@ void n8v_entry(n8v_entry_options options) {
     Clay_TextElementConfig labelTextConfig = {};
     labelTextConfig.textColor = n8v::detail::toClay(paint.labelColor);
     labelTextConfig.fontSize = labelFontSize;
+    labelTextConfig.fontId = n8v::detail::textFontId(paint.font, false, false);
     labelTextConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
     labelTextConfig.userData = &textStyleStorage.back();
     CLAY_TEXT(internString(placeholderView), labelTextConfig);
