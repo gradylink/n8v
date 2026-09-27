@@ -1009,8 +1009,8 @@ private:
     ContainerFrame &frame = it->second;
     gtk_scrolled_window_set_policy(
       GTK_SCROLLED_WINDOW(frame.scrolled),
-      clip.horizontal ? GTK_POLICY_AUTOMATIC : GTK_POLICY_NEVER,
-      clip.vertical ? GTK_POLICY_AUTOMATIC : GTK_POLICY_NEVER
+      clip.horizontal ? GTK_POLICY_AUTOMATIC : GTK_POLICY_EXTERNAL,
+      clip.vertical ? GTK_POLICY_AUTOMATIC : GTK_POLICY_EXTERNAL
     );
     float originX = containerStack_.empty() ? rootOriginX_ : containerStack_.back().originX;
     float originY = containerStack_.empty() ? 0.0f : containerStack_.back().originY;
@@ -1061,7 +1061,7 @@ private:
       g_signal_connect_data(panel.listBox, "row-activated", G_CALLBACK(&Gtk4Backend::onSidebarRowActivated), this, nullptr, (GConnectFlags)0);
 
       GtkWidget *scrolled = gtk_scrolled_window_new();
-      gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+      gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_EXTERNAL, GTK_POLICY_AUTOMATIC);
       gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), panel.listBox);
       gtk_widget_set_vexpand(scrolled, TRUE);
 

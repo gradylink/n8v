@@ -42,6 +42,7 @@ void ensureInitialized() {
 
   Clay_Initialize(arena, n8v::activeBackend().windowSize(), Clay_ErrorHandler{clayErrorHandler, nullptr});
   Clay_SetMeasureTextFunction(measureText, nullptr);
+  Clay_SetCullingEnabled(!n8v::activeBackend().rendersNativeChrome());
 }
 
 float frameDelta() {
