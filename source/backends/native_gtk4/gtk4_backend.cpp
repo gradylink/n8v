@@ -46,6 +46,12 @@ std::string linkMarkup(std::string_view text, std::string_view url) {
   return result;
 }
 
+int compareActionRowOrdinals(GtkListBoxRow *a, GtkListBoxRow *b, gpointer /*userData*/) {
+  int ordinalA = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(a), "n8v-ordinal"));
+  int ordinalB = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(b), "n8v-ordinal"));
+  return ordinalA - ordinalB;
+}
+
 void setPlainLabelText(GtkWidget *label, std::string_view text, bool bold, bool italic, bool strikethrough = false) {
   if (!bold && !italic && !strikethrough) {
     gtk_label_set_text(GTK_LABEL(label), std::string(text).c_str());
@@ -971,6 +977,7 @@ private:
     sidebarListBox_ = gtk_list_box_new();
     gtk_widget_add_css_class(sidebarListBox_, "navigation-sidebar");
     gtk_list_box_set_selection_mode(GTK_LIST_BOX(sidebarListBox_), GTK_SELECTION_SINGLE);
+    gtk_list_box_set_sort_func(GTK_LIST_BOX(sidebarListBox_), compareActionRowOrdinals, nullptr, nullptr);
     gtk_widget_set_vexpand(sidebarListBox_, TRUE);
     gtk_box_append(GTK_BOX(sidebarBox_), sidebarListBox_);
 
@@ -1018,6 +1025,7 @@ private:
     if (!row) {
 #ifdef N8V_HAVE_ADWAITA
       row = adw_action_row_new();
+      g_object_set_data(G_OBJECT(row), "n8v-ordinal", GINT_TO_POINTER(meta.ordinal));
       gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(row), TRUE);
       GtkWidget *icon = gtk_image_new();
       adw_action_row_add_prefix(ADW_ACTION_ROW(row), icon);
@@ -1027,6 +1035,7 @@ private:
       connectOrdinal(row, "activated", G_CALLBACK(&Gtk4Backend::onButtonClicked), this, meta.ordinal);
 #else
       row = gtk_list_box_row_new();
+      g_object_set_data(G_OBJECT(row), "n8v-ordinal", GINT_TO_POINTER(meta.ordinal));
       GtkWidget *label = gtk_label_new("");
       gtk_widget_set_halign(label, GTK_ALIGN_START);
       gtk_widget_set_margin_start(label, 12);
