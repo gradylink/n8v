@@ -42,6 +42,7 @@ struct SidebarContext {
   int pageOrdinal = 0;
   int ordinal = 0;
   bool compact = false;
+  float contentWidth = 0.0f;
 };
 
 std::vector<SidebarContext> sidebarStack;
@@ -94,9 +95,12 @@ void n8v_open_sidebar(n8v_sidebar_options opts) {
   const float listWidthPx = listWidthSizing.value;
 
   Clay_Dimensions windowSize = n8v::activeBackend().windowSize();
+  float availableWidth = sidebarStack.empty() ? windowSize.width : sidebarStack.back().contentWidth;
+  float contentWidth = availableWidth - listWidthPx;
+
   Clay__OpenElementWithId(sidebarContentAnchorId(ordinal));
   Clay_ElementDeclaration anchorDecl = {};
-  anchorDecl.layout.sizing.width = CLAY_SIZING_FIXED(windowSize.width - listWidthPx);
+  anchorDecl.layout.sizing.width = CLAY_SIZING_FIXED(contentWidth);
   anchorDecl.layout.sizing.height = CLAY_SIZING_FIXED(windowSize.height);
   anchorDecl.floating.attachTo = CLAY_ATTACH_TO_PARENT;
   anchorDecl.floating.offset = {listWidthPx, 0};
@@ -150,7 +154,7 @@ void n8v_open_sidebar(n8v_sidebar_options opts) {
     _n8v_text_commit(opts.title);
   }
 
-  sidebarStack.push_back(SidebarContext{opts.selected, n8v::detail::toStdFunction(opts.on_change, opts.on_change_userdata), 0, ordinal, opts.compact});
+  sidebarStack.push_back(SidebarContext{opts.selected, n8v::detail::toStdFunction(opts.on_change, opts.on_change_userdata), 0, ordinal, opts.compact, contentWidth});
 }
 
 void n8v_close_sidebar(void) {
