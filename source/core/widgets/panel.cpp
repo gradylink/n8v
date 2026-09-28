@@ -31,7 +31,7 @@ uint16_t snapGapToGrid(uint16_t value, float unit) {
 extern "C" {
 
 void n8v_open_panel(n8v_panel_options opts) {
-  Clay__OpenElement();
+  openElementMaybeWithId(opts.id);
 
   const int ordinal = widgetOrdinal++;
   const n8v::PanelRole role = toPanelRole(opts.role);

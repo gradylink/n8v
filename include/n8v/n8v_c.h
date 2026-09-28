@@ -179,6 +179,8 @@ typedef struct n8v_flex_options {
   n8v_sizing height;
   bool clip_horizontal;
   bool clip_vertical;
+  const char *id;
+  bool stick_to_bottom;
 } n8v_flex_options;
 
 typedef struct n8v_panel_options {
@@ -191,6 +193,7 @@ typedef struct n8v_panel_options {
   n8v_sizing height;
   bool clip_horizontal;
   bool clip_vertical;
+  const char *id;
 } n8v_panel_options;
 
 typedef struct n8v_text_options {
@@ -514,6 +517,19 @@ N8V_API bool n8v_open_page(n8v_page_options options);
 N8V_API void n8v_close_page(void);
 N8V_API void n8v_open_panel(n8v_panel_options options);
 N8V_API void n8v_close_panel(void);
+
+/** Scrolls the container to the bottom of its content (vertical axis only). */
+N8V_API void n8v_scroll_to_bottom(const char *container_id);
+/** Scrolls the container to the top of its content (vertical axis only). */
+N8V_API void n8v_scroll_to_top(const char *container_id);
+/** Scrolls the container to the left edge of its content (horizontal axis only). */
+N8V_API void n8v_scroll_to_left(const char *container_id);
+/** Scrolls the container to the right edge of its content (horizontal axis only). */
+N8V_API void n8v_scroll_to_right(const char *container_id);
+/** Scrolls the container to an absolute offset in pixels from the top-left of its content, each axis clamped independently to the container's valid scroll range. */
+N8V_API void n8v_scroll_to_offset(const char *container_id, float x, float y);
+/** Scrolls the container so the element tagged with `element_id` is visible at the top-left of the container's viewport, offset by `padding_left`/`padding_top` pixels. */
+N8V_API void n8v_scroll_to_element(const char *container_id, const char *element_id, float padding_left, float padding_top);
 
 #define N8V_UI() for (uint8_t n8v_c_uiLatch = (n8v_begin_frame(), 0); n8v_c_uiLatch < 1; n8v_c_uiLatch = 1, n8v_end_frame())
 

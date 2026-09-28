@@ -196,6 +196,14 @@ inline const char *internCString(std::string_view text) {
   return textStorage.back().c_str();
 }
 
+inline void openElementMaybeWithId(const char *id) {
+  if (id && *id) {
+    Clay__OpenElementWithId(Clay_GetElementId(Clay_String{false, (int32_t)std::strlen(id), id}));
+  } else {
+    Clay__OpenElement();
+  }
+}
+
 void resetLeafFrameState();
 void resetCheckboxFrameState();
 void resetToggleFrameState();

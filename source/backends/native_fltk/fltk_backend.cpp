@@ -142,6 +142,20 @@ public:
 
   void beginFrame() override {}
 
+  void setScrollOffsetY(uint32_t containerId, float y) override {
+    auto it = scrollContainers_.find(containerId);
+    if (it == scrollContainers_.end()) return;
+    auto *scroll = static_cast<Fl_Scroll *>(it->second.scroll);
+    scroll->scroll_to(scroll->xposition(), (int)y);
+  }
+
+  void setScrollOffsetX(uint32_t containerId, float x) override {
+    auto it = scrollContainers_.find(containerId);
+    if (it == scrollContainers_.end()) return;
+    auto *scroll = static_cast<Fl_Scroll *>(it->second.scroll);
+    scroll->scroll_to((int)x, scroll->yposition());
+  }
+
   void present(Clay_RenderCommandArray commands) override {
     std::map<int, int> wrapLineCounts;
     std::set<WidgetKey> seenKeys;

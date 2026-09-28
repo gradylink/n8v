@@ -224,6 +224,18 @@ public:
 
   void beginFrame() override { Clay_SetPointerState({pointerX_, pointerY_}, false); }
 
+  void setScrollOffsetY(uint32_t containerId, float y) override {
+    auto it = scrollContainers_.find(containerId);
+    if (it == scrollContainers_.end()) return;
+    gtk_adjustment_set_value(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(it->second.scrolled)), y);
+  }
+
+  void setScrollOffsetX(uint32_t containerId, float x) override {
+    auto it = scrollContainers_.find(containerId);
+    if (it == scrollContainers_.end()) return;
+    gtk_adjustment_set_value(gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(it->second.scrolled)), x);
+  }
+
   void present(Clay_RenderCommandArray commands) override {
     std::map<int, int> wrapLineCounts;
     std::set<WidgetKey> seenKeys;

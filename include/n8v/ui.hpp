@@ -54,7 +54,6 @@ inline ButtonStyle fromC(n8v_button_style s) {
   return ButtonStyle::Primary;
 }
 
-
 inline n8v_icon_variant toC(IconVariant v) { return v == IconVariant::Outline ? N8V_ICON_VARIANT_OUTLINE : N8V_ICON_VARIANT_FILLED; }
 
 inline n8v_icon_position toC(IconPosition p) { return p == IconPosition::Leading ? N8V_ICON_POSITION_LEADING : N8V_ICON_POSITION_TRAILING; }
@@ -175,9 +174,7 @@ inline FontFamily fromC(n8v_font_family f) {
 inline std::string_view toView(const char *s) { return s ? std::string_view(s) : std::string_view{}; }
 
 inline TextOptions fromC(n8v_text_options options) {
-  return TextOptions{
-    .bold = options.bold, .italic = options.italic, .strikethrough = options.strikethrough, .url = toView(options.url), .color = fromC(options.color)
-  };
+  return TextOptions{.bold = options.bold, .italic = options.italic, .strikethrough = options.strikethrough, .url = toView(options.url), .color = fromC(options.color)};
 }
 
 inline n8v_text_options toC(const TextOptions &options) {
@@ -536,6 +533,7 @@ inline void beginFrame() {
 inline void endFrame() { n8v_end_frame(); }
 
 inline void openFlex(const FlexOptions &options) {
+  std::string idStorage(options.id);
   n8v_flex_options c_opts{};
   c_opts.direction = toC(options.direction);
   c_opts.gap = options.gap;
@@ -546,12 +544,15 @@ inline void openFlex(const FlexOptions &options) {
   c_opts.height = toC(options.height);
   c_opts.clip_horizontal = options.clipHorizontal;
   c_opts.clip_vertical = options.clipVertical;
+  c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
+  c_opts.stick_to_bottom = options.stickToBottom;
   n8v_open_flex(c_opts);
 }
 
 inline void closeFlex() { n8v_close_flex(); }
 
 inline void openPanel(const PanelOptions &options) {
+  std::string idStorage(options.id);
   n8v_panel_options c_opts{};
   c_opts.role = toC(options.role);
   c_opts.direction = toC(options.direction);
@@ -562,6 +563,7 @@ inline void openPanel(const PanelOptions &options) {
   c_opts.height = toC(options.height);
   c_opts.clip_horizontal = options.clipHorizontal;
   c_opts.clip_vertical = options.clipVertical;
+  c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
   n8v_open_panel(c_opts);
 }
 
@@ -802,6 +804,32 @@ inline void slider(SliderOptions options) { detail::slider(std::move(options)); 
 inline void image(ImageOptions options) { detail::image(std::move(options)); }
 
 inline void icon(IconOptions options) { detail::icon(std::move(options)); }
+
+inline void scrollToBottom(std::string_view containerId) {
+  std::string storage(containerId);
+  n8v_scroll_to_bottom(storage.c_str());
+}
+inline void scrollToTop(std::string_view containerId) {
+  std::string storage(containerId);
+  n8v_scroll_to_top(storage.c_str());
+}
+inline void scrollToLeft(std::string_view containerId) {
+  std::string storage(containerId);
+  n8v_scroll_to_left(storage.c_str());
+}
+inline void scrollToRight(std::string_view containerId) {
+  std::string storage(containerId);
+  n8v_scroll_to_right(storage.c_str());
+}
+inline void setScrollOffset(std::string_view containerId, float x, float y) {
+  std::string storage(containerId);
+  n8v_scroll_to_offset(storage.c_str(), x, y);
+}
+inline void scrollToElement(std::string_view containerId, std::string_view elementId, float paddingLeft = 0.0f, float paddingTop = 0.0f) {
+  std::string containerStorage(containerId);
+  std::string elementStorage(elementId);
+  n8v_scroll_to_element(containerStorage.c_str(), elementStorage.c_str(), paddingLeft, paddingTop);
+}
 
 inline bool initialize(int width, int height, std::string_view title) {
   std::string titleStorage(title);

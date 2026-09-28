@@ -4,6 +4,7 @@
 
 #include <clay.h>
 
+#include <cstdint>
 #include <string_view>
 
 namespace n8v {
@@ -48,6 +49,9 @@ struct Backend {
 
   virtual Clay_Vector2 consumeScrollDelta() { return {0, 0}; }
   virtual bool ownsScrollMath() const { return false; }
+
+  virtual void setScrollOffsetY(uint32_t /*containerId*/, float /*y*/) {}
+  virtual void setScrollOffsetX(uint32_t /*containerId*/, float /*x*/) {}
 
   virtual void beginFrame() = 0;
   virtual void present(Clay_RenderCommandArray commands) = 0;

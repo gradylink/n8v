@@ -21,6 +21,8 @@ struct FlexOptions {
   Sizing height = Sizing::fit();
   bool clipHorizontal = false;
   bool clipVertical = false;
+  std::string_view id = {};
+  bool stickToBottom = false;
 };
 
 struct PanelOptions {
@@ -33,6 +35,7 @@ struct PanelOptions {
   Sizing height = Sizing::fit();
   bool clipHorizontal = false;
   bool clipVertical = false;
+  std::string_view id = {};
 };
 
 struct TextOptions {

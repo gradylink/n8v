@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -31,6 +32,109 @@ Clay_Dimensions measureText(Clay_StringSlice text, Clay_TextElementConfig *confi
 }
 
 void clayErrorHandler(Clay_ErrorData errorData) { std::fprintf(stderr, "[n8v] Clay error: %.*s\n", (int)errorData.errorText.length, errorData.errorText.chars); }
+
+Clay_String toClayStr(const std::string &s) { return Clay_String{false, (int32_t)s.size(), s.data()}; }
+
+struct PendingScrollTarget {
+  std::string containerId;
+  enum class Kind { Bottom, Top, Left, Right, Offset, Element } kind;
+  std::string elementId;
+  float offsetX = 0.0f;
+  float offsetY = 0.0f;
+  float paddingLeft = 0.0f;
+  float paddingTop = 0.0f;
+  int framesWaited = 0;
+};
+std::vector<PendingScrollTarget> pendingScrollTargets;
+std::vector<std::string> stickyBottomContainerIds;
+constexpr float kStickyBottomEpsilonPx = 24.0f;
+constexpr int kScrollRequestTimeoutFrames = 60;
+
+void applyScrollY(n8v::Backend &backend, uint32_t containerId, float y, const Clay_ScrollContainerData &scrollData) {
+  if (backend.ownsScrollMath()) {
+    scrollData.scrollPosition->y = -y;
+  } else {
+    backend.setScrollOffsetY(containerId, y);
+  }
+}
+void applyScrollX(n8v::Backend &backend, uint32_t containerId, float x, const Clay_ScrollContainerData &scrollData) {
+  if (backend.ownsScrollMath()) {
+    scrollData.scrollPosition->x = -x;
+  } else {
+    backend.setScrollOffsetX(containerId, x);
+  }
+}
+
+void resolvePendingScrollRequests() {
+  n8v::Backend &backend = n8v::activeBackend();
+
+  for (const std::string &containerId : stickyBottomContainerIds) {
+    Clay_ElementId cid = Clay_GetElementId(toClayStr(containerId));
+    Clay_ScrollContainerData scrollData = Clay_GetScrollContainerData(cid);
+    if (!scrollData.found) continue;
+    float maxScrollY = std::max(scrollData.contentDimensions.height - scrollData.scrollContainerDimensions.height, 0.0f);
+    float currentY = -scrollData.scrollPosition->y;
+    if (currentY >= maxScrollY - kStickyBottomEpsilonPx) {
+      applyScrollY(backend, cid.id, maxScrollY, scrollData);
+    }
+  }
+  stickyBottomContainerIds.clear();
+
+  for (auto it = pendingScrollTargets.begin(); it != pendingScrollTargets.end();) {
+    PendingScrollTarget &req = *it;
+    Clay_ElementId cid = Clay_GetElementId(toClayStr(req.containerId));
+    Clay_ScrollContainerData scrollData = Clay_GetScrollContainerData(cid);
+    bool resolved = false;
+    if (scrollData.found) {
+      float maxScrollY = std::max(scrollData.contentDimensions.height - scrollData.scrollContainerDimensions.height, 0.0f);
+      float maxScrollX = std::max(scrollData.contentDimensions.width - scrollData.scrollContainerDimensions.width, 0.0f);
+      bool ready = true;
+      switch (req.kind) {
+      case PendingScrollTarget::Kind::Bottom:
+        applyScrollY(backend, cid.id, maxScrollY, scrollData);
+        break;
+      case PendingScrollTarget::Kind::Top:
+        applyScrollY(backend, cid.id, 0.0f, scrollData);
+        break;
+      case PendingScrollTarget::Kind::Left:
+        applyScrollX(backend, cid.id, 0.0f, scrollData);
+        break;
+      case PendingScrollTarget::Kind::Right:
+        applyScrollX(backend, cid.id, maxScrollX, scrollData);
+        break;
+      case PendingScrollTarget::Kind::Offset:
+        applyScrollX(backend, cid.id, std::clamp(req.offsetX, 0.0f, maxScrollX), scrollData);
+        applyScrollY(backend, cid.id, std::clamp(req.offsetY, 0.0f, maxScrollY), scrollData);
+        break;
+      case PendingScrollTarget::Kind::Element: {
+        Clay_ElementId eid = Clay_GetElementId(toClayStr(req.elementId));
+        Clay_ElementData elementData = Clay_GetElementData(eid);
+        Clay_ElementData containerData = Clay_GetElementData(cid);
+        if (!elementData.found || !containerData.found) {
+          ready = false;
+          break;
+        }
+        float contentTopAbsolute = containerData.boundingBox.y + scrollData.scrollPosition->y;
+        float contentLeftAbsolute = containerData.boundingBox.x + scrollData.scrollPosition->x;
+        float targetY = std::clamp(elementData.boundingBox.y - contentTopAbsolute - req.paddingTop, 0.0f, maxScrollY);
+        float targetX = std::clamp(elementData.boundingBox.x - contentLeftAbsolute - req.paddingLeft, 0.0f, maxScrollX);
+        applyScrollY(backend, cid.id, targetY, scrollData);
+        applyScrollX(backend, cid.id, targetX, scrollData);
+        break;
+      }
+      }
+      resolved = ready;
+    }
+    if (resolved) {
+      it = pendingScrollTargets.erase(it);
+    } else if (++req.framesWaited > kScrollRequestTimeoutFrames) {
+      std::fprintf(stderr, "[n8v] scroll request for container '%s' timed out (container or target element id not found)\n", req.containerId.c_str());
+      it = pendingScrollTargets.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
 
 void ensureInitialized() {
   if (initialized) return;
@@ -96,6 +200,7 @@ void n8v_end_frame(void) {
   n8v::Backend &backend = n8v::activeBackend();
   backend.present(commands);
   backend.setCursor(pendingCursor);
+  resolvePendingScrollRequests();
 }
 
 namespace {
@@ -112,7 +217,10 @@ uint16_t snapGapToGrid(uint16_t value, float unit) {
 } // namespace
 
 void n8v_open_flex(n8v_flex_options options) {
-  Clay__OpenElement();
+  openElementMaybeWithId(options.id);
+  if (options.clip_vertical && options.stick_to_bottom && options.id && *options.id) {
+    stickyBottomContainerIds.emplace_back(options.id);
+  }
 
   n8v::Padding pad = toPadding(options.padding);
   uint16_t gap = options.gap;
@@ -144,5 +252,35 @@ void n8v_open_flex(n8v_flex_options options) {
 }
 
 void n8v_close_flex(void) { Clay__CloseElement(); }
+
+void n8v_scroll_to_bottom(const char *container_id) {
+  if (!container_id || !*container_id) return;
+  pendingScrollTargets.push_back(PendingScrollTarget{container_id, PendingScrollTarget::Kind::Bottom, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0});
+}
+
+void n8v_scroll_to_top(const char *container_id) {
+  if (!container_id || !*container_id) return;
+  pendingScrollTargets.push_back(PendingScrollTarget{container_id, PendingScrollTarget::Kind::Top, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0});
+}
+
+void n8v_scroll_to_left(const char *container_id) {
+  if (!container_id || !*container_id) return;
+  pendingScrollTargets.push_back(PendingScrollTarget{container_id, PendingScrollTarget::Kind::Left, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0});
+}
+
+void n8v_scroll_to_right(const char *container_id) {
+  if (!container_id || !*container_id) return;
+  pendingScrollTargets.push_back(PendingScrollTarget{container_id, PendingScrollTarget::Kind::Right, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0});
+}
+
+void n8v_scroll_to_offset(const char *container_id, float x, float y) {
+  if (!container_id || !*container_id) return;
+  pendingScrollTargets.push_back(PendingScrollTarget{container_id, PendingScrollTarget::Kind::Offset, {}, x, y, 0.0f, 0.0f, 0});
+}
+
+void n8v_scroll_to_element(const char *container_id, const char *element_id, float padding_left, float padding_top) {
+  if (!container_id || !*container_id || !element_id || !*element_id) return;
+  pendingScrollTargets.push_back(PendingScrollTarget{container_id, PendingScrollTarget::Kind::Element, element_id, 0.0f, 0.0f, padding_left, padding_top, 0});
+}
 
 } // extern "C"
