@@ -1,5 +1,6 @@
 @PACKAGE_INIT@
 
+include(CMakeFindDependencyMacro)
 include("${CMAKE_CURRENT_LIST_DIR}/n8vTargets.cmake")
 
 set_and_check(N8V_INCLUDE_DIR "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
@@ -11,6 +12,23 @@ set(_n8v_had_QT @N8V_HAVE_QT@)
 set(_n8v_had_MILSKO @N8V_HAVE_MILSKO@)
 set(_n8v_had_FLTK @N8V_HAVE_FLTK@)
 set(_n8v_had_STATIC @N8V_BUILD_STATIC@)
+
+set(_n8v_find_dependency_packages @_N8V_FIND_DEPENDENCY_PACKAGES@)
+set(_n8v_find_pkgconfig_modules @_N8V_FIND_PKGCONFIG_MODULES@)
+set(_n8v_exported_dep_targets @_N8V_EXPORTED_DEP_TARGETS@)
+set(_n8v_external_link_targets @_N8V_EXTERNAL_LINK_TARGETS@)
+
+foreach(_n8v_dep_pkg ${_n8v_find_dependency_packages})
+  find_dependency(${_n8v_dep_pkg})
+endforeach()
+if(_n8v_find_pkgconfig_modules)
+  find_package(PkgConfig QUIET)
+endif()
+foreach(_n8v_dep_mod ${_n8v_find_pkgconfig_modules})
+  if(PkgConfig_FOUND)
+    pkg_check_modules(${_n8v_dep_mod} IMPORTED_TARGET GLOBAL ${_n8v_dep_mod})
+  endif()
+endforeach()
 
 if(_n8v_had_STATIC AND NOT TARGET n8v::n8v)
   add_library(n8v::n8v STATIC IMPORTED GLOBAL)
@@ -31,6 +49,7 @@ if(_n8v_had_STATIC AND NOT TARGET n8v::n8v)
   if(_n8v_had_FLTK)
     list(APPEND _n8v_static_link_libs n8v::fltk_lazy)
   endif()
+  list(APPEND _n8v_static_link_libs ${_n8v_exported_dep_targets} ${_n8v_external_link_targets})
 
   set_target_properties(n8v::n8v PROPERTIES
     IMPORTED_LOCATION "${N8V_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}n8v${CMAKE_STATIC_LIBRARY_SUFFIX}"
