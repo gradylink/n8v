@@ -1,0 +1,26 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/n8vTargets.cmake")
+
+if(TARGET n8v::n8v_shared AND NOT TARGET n8v::n8v)
+  add_library(n8v::n8v ALIAS n8v::n8v_shared)
+endif()
+
+set(_n8v_had_GTK4 @N8V_HAVE_GTK4@)
+set(_n8v_had_ADWAITA @N8V_HAVE_ADWAITA@)
+set(_n8v_had_QT @N8V_HAVE_QT@)
+set(_n8v_had_MILSKO @N8V_HAVE_MILSKO@)
+set(_n8v_had_FLTK @N8V_HAVE_FLTK@)
+
+foreach(_n8v_comp ${n8v_FIND_COMPONENTS})
+  string(TOUPPER "${_n8v_comp}" _n8v_comp_upper)
+  if(DEFINED _n8v_had_${_n8v_comp_upper})
+    set(n8v_${_n8v_comp}_FOUND "${_n8v_had_${_n8v_comp_upper}}")
+  else()
+    set(n8v_${_n8v_comp}_FOUND FALSE)
+    set(n8v_NOT_FOUND_MESSAGE "n8v: unknown component '${_n8v_comp}' (known: GTK4, ADWAITA, QT, MILSKO, FLTK)")
+  endif()
+endforeach()
+unset(_n8v_comp_upper)
+
+check_required_components(n8v)

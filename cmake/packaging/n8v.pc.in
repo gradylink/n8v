@@ -1,0 +1,10 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: n8v
+Description: n8v, an immediate-mode native UI library.
+Version: @PROJECT_VERSION@
+Libs: -L${libdir} -ln8v
+Cflags: -I${includedir}

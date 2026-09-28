@@ -13,6 +13,18 @@ cl_repo("${CMAKE_CURRENT_SOURCE_DIR}/cmake/recipes")
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/lzy-bootstrap.cmake)
 
+function(n8v_restrict_to_build_interface TARGET_NAME)
+  get_target_property(_n8v_rtbi_includes ${TARGET_NAME} INTERFACE_INCLUDE_DIRECTORIES)
+  if(NOT _n8v_rtbi_includes)
+    return()
+  endif()
+  set(_n8v_rtbi_wrapped "")
+  foreach(_n8v_rtbi_dir ${_n8v_rtbi_includes})
+    list(APPEND _n8v_rtbi_wrapped "$<BUILD_INTERFACE:${_n8v_rtbi_dir}>")
+  endforeach()
+  set_target_properties(${TARGET_NAME} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${_n8v_rtbi_wrapped}")
+endfunction()
+
 if(NOT EMSCRIPTEN)
   if(NOT DEFINED _N8V_SDL2_INCLUDE_DIRS)
     cl_add_dep(SDL2)
@@ -326,13 +338,20 @@ else()
   )
 endif()
 
-option(N8V_BUILD_SHARED "Also build a shared libn8v.so." ON)
+option(N8V_BUILD_STATIC "Build a shared libn8v.so." ON)
+option(N8V_BUILD_SHARED "Build a shared libn8v.so." ON)
 if(EMSCRIPTEN)
   set(N8V_BUILD_SHARED OFF)
+  set(N8V_BUILD_STATIC OFF)
+elseif(NOT N8V_BUILD_STATIC AND NOT N8V_BUILD_SHARED)
+  message(FATAL_ERROR "You must enable either 'N8V_BUILD_STATIC' or 'N8V_BUILD_SHARED'.")
 endif()
 
-set(_n8v_targets n8v)
-add_library(n8v STATIC ${N8V_SOURCES})
+set(_n8v_targets "")
+if(N8V_BUILD_STATIC)
+  add_library(n8v STATIC ${N8V_SOURCES})
+  list(APPEND _n8v_targets n8v)
+endif()
 if(N8V_BUILD_SHARED)
   add_library(n8v_shared SHARED ${N8V_SOURCES})
   set_target_properties(n8v_shared PROPERTIES OUTPUT_NAME n8v)
@@ -344,16 +363,16 @@ endif()
 
 foreach(_n8v_target ${_n8v_targets})
   set_target_properties(${_n8v_target} PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
-  target_include_directories(${_n8v_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_include_directories(${_n8v_target} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
   target_include_directories(${_n8v_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/source)
   target_link_libraries(${_n8v_target} PRIVATE n8v_fonts n8v_icons)
-  cl_add_dep(${_n8v_target} clay PUBLIC)
+  cl_add_dep(${_n8v_target} clay PRIVATE)
   cl_add_dep(${_n8v_target} stb_truetype PRIVATE)
   cl_add_dep(${_n8v_target} stb_image PRIVATE)
   cl_add_dep(${_n8v_target} plutosvg PRIVATE)
 
   if(NOT EMSCRIPTEN)
-    target_link_libraries(${_n8v_target} PRIVATE sdl2_lazy)
+    target_link_libraries(${_n8v_target} PUBLIC sdl2_lazy)
   endif()
 
   if(N8V_HAVE_HTML)
@@ -369,9 +388,9 @@ foreach(_n8v_target ${_n8v_targets})
   if(N8V_HAVE_GTK4)
     target_sources(${_n8v_target} PRIVATE source/backends/native_gtk4/gtk4_backend.cpp)
     target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_GTK4_BACKEND)
-    target_link_libraries(${_n8v_target} PRIVATE gtk4_lazy gobject_lazy glib_lazy)
+    target_link_libraries(${_n8v_target} PUBLIC gtk4_lazy gobject_lazy glib_lazy)
     if(N8V_HAVE_ADWAITA)
-      target_link_libraries(${_n8v_target} PRIVATE adwaita_lazy)
+      target_link_libraries(${_n8v_target} PUBLIC adwaita_lazy)
       target_compile_definitions(${_n8v_target} PRIVATE N8V_HAVE_ADWAITA)
     endif()
   endif()
@@ -379,21 +398,101 @@ foreach(_n8v_target ${_n8v_targets})
   if(N8V_HAVE_QT)
     target_sources(${_n8v_target} PRIVATE source/backends/native_qt/qt_backend.cpp)
     target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_QT_BACKEND)
-    target_link_libraries(${_n8v_target} PRIVATE qt6widgets_lazy qt6gui_lazy qt6core_lazy)
+    target_link_libraries(${_n8v_target} PUBLIC qt6widgets_lazy qt6gui_lazy qt6core_lazy)
   endif()
 
   if(N8V_HAVE_MILSKO)
     target_sources(${_n8v_target} PRIVATE source/backends/native_milsko/milsko_backend.cpp)
     target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_MILSKO_BACKEND)
-    target_link_libraries(${_n8v_target} PRIVATE milsko_lazy)
+    target_link_libraries(${_n8v_target} PUBLIC milsko_lazy)
   endif()
 
   if(N8V_HAVE_FLTK)
     target_sources(${_n8v_target} PRIVATE source/backends/native_fltk/fltk_backend.cpp)
     target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_FLTK_BACKEND)
-    target_link_libraries(${_n8v_target} PRIVATE fltk_lazy)
+    target_link_libraries(${_n8v_target} PUBLIC fltk_lazy)
   endif()
 endforeach()
+
+option(N8V_INSTALL "Install n8v and generate its CMake package config + pkg-config files." ${PROJECT_IS_TOP_LEVEL})
+if(N8V_INSTALL AND NOT EMSCRIPTEN)
+  include(GNUInstallDirs)
+  include(CMakePackageConfigHelpers)
+
+  install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+  if(N8V_BUILD_STATIC)
+    install(TARGETS n8v
+      EXPORT n8vTargets
+      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+      INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+  endif()
+  if(N8V_BUILD_SHARED)
+    install(TARGETS n8v_shared
+      EXPORT n8vTargets
+      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+      INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+  endif()
+
+  set(_n8v_lazy_export_targets sdl2_lazy)
+  if(N8V_HAVE_GTK4)
+    list(APPEND _n8v_lazy_export_targets gtk4_lazy gobject_lazy glib_lazy)
+    if(N8V_HAVE_ADWAITA)
+      list(APPEND _n8v_lazy_export_targets adwaita_lazy)
+    endif()
+  endif()
+  if(N8V_HAVE_QT)
+    list(APPEND _n8v_lazy_export_targets qt6widgets_lazy qt6gui_lazy qt6core_lazy)
+  endif()
+  if(N8V_HAVE_MILSKO)
+    list(APPEND _n8v_lazy_export_targets milsko_lazy)
+  endif()
+  if(N8V_HAVE_FLTK)
+    list(APPEND _n8v_lazy_export_targets fltk_lazy)
+  endif()
+  foreach(_n8v_lazy_target ${_n8v_lazy_export_targets})
+    n8v_restrict_to_build_interface(${_n8v_lazy_target})
+    install(TARGETS ${_n8v_lazy_target}
+      EXPORT n8vTargets
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
+  endforeach()
+
+  install(EXPORT n8vTargets
+    FILE n8vTargets.cmake
+    NAMESPACE n8v::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/n8v
+  )
+
+  configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/packaging/n8vConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/n8vConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/n8v
+  )
+  write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/n8vConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+  )
+  install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/n8vConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/n8vConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/n8v
+  )
+
+  configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/packaging/n8v.pc.in
+    ${CMAKE_CURRENT_BINARY_DIR}/n8v.pc
+    @ONLY
+  )
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/n8v.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+endif()
 
 option(N8V_EXAMPLES "Build the n8v example apps." ${PROJECT_IS_TOP_LEVEL})
 if(N8V_EXAMPLES)
