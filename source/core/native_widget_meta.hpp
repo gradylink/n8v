@@ -17,8 +17,8 @@ struct DecodedImage;
 struct NativeWidgetMeta {
   NativeWidgetKind kind;
   int ordinal;
-  n8v_click_fn onClick = nullptr;                           // Button only
-  void *onClickUserdata = nullptr;                          // Button only
+  n8v_click_fn onClick = nullptr;                           // Button/Link
+  void *onClickUserdata = nullptr;                          // Button/Link
   std::string *url = nullptr;                               // Link only
   bool *checked = nullptr;                                  // Checkbox/Switch only
   n8v_bool_change_fn onChange = nullptr;                    // Checkbox/Switch only
@@ -63,21 +63,21 @@ struct NativeWidgetMeta {
   bool sidebarCompact = false;                              // Sidebar and its page rows
   n8v::Color iconTint{}; // Icon widget only - the tint used to decode `image`, so backends can re-decode a freedesktop-theme file (found on disk, not in the bundle) with the
                          // same color
-  n8v::Color switchTrackColor{};       // Switch only - eased track fill (on/off interpolated)
-  n8v::Color switchTrackBorderColor{}; // Switch only
-  float switchTrackBorderWidth = 0.0f; // Switch only
-  n8v::Color switchKnobColor{};        // Switch only - the knob's own fill
-  n8v::Color switchKnobGlyphColor{};   // Switch only - Material 3 Expressive's checkmark drawn inside the "on" knob
-  float switchGlyphScale = 0.0f;       // Switch only - eased 0..1 opacity of the in-knob glyph (0 for styles without one)
-  float switchKnobPosition = 0.0f;     // Switch only - eased 0 (off, left) .. 1 (on, right)
-  float switchKnobSize = 0.0f;         // Switch only - eased knob diameter (Material 3 Expressive grows it when on)
-  float switchTrackWidth = 0.0f;       // Switch only
-  float switchTrackHeight = 0.0f;      // Switch only
+  n8v::Color switchTrackColor{};                   // Switch only - eased track fill (on/off interpolated)
+  n8v::Color switchTrackBorderColor{};             // Switch only
+  float switchTrackBorderWidth = 0.0f;             // Switch only
+  n8v::Color switchKnobColor{};                    // Switch only - the knob's own fill
+  n8v::Color switchKnobGlyphColor{};               // Switch only - Material 3 Expressive's checkmark drawn inside the "on" knob
+  float switchGlyphScale = 0.0f;                   // Switch only - eased 0..1 opacity of the in-knob glyph (0 for styles without one)
+  float switchKnobPosition = 0.0f;                 // Switch only - eased 0 (off, left) .. 1 (on, right)
+  float switchKnobSize = 0.0f;                     // Switch only - eased knob diameter (Material 3 Expressive grows it when on)
+  float switchTrackWidth = 0.0f;                   // Switch only
+  float switchTrackHeight = 0.0f;                  // Switch only
   n8v::PanelRole panelRole = n8v::PanelRole::Card; // Panel only
-  n8v::Color panelBackground{};        // Panel only
-  n8v::Color panelBorderColor{};       // Panel only
-  float panelBorderWidth = 0.0f;       // Panel only
-  n8v::CornerRadius panelCornerRadius{}; // Panel only
+  n8v::Color panelBackground{};                    // Panel only
+  n8v::Color panelBorderColor{};                   // Panel only
+  float panelBorderWidth = 0.0f;                   // Panel only
+  n8v::CornerRadius panelCornerRadius{};           // Panel only
 };
 
 inline std::function<void()> toStdFunction(n8v_click_fn fn, void *userdata) {

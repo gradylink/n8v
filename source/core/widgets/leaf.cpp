@@ -31,9 +31,8 @@ void dispatchClick(Clay_ElementId /*elementId*/, Clay_PointerData pointerData, v
   if (meta && meta->onClick) meta->onClick(meta->onClickUserdata);
 }
 
-void dispatchLinkClick(Clay_ElementId /*elementId*/, Clay_PointerData pointerData, void *userData) {
-  if (pointerData.state != CLAY_POINTER_DATA_PRESSED_THIS_FRAME) return;
-  auto *url = static_cast<std::string *>(userData);
+void openUrlClickCallback(void *userdata) {
+  auto *url = static_cast<std::string *>(userdata);
   if (url) n8v::detail::openUrl(*url);
 }
 
@@ -163,18 +162,27 @@ void _n8v_text_commit(const char *label) {
   std::string_view labelView = toView(label);
   std::string_view urlView = toView(opts.url);
 
-  if (!urlView.empty()) {
+  if (!urlView.empty() || opts.on_click) {
     Clay__OpenElement();
 
     const int ordinal = widgetOrdinal++;
     if (Clay_Hovered()) pendingCursor = n8v::CursorKind::Pointer;
 
-    urlStorage.emplace_back(urlView);
     widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
     n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
     meta.kind = n8v::NativeWidgetKind::Link;
     meta.ordinal = ordinal;
-    meta.url = &urlStorage.back();
+    if (!urlView.empty()) {
+      urlStorage.emplace_back(urlView);
+      meta.url = &urlStorage.back();
+    }
+    if (opts.on_click) {
+      meta.onClick = opts.on_click;
+      meta.onClickUserdata = opts.on_click_userdata;
+    } else {
+      meta.onClick = &openUrlClickCallback;
+      meta.onClickUserdata = meta.url;
+    }
 
     Clay_ElementDeclaration decl = {};
     decl.backgroundColor = {255, 255, 255, 255};
@@ -194,7 +202,7 @@ void _n8v_text_commit(const char *label) {
 
     Clay__ConfigureOpenElement(decl);
 
-    Clay_OnHover(dispatchLinkClick, meta.url);
+    Clay_OnHover(dispatchClick, &meta);
 
     textStyleStorage.push_back(n8v::detail::TextStyleFlags{textPaint.font, opts.bold, opts.italic, true, true, ordinal, opts.strikethrough});
     Clay_TextElementConfig textConfig = {};

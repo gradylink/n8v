@@ -5,7 +5,6 @@
 #include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
 #include "core/native_widget_meta.hpp"
-#include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
 #include "core/ui_core_internal.hpp"
 
@@ -62,12 +61,12 @@ protected:
 class N8VLinkLabel final : public QLabel {
 public:
   using QLabel::QLabel;
-  std::string url;
+  std::function<void()> onClick;
 
 protected:
   void mousePressEvent(QMouseEvent *event) override {
     QLabel::mousePressEvent(event);
-    n8v::detail::openUrl(url);
+    if (onClick) onClick();
   }
 };
 
@@ -313,7 +312,7 @@ public:
         positionWidget(widget, command->boundingBox);
         pendingLabelTarget = widget;
         pendingKind = meta->kind;
-        pendingLinkUrl = meta->kind == NativeWidgetKind::Link && meta->url ? *meta->url : std::string();
+        pendingLinkUrl = meta->kind == NativeWidgetKind::Link ? (meta->url ? *meta->url : std::string("#")) : std::string();
         if (meta->kind == NativeWidgetKind::Button) ensureButtonIcon(widget, *meta);
         continue;
       }
@@ -753,8 +752,8 @@ private:
         static_cast<N8VButton *>(it->second)->setFlat(meta.buttonFlat);
       } else if (meta.kind == NativeWidgetKind::Link) {
         auto *label = static_cast<N8VLinkLabel *>(it->second);
-        label->url = meta.url ? *meta.url : std::string();
-        label->setAttribute(Qt::WA_TransparentForMouseEvents, label->url.empty());
+        label->onClick = toStdFunction(meta.onClick, meta.onClickUserdata);
+        label->setAttribute(Qt::WA_TransparentForMouseEvents, false);
       } else if (meta.kind == NativeWidgetKind::Checkbox && meta.checked) {
         auto *checkbox = static_cast<N8VCheckBox *>(it->second);
         checkbox->checkedPtr = meta.checked;
@@ -866,8 +865,8 @@ private:
     } else {
       auto *label = new N8VLinkLabel(currentParent());
       label->setTextFormat(Qt::RichText);
-      label->url = meta.url ? *meta.url : std::string();
-      label->setAttribute(Qt::WA_TransparentForMouseEvents, label->url.empty());
+      label->onClick = toStdFunction(meta.onClick, meta.onClickUserdata);
+      label->setAttribute(Qt::WA_TransparentForMouseEvents, false);
       widget = label;
     }
 

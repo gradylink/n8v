@@ -626,6 +626,7 @@ struct LeafBuilder {
       c_opts.strikethrough = textOptions.strikethrough;
       c_opts.url = urlStorage.c_str();
       c_opts.color = toC(textOptions.color);
+      if (textOptions.onClick) callback_bridge::bridge(callback_bridge::clickClosures, std::move(textOptions.onClick), c_opts.on_click, c_opts.on_click_userdata);
       _n8v_set_text_opts(c_opts);
       _n8v_text_commit(labelStorage.c_str());
     }

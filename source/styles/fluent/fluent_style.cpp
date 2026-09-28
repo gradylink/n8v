@@ -27,7 +27,7 @@ public:
 
   TextPaint text(const TextOptions &options) const override {
     TextPaint paint{};
-    paint.color = options.url.empty() ? options.color : Color{0, 103, 192, 255};
+    paint.color = (options.url.empty() && !options.onClick) ? options.color : Color{0, 103, 192, 255};
     paint.font = FontFamily::Selawik;
     paint.fontSize = 14;
     return paint;

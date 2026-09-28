@@ -224,16 +224,29 @@ public:
 
   void beginFrame() override { Clay_SetPointerState({pointerX_, pointerY_}, false); }
 
+  void configureAdjustment(GtkAdjustment *adj, uint32_t containerId, bool horizontal, float value) {
+    Clay_ScrollContainerData scrollData = Clay_GetScrollContainerData(Clay_ElementId{containerId});
+    if (!scrollData.found) {
+      gtk_adjustment_set_value(adj, value);
+      return;
+    }
+    double pageSize = horizontal ? scrollData.scrollContainerDimensions.width : scrollData.scrollContainerDimensions.height;
+    double content = horizontal ? scrollData.contentDimensions.width : scrollData.contentDimensions.height;
+    double upper = std::max(content, pageSize);
+    double clamped = std::clamp((double)value, 0.0, std::max(upper - pageSize, 0.0));
+    gtk_adjustment_configure(adj, clamped, 0.0, upper, gtk_adjustment_get_step_increment(adj), pageSize, pageSize);
+  }
+
   void setScrollOffsetY(uint32_t containerId, float y) override {
     auto it = scrollContainers_.find(containerId);
     if (it == scrollContainers_.end()) return;
-    gtk_adjustment_set_value(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(it->second.scrolled)), y);
+    configureAdjustment(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(it->second.scrolled)), containerId, false, y);
   }
 
   void setScrollOffsetX(uint32_t containerId, float x) override {
     auto it = scrollContainers_.find(containerId);
     if (it == scrollContainers_.end()) return;
-    gtk_adjustment_set_value(gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(it->second.scrolled)), x);
+    configureAdjustment(gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(it->second.scrolled)), containerId, true, x);
   }
 
   void present(Clay_RenderCommandArray commands) override {
@@ -514,6 +527,13 @@ private:
     if (it != ref->backend->buttonCallbacks_.end() && it->second) it->second();
   }
 
+  static gboolean onLinkActivated(GtkLabel *, const char *, gpointer userData) {
+    auto *ref = static_cast<OrdinalRef *>(userData);
+    auto it = ref->backend->buttonCallbacks_.find(ref->ordinal);
+    if (it != ref->backend->buttonCallbacks_.end() && it->second) it->second();
+    return TRUE;
+  }
+
   static void onSidebarRowActivated(GtkListBox *, GtkListBoxRow *row, gpointer userData) {
     auto *backend = static_cast<Gtk4Backend *>(userData);
     int ordinal = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(row), "n8v-ordinal"));
@@ -719,6 +739,8 @@ private:
         if (current != wantSelected) gtk_drop_down_set_selected(GTK_DROP_DOWN(it->second), wantSelected);
       } else if (meta.kind == NativeWidgetKind::Panel) {
         if (meta.panelRole != n8v::PanelRole::ListItem) ensurePanelStyle(it->second, meta);
+      } else if (meta.kind == NativeWidgetKind::Link) {
+        buttonCallbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
       } else if (meta.kind == NativeWidgetKind::Slider && meta.sliderValue) {
         SliderState &state = sliderStates_[meta.ordinal];
         state.value = meta.sliderValue;
@@ -810,6 +832,13 @@ private:
         gtk_widget_set_can_target(widget, FALSE);
         ensurePanelStyle(widget, meta);
       }
+    } else if (meta.kind == NativeWidgetKind::Link) {
+      widget = gtk_label_new("");
+      gtk_label_set_use_markup(GTK_LABEL(widget), TRUE);
+      gtk_label_set_xalign(GTK_LABEL(widget), 0.0f);
+      gtk_widget_set_valign(widget, GTK_ALIGN_START);
+      buttonCallbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
+      connectOrdinal(widget, "activate-link", G_CALLBACK(&Gtk4Backend::onLinkActivated), this, meta.ordinal);
     } else {
       widget = gtk_label_new("");
       gtk_label_set_use_markup(GTK_LABEL(widget), TRUE);

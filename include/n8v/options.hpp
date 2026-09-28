@@ -42,8 +42,12 @@ struct TextOptions {
   bool bold = false;
   bool italic = false;
   bool strikethrough = false;
-  /** If non-empty, the text is painted as a link (color + underline) to this URL. */
+  /** If non-empty, the text is painted as a link (color + underline) to this URL and opens it on
+      click - ignored if onClick is set. */
   std::string_view url = {};
+  /** If set, the text is painted as a link (color + underline) and this fires on click instead of
+      opening `url`. Takes priority over `url` if both are set. */
+  std::function<void()> onClick = nullptr;
   /** Ignored by style families that pick their own color (e.g. links). */
   Color color = {0, 0, 0, 255};
 };

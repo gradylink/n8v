@@ -5,7 +5,6 @@
 #include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
 #include "core/native_widget_meta.hpp"
-#include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
 #include "core/ui_core_internal.hpp"
 
@@ -30,9 +29,7 @@ namespace n8v::detail {
 namespace {
 
 struct ClickAction {
-  bool isLink = false;
   std::function<void()> callback;
-  std::string url;
   bool *checked = nullptr;
   std::function<void(bool)> onChange;
   int *radioSelected = nullptr;
@@ -305,12 +302,7 @@ public:
 private:
   static void MWAPI onActivate(MwWidget /*handle*/, void *userData, void * /*callData*/) {
     auto *action = static_cast<ClickAction *>(userData);
-    if (!action) return;
-    if (action->isLink) {
-      n8v::detail::openUrl(action->url);
-    } else if (action->callback) {
-      action->callback();
-    }
+    if (action && action->callback) action->callback();
   }
 
   static void MWAPI onCheckboxChanged(MwWidget handle, void *userData, void * /*callData*/) {
@@ -469,13 +461,12 @@ private:
         MwSetInteger(it->second, MwNvalue, sliderPositionFor(*meta.sliderValue, meta.sliderMin, meta.sliderMax));
       } else if (meta.kind == NativeWidgetKind::Panel) {
       } else {
-        action.url = meta.url ? *meta.url : std::string();
+        action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
       }
       return it->second;
     }
 
     ClickAction &action = actions_[meta.ordinal];
-    action.isLink = meta.kind == NativeWidgetKind::Link;
 
     MwWidget widget = nullptr;
     if (meta.kind == NativeWidgetKind::Checkbox || meta.kind == NativeWidgetKind::Switch) {
@@ -522,14 +513,10 @@ private:
       widget = MwCreateWidget(MwButtonClass, "n8v-widget", currentParent(), 0, 0, 1, 1);
       MwSetInteger(widget, MwNflat, 1);
     } else {
-      if (action.isLink) {
-        action.url = meta.url ? *meta.url : std::string();
-      } else {
-        action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
-      }
+      action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
 
       widget = MwCreateWidget(MwButtonClass, "n8v-widget", currentParent(), 0, 0, 1, 1);
-      if (action.isLink) {
+      if (meta.kind == NativeWidgetKind::Link) {
         MwSetInteger(widget, MwNflat, 1);
         MwSetString(widget, MwNforeground, "#4287f5");
       } else if (meta.kind == NativeWidgetKind::Button && meta.buttonFlat) {

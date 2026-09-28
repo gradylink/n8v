@@ -93,6 +93,11 @@ int main() {
             }
 
             text({.italic = true, .url = "https://example.com"})("example.com");
+
+            text({.onClick = [&clickCount] {
+                    ++clickCount;
+                    std::cout << "link click " << clickCount << std::endl;
+                  }})("callback link");
           }
         }
 

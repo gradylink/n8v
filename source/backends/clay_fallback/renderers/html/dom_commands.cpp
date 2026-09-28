@@ -146,7 +146,7 @@ void HtmlBackend::renderRectangle(const Clay_RenderCommand &command, PendingStat
     return;
   }
 
-  if (meta && meta->kind == NativeWidgetKind::Link && meta->url) {
+  if (meta && meta->kind == NativeWidgetKind::Link) {
     pending.linkMeta = meta;
     return;
   }
@@ -224,7 +224,7 @@ void HtmlBackend::renderLinkText(NativeWidgetMeta &meta, const Clay_RenderComman
   if (created) {
     el.call<void>("setAttribute", std::string("data-n8v-link"), std::string("1"));
     el.call<void>("setAttribute", std::string("class"), std::string("n8v-text"));
-    el.call<void>("setAttribute", std::string("href"), *meta.url);
+    if (meta.url) el.call<void>("setAttribute", std::string("href"), *meta.url);
     el["style"].set("cursor", std::string("pointer"));
     el["style"].set("pointerEvents", std::string("auto"));
   }

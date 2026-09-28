@@ -29,7 +29,7 @@ public:
 
   TextPaint text(const TextOptions &options) const override {
     TextPaint paint{};
-    paint.color = options.url.empty() ? options.color : Color{40, 90, 200, 255};
+    paint.color = (options.url.empty() && !options.onClick) ? options.color : Color{40, 90, 200, 255};
     paint.font = FontFamily::DejaVuSans;
     paint.fontSize = 15;
     return paint;

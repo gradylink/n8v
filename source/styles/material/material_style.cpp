@@ -29,7 +29,7 @@ public:
 
   TextPaint text(const TextOptions &options) const override {
     TextPaint paint{};
-    paint.color = options.url.empty() ? options.color : Color{103, 80, 164, 255};
+    paint.color = (options.url.empty() && !options.onClick) ? options.color : Color{103, 80, 164, 255};
     paint.font = FontFamily::Roboto;
     paint.fontSize = 16;
     return paint;

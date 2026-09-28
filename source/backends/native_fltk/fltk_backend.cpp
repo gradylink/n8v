@@ -5,7 +5,6 @@
 #include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
 #include "core/native_widget_meta.hpp"
-#include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
 #include "core/ui_core_internal.hpp"
 
@@ -53,9 +52,7 @@ std::string escapeMenuText(std::string_view text) {
 }
 
 struct WidgetAction {
-  bool isLink = false;
   std::function<void()> callback;
-  std::string url;
 
   bool *checked = nullptr;
   std::function<void(bool)> onChange;
@@ -306,12 +303,7 @@ private:
 
   static void onButtonClicked(Fl_Widget *, void *userData) {
     auto *action = static_cast<WidgetAction *>(userData);
-    if (!action) return;
-    if (action->isLink) {
-      n8v::detail::openUrl(action->url);
-    } else if (action->callback) {
-      action->callback();
-    }
+    if (action && action->callback) action->callback();
   }
 
   static void onCheckboxChanged(Fl_Widget *widget, void *userData) {
@@ -514,7 +506,7 @@ private:
         button->box(meta.buttonFlat ? FL_FLAT_BOX : FL_UP_BOX);
         button->down_box(meta.buttonFlat ? FL_FLAT_BOX : FL_DOWN_BOX);
       } else if (meta.kind == NativeWidgetKind::Link) {
-        action.url = meta.url ? *meta.url : std::string();
+        action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
       } else if ((meta.kind == NativeWidgetKind::Checkbox || meta.kind == NativeWidgetKind::Switch) && meta.checked) {
         action.checked = meta.checked;
         action.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
@@ -628,8 +620,7 @@ private:
       widget = box;
     } else {
       auto *button = new Fl_Button(0, 0, 1, 1);
-      action.isLink = true;
-      action.url = meta.url ? *meta.url : std::string();
+      action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
       button->box(FL_NO_BOX);
       button->labelcolor(fl_rgb_color(66, 135, 245));
       button->align(FL_ALIGN_INSIDE | FL_ALIGN_LEFT);

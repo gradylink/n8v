@@ -202,6 +202,10 @@ typedef struct n8v_text_options {
   bool strikethrough;
   const char *url;
   n8v_color color;
+  /** If set, the text is painted as a link and this fires on click instead of opening `url` -
+      takes priority over `url` if both are set. */
+  n8v_click_fn on_click;
+  void *on_click_userdata;
 } n8v_text_options;
 
 typedef enum n8v_icon_variant {
