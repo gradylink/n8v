@@ -225,18 +225,21 @@ typedef struct n8v_button_options {
   const char *icon;
   n8v_icon_variant icon_variant;
   n8v_icon_position icon_position;
+  const char *id;
 } n8v_button_options;
 
 typedef struct n8v_checkbox_options {
   bool *checked;
   n8v_bool_change_fn on_change;
   void *on_change_userdata;
+  const char *id;
 } n8v_checkbox_options;
 
 typedef struct n8v_toggle_options {
   bool *checked;
   n8v_bool_change_fn on_change;
   void *on_change_userdata;
+  const char *id;
 } n8v_toggle_options;
 
 typedef struct n8v_radio_options {
@@ -244,6 +247,7 @@ typedef struct n8v_radio_options {
   int value;
   n8v_int_change_fn on_change;
   void *on_change_userdata;
+  const char *id;
 } n8v_radio_options;
 
 typedef struct n8v_entry_options {
@@ -254,6 +258,7 @@ typedef struct n8v_entry_options {
   void *on_change_userdata;
   n8v_click_fn on_submit;
   void *on_submit_userdata;
+  const char *id;
 } n8v_entry_options;
 
 typedef struct n8v_dropdown_options {
@@ -263,6 +268,7 @@ typedef struct n8v_dropdown_options {
   const char *placeholder;
   n8v_int_change_fn on_change;
   void *on_change_userdata;
+  const char *id;
 } n8v_dropdown_options;
 
 typedef struct n8v_slider_options {
@@ -271,6 +277,7 @@ typedef struct n8v_slider_options {
   float max;
   n8v_float_change_fn on_change;
   void *on_change_userdata;
+  const char *id;
 } n8v_slider_options;
 
 typedef enum n8v_image_source_kind {
@@ -318,6 +325,7 @@ typedef struct n8v_page_options {
   const char *name;
   const char *icon;
   const char *image;
+  n8v_rounding image_rounding;
 } n8v_page_options;
 
 typedef struct n8v_button_paint {

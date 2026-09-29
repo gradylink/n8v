@@ -33,7 +33,7 @@ void HtmlBackend::renderCheckboxOrRadioIndicator(NativeWidgetMeta &meta, const C
   float gap = squareSize * 0.4f;
   Clay_BoundingBox squareBox{labelBox.x - squareSize - gap, labelBox.y, squareSize, squareSize};
 
-  touchedIndicatorThisFrame_[meta.ordinal] = true;
+  touchedIndicatorThisFrame_[stableWidgetKey(meta)] = true;
 
   if (isRadio) {
     renderRadioIndicator(meta, squareBox);
@@ -43,7 +43,7 @@ void HtmlBackend::renderCheckboxOrRadioIndicator(NativeWidgetMeta &meta, const C
 }
 
 void HtmlBackend::renderRadioIndicator(NativeWidgetMeta &meta, const Clay_BoundingBox &squareBox) {
-  auto it = indicatorElements_.find(meta.ordinal);
+  auto it = indicatorElements_.find(stableWidgetKey(meta));
   emscripten::val el;
   bool created = false;
   if (it != indicatorElements_.end()) {
@@ -53,15 +53,15 @@ void HtmlBackend::renderRadioIndicator(NativeWidgetMeta &meta, const Clay_Boundi
     el = createSvg(doc_);
     root_.call<void>("appendChild", el);
     lastAppendedSibling_ = el;
-    indicatorElements_[meta.ordinal] = el;
+    indicatorElements_[stableWidgetKey(meta)] = el;
     created = true;
   }
 
-  positionElement(el, indicatorLastBox_[meta.ordinal], squareBox);
+  positionElement(el, indicatorLastBox_[stableWidgetKey(meta)], squareBox);
 
   float scale = std::clamp(meta.indicatorGlyphScale, 0.0f, 1.0f);
   IndicatorSignature sig{meta.indicatorFillColor, meta.indicatorBorderColor, meta.indicatorGlyphColor, meta.indicatorBorderWidth, 0.0f, scale};
-  IndicatorSignature &last = indicatorSig_[meta.ordinal];
+  IndicatorSignature &last = indicatorSig_[stableWidgetKey(meta)];
   if (
     !created && colorEquals(sig.fill, last.fill) && colorEquals(sig.border, last.border) && colorEquals(sig.glyph, last.glyph) && sig.borderWidth == last.borderWidth &&
     sig.glyphScale == last.glyphScale
@@ -86,7 +86,7 @@ void HtmlBackend::renderRadioIndicator(NativeWidgetMeta &meta, const Clay_Boundi
 }
 
 void HtmlBackend::renderCheckboxIndicator(NativeWidgetMeta &meta, const Clay_BoundingBox &squareBox) {
-  auto it = indicatorElements_.find(meta.ordinal);
+  auto it = indicatorElements_.find(stableWidgetKey(meta));
   emscripten::val el;
   bool created = false;
   if (it != indicatorElements_.end()) {
@@ -97,14 +97,14 @@ void HtmlBackend::renderCheckboxIndicator(NativeWidgetMeta &meta, const Clay_Bou
     root_.call<void>("appendChild", el);
     lastAppendedSibling_ = el;
     makeOverlaySvg(doc_, el);
-    indicatorElements_[meta.ordinal] = el;
+    indicatorElements_[stableWidgetKey(meta)] = el;
     created = true;
   }
 
-  positionElement(el, indicatorLastBox_[meta.ordinal], squareBox);
+  positionElement(el, indicatorLastBox_[stableWidgetKey(meta)], squareBox);
 
   IndicatorSignature sig{meta.indicatorFillColor, meta.indicatorBorderColor, meta.indicatorGlyphColor, meta.indicatorBorderWidth, meta.indicatorCornerRadius, 0.0f};
-  IndicatorSignature &last = indicatorSig_[meta.ordinal];
+  IndicatorSignature &last = indicatorSig_[stableWidgetKey(meta)];
   if (
     !created && colorEquals(sig.fill, last.fill) && colorEquals(sig.border, last.border) && colorEquals(sig.glyph, last.glyph) && sig.borderWidth == last.borderWidth &&
     sig.cornerRadius == last.cornerRadius
@@ -136,9 +136,9 @@ void HtmlBackend::renderSwitchIndicator(NativeWidgetMeta &meta, const Clay_Bound
   float gap = trackH * 0.5f;
   Clay_BoundingBox trackBox{labelBox.x - trackW - gap, labelBox.y + (labelBox.height - trackH) * 0.5f, trackW, trackH};
 
-  touchedIndicatorThisFrame_[meta.ordinal] = true;
+  touchedIndicatorThisFrame_[stableWidgetKey(meta)] = true;
 
-  auto it = switchElements_.find(meta.ordinal);
+  auto it = switchElements_.find(stableWidgetKey(meta));
   emscripten::val el;
   bool created = false;
   if (it != switchElements_.end()) {
@@ -149,11 +149,11 @@ void HtmlBackend::renderSwitchIndicator(NativeWidgetMeta &meta, const Clay_Bound
     el.call<void>("setAttribute", std::string("preserveAspectRatio"), std::string("none"));
     root_.call<void>("appendChild", el);
     lastAppendedSibling_ = el;
-    switchElements_[meta.ordinal] = el;
+    switchElements_[stableWidgetKey(meta)] = el;
     created = true;
   }
 
-  positionElement(el, switchLastBox_[meta.ordinal], trackBox);
+  positionElement(el, switchLastBox_[stableWidgetKey(meta)], trackBox);
 
   SwitchSignature sig{
     meta.switchTrackColor,
@@ -167,7 +167,7 @@ void HtmlBackend::renderSwitchIndicator(NativeWidgetMeta &meta, const Clay_Bound
     trackW,
     trackH,
   };
-  SwitchSignature &last = switchSig_[meta.ordinal];
+  SwitchSignature &last = switchSig_[stableWidgetKey(meta)];
   if (
     !created && colorEquals(sig.trackColor, last.trackColor) && colorEquals(sig.trackBorderColor, last.trackBorderColor) && colorEquals(sig.knobColor, last.knobColor) &&
     colorEquals(sig.glyphColor, last.glyphColor) && sig.trackBorderWidth == last.trackBorderWidth && sig.knobPosition == last.knobPosition && sig.knobSize == last.knobSize &&

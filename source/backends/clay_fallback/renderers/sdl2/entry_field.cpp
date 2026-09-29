@@ -19,14 +19,15 @@ void Sdl2Backend::fireEntryChange() {
 }
 
 void Sdl2Backend::handleEntryClick(NativeWidgetMeta *meta, size_t hitOffset) {
+  const int key = stableWidgetKey(*meta);
   Uint32 now = SDL_GetTicks();
-  if (meta->ordinal == lastClickOrdinal_ && (now - lastClickTicks_) < 400) {
+  if (key == lastClickOrdinal_ && (now - lastClickTicks_) < 400) {
     clickCount_ = (clickCount_ % 3) + 1;
   } else {
     clickCount_ = 1;
   }
   lastClickTicks_ = now;
-  lastClickOrdinal_ = meta->ordinal;
+  lastClickOrdinal_ = key;
   lastActivityTicks_ = now;
 
   textSel_ = TextSelState{};
@@ -36,7 +37,7 @@ void Sdl2Backend::handleEntryClick(NativeWidgetMeta *meta, size_t hitOffset) {
   entry_.onChangeUserdata = meta->onEntryChangeUserdata;
   entry_.onSubmit = meta->onEntrySubmit;
   entry_.onSubmitUserdata = meta->onEntrySubmitUserdata;
-  entry_.ordinal = meta->ordinal;
+  entry_.ordinal = key;
 
   const std::string &value = *meta->entryValue;
   if (clickCount_ == 2) {
@@ -198,7 +199,7 @@ void Sdl2Backend::renderEntryText(NativeWidgetMeta *meta, const Clay_RenderComma
     lastActivityTicks_ = SDL_GetTicks();
   }
 
-  bool isFocused = meta->ordinal == entry_.ordinal;
+  bool isFocused = stableWidgetKey(*meta) == entry_.ordinal;
   bool hasSel = isFocused && entry_.hasSelection();
   size_t displaySelStart = realOffsetToDisplayOffset(value, entry_.selStart(), isPassword);
   size_t displaySelEnd = realOffsetToDisplayOffset(value, entry_.selEnd(), isPassword);

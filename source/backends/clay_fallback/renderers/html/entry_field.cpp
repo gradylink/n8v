@@ -7,9 +7,9 @@
 namespace n8v::detail {
 
 void HtmlBackend::syncEntryInput(NativeWidgetMeta &meta, const Clay_BoundingBox &fieldBox, const Clay_RenderCommand &textCommand) {
-  touchedEntryThisFrame_[meta.ordinal] = true;
+  touchedEntryThisFrame_[stableWidgetKey(meta)] = true;
 
-  EntryBinding &binding = entryBindings_[meta.ordinal];
+  EntryBinding &binding = entryBindings_[stableWidgetKey(meta)];
   binding.entryValue = meta.entryValue;
   binding.entryBuf = meta.entryBuf;
   binding.onChange = meta.onEntryChange;
@@ -17,7 +17,7 @@ void HtmlBackend::syncEntryInput(NativeWidgetMeta &meta, const Clay_BoundingBox 
   binding.onSubmit = meta.onEntrySubmit;
   binding.onSubmitUserdata = meta.onEntrySubmitUserdata;
 
-  auto it = entryElements_.find(meta.ordinal);
+  auto it = entryElements_.find(stableWidgetKey(meta));
   emscripten::val el;
   bool created = false;
   if (it != entryElements_.end()) {
@@ -25,14 +25,14 @@ void HtmlBackend::syncEntryInput(NativeWidgetMeta &meta, const Clay_BoundingBox 
     reorderElement(el);
   } else {
     el = doc_.call<emscripten::val>("createElement", std::string("input"));
-    el.call<void>("setAttribute", std::string("data-n8v-ordinal"), std::to_string(meta.ordinal));
+    el.call<void>("setAttribute", std::string("data-n8v-ordinal"), std::to_string(stableWidgetKey(meta)));
     root_.call<void>("appendChild", el);
     lastAppendedSibling_ = el;
-    entryElements_[meta.ordinal] = el;
+    entryElements_[stableWidgetKey(meta)] = el;
     created = true;
   }
 
-  positionElement(el, entryLastBox_[meta.ordinal], fieldBox);
+  positionElement(el, entryLastBox_[stableWidgetKey(meta)], fieldBox);
 
   const Clay_TextRenderData &text = textCommand.renderData.text;
   auto *flags = static_cast<TextStyleFlags *>(textCommand.userData);
@@ -51,7 +51,7 @@ void HtmlBackend::syncEntryInput(NativeWidgetMeta &meta, const Clay_BoundingBox 
   sig.hasPlaceholderAttr = !suppressPlaceholder && meta.placeholder != nullptr;
   sig.placeholderAttr = sig.hasPlaceholderAttr ? *meta.placeholder : std::string{};
 
-  EntryStyleSignature &lastSig = entryStyleSig_[meta.ordinal];
+  EntryStyleSignature &lastSig = entryStyleSig_[stableWidgetKey(meta)];
   bool styleChanged = created || sig.password != lastSig.password || sig.family != lastSig.family || sig.fontSize != lastSig.fontSize ||
                       !colorEquals(sig.color, lastSig.color) || sig.padLeft != lastSig.padLeft || sig.padTop != lastSig.padTop ||
                       sig.hasPlaceholderAttr != lastSig.hasPlaceholderAttr || sig.placeholderAttr != lastSig.placeholderAttr;

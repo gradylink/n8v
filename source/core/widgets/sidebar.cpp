@@ -47,6 +47,8 @@ struct SidebarContext {
 
 std::vector<SidebarContext> sidebarStack;
 
+std::vector<int> sidebarDepthCounters;
+
 struct PageClickState {
   int *selectedPtr = nullptr;
   std::function<void(int)> onChange;
@@ -72,7 +74,10 @@ void dispatchRowHover(Clay_ElementId /*elementId*/, Clay_PointerData pointerData
 
 namespace n8v::detail::ui_internal {
 
-void resetSidebarFrameState() { sidebarStack.clear(); }
+void resetSidebarFrameState() {
+  sidebarStack.clear();
+  sidebarDepthCounters.clear();
+}
 
 } // namespace n8v::detail::ui_internal
 
@@ -86,7 +91,9 @@ void n8v_open_sidebar(n8v_sidebar_options opts) {
   shellDecl.layout.sizing.height = CLAY_SIZING_GROW(0);
   Clay__ConfigureOpenElement(shellDecl);
 
-  const int ordinal = widgetOrdinal++;
+  const int depth = (int)sidebarStack.size();
+  if ((int)sidebarDepthCounters.size() <= depth) sidebarDepthCounters.resize(depth + 1, 0);
+  const int ordinal = depth * 1000 + sidebarDepthCounters[depth]++;
   const n8v::SidebarPaint paint = n8v::activePaint().sidebar();
   const n8v::Sizing listWidthSizing = toSizing(opts.width);
   if (listWidthSizing.mode != n8v::SizingMode::Fixed) {
@@ -190,6 +197,8 @@ bool n8v_open_page(n8v_page_options opts) {
   const bool pressed = hovered && n8v::activeBackend().pointerDown();
   const n8v::ButtonPaint paint = n8v::activePaint().button(selected ? n8v::ButtonStyle::Primary : n8v::ButtonStyle::Secondary, hovered, pressed);
 
+  const float iconSlotSize = hasImage ? (float)paint.fontSize * 2.0f : (float)paint.fontSize;
+
   std::string imagePathStorage(imageView);
   const n8v::detail::DecodedImage *rowImage = nullptr;
   if (hasIcon) {
@@ -199,6 +208,7 @@ bool n8v_open_page(n8v_page_options opts) {
     imgOpts.source_kind = N8V_IMAGE_SOURCE_PATH;
     imgOpts.path = imagePathStorage.c_str();
     rowImage = n8v::detail::getOrDecodeImage(imgOpts);
+    rowImage = n8v::detail::getOrFitImageInSquare(rowImage, (int)std::lround(iconSlotSize));
   }
 
   Clay_ElementDeclaration decl = {};
@@ -218,8 +228,25 @@ bool n8v_open_page(n8v_page_options opts) {
     decl.transition.properties = CLAY_TRANSITION_PROPERTY_BACKGROUND_COLOR;
   }
 
-  Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Button, nameView, paint.fontSize, rowImage != nullptr);
+  Clay_Dimensions nativeSize =
+    n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Button, nameView, paint.fontSize, rowImage != nullptr, hasImage ? iconSlotSize : 0.0f);
   if (nativeSize.height > 0) decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
+
+  n8v::CornerRadius imageCornerRadius{};
+  if (hasImage) {
+    n8v::Rounding imageRounding = toRounding(opts.image_rounding);
+    switch (imageRounding.mode) {
+    case n8v::RoundingMode::StyleDefault:
+      imageCornerRadius = n8v::activePaint().image().cornerRadius;
+      break;
+    case n8v::RoundingMode::None:
+      imageCornerRadius = {};
+      break;
+    case n8v::RoundingMode::Fixed:
+      imageCornerRadius = imageRounding.radius;
+      break;
+    }
+  }
 
   PageClickState *clickState = &pageClickStates[rowOrdinal];
   clickState->selectedPtr = ctx.selectedPtr;
@@ -233,6 +260,8 @@ bool n8v_open_page(n8v_page_options opts) {
   meta.onClick = &dispatchPageClick;
   meta.onClickUserdata = clickState;
   meta.image = rowImage;
+  meta.imageBoxSize = hasImage ? iconSlotSize : 0.0f;
+  meta.imageCornerRadius = imageCornerRadius;
   meta.iconName = hasIcon ? internCString(iconView) : nullptr;
   meta.iconVariant = n8v::IconVariant::Outline;
   meta.buttonSelected = selected;
@@ -246,13 +275,15 @@ bool n8v_open_page(n8v_page_options opts) {
     Clay__OpenElement();
     Clay_ElementDeclaration iconDecl = {};
     iconDecl.image.imageData = const_cast<n8v::detail::DecodedImage *>(rowImage);
-    iconDecl.layout.sizing.width = CLAY_SIZING_FIXED((float)paint.fontSize);
-    iconDecl.layout.sizing.height = CLAY_SIZING_FIXED((float)paint.fontSize);
+    iconDecl.layout.sizing.width = CLAY_SIZING_FIXED(iconSlotSize);
+    iconDecl.layout.sizing.height = CLAY_SIZING_FIXED(iconSlotSize);
+    if (hasImage) iconDecl.cornerRadius = n8v::detail::toClay(imageCornerRadius);
     widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
     n8v::detail::NativeWidgetMeta &iconMeta = widgetMetaStorage.back();
     iconMeta.kind = n8v::NativeWidgetKind::Icon;
     iconMeta.ordinal = widgetOrdinal++;
     iconMeta.image = rowImage;
+    iconMeta.imageCornerRadius = imageCornerRadius;
     iconMeta.iconName = hasIcon ? internCString(iconView) : nullptr;
     iconMeta.iconTint = paint.textColor;
     iconDecl.userData = &iconMeta;

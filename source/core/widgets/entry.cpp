@@ -54,8 +54,9 @@ void n8v_entry(n8v_entry_options options) {
 
   std::string_view placeholderView = toView(options.placeholder);
 
+  const int focusKey = n8v::detail::stableWidgetKey(toView(options.id), ordinal);
   bool hasValue = shadow && !shadow->empty();
-  const bool focused = n8v::activeBackend().isEntryFocused(ordinal);
+  const bool focused = n8v::activeBackend().isEntryFocused(focusKey);
   const n8v::EntryPaint paint = n8v::activePaint().entry(focused, hasValue);
   const bool floatingLabelStyle = paint.labelColor.a > 0.0f;
   const bool labelFloated = floatingLabelStyle && (hasValue || focused);
@@ -105,6 +106,7 @@ void n8v_entry(n8v_entry_options options) {
   n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
   meta.kind = n8v::NativeWidgetKind::Entry;
   meta.ordinal = ordinal;
+  if (options.id) meta.id = options.id;
   meta.entryValue = shadow;
   meta.placeholder = &placeholderStorage.back();
   meta.password = options.password;

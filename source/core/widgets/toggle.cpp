@@ -82,6 +82,7 @@ void _n8v_toggle_commit(const char *label) {
   n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
   meta.kind = n8v::NativeWidgetKind::Switch;
   meta.ordinal = ordinal;
+  if (opts.id) meta.id = opts.id;
   meta.checked = opts.checked;
   meta.onChange = opts.on_change;
   meta.onChangeUserdata = opts.on_change_userdata;

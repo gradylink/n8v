@@ -106,6 +106,14 @@ struct RoundKey {
 
 std::map<RoundKey, DecodedImage> roundedCache;
 
+struct FitKey {
+  const void *source;
+  int boxSize;
+  bool operator<(const FitKey &other) const { return std::tie(source, boxSize) < std::tie(other.source, other.boxSize); }
+};
+
+std::map<FitKey, DecodedImage> fitCache;
+
 void resizeRgba(const uint8_t *src, int sw, int sh, std::vector<uint8_t> &dst, int dw, int dh) {
   dst.resize((size_t)dw * (size_t)dh * 4);
   for (int y = 0; y < dh; ++y) {
@@ -223,6 +231,37 @@ const DecodedImage *getOrBakeRoundedImage(
   baked.height = targetHeight;
 
   return &(roundedCache[key] = std::move(baked));
+}
+
+const DecodedImage *getOrFitImageInSquare(const DecodedImage *source, int boxSize) {
+  if (!source || boxSize <= 0 || source->width <= 0 || source->height <= 0) return source;
+  if (source->width == boxSize && source->height == boxSize) return source;
+
+  FitKey key{source, boxSize};
+  auto it = fitCache.find(key);
+  if (it != fitCache.end()) return &it->second;
+
+  float scale = std::min((float)boxSize / (float)source->width, (float)boxSize / (float)source->height);
+  int scaledWidth = std::max(1, (int)std::lround(source->width * scale));
+  int scaledHeight = std::max(1, (int)std::lround(source->height * scale));
+
+  std::vector<uint8_t> scaled;
+  resizeRgba(source->rgba, source->width, source->height, scaled, scaledWidth, scaledHeight);
+
+  DecodedImage fitted;
+  fitted.owned.assign((size_t)boxSize * (size_t)boxSize * 4, 0);
+  int offsetX = (boxSize - scaledWidth) / 2;
+  int offsetY = (boxSize - scaledHeight) / 2;
+  for (int y = 0; y < scaledHeight; ++y) {
+    const uint8_t *srcRow = scaled.data() + (size_t)y * scaledWidth * 4;
+    uint8_t *dstRow = fitted.owned.data() + ((size_t)(y + offsetY) * boxSize + offsetX) * 4;
+    std::copy(srcRow, srcRow + (size_t)scaledWidth * 4, dstRow);
+  }
+  fitted.rgba = fitted.owned.data();
+  fitted.width = boxSize;
+  fitted.height = boxSize;
+
+  return &(fitCache[key] = std::move(fitted));
 }
 
 } // namespace n8v::detail

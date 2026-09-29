@@ -93,7 +93,7 @@ public:
 
   Clay_Dimensions windowSize() const override { return {(float)MwGetInteger(window_, MwNwidth), (float)MwGetInteger(window_, MwNheight)}; }
 
-  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view, uint16_t, bool) const override {
+  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view, uint16_t, bool, float = 0.0f) const override {
     if (kind == NativeWidgetKind::Dropdown) {
       return {0, (float)MwTextHeight(measureLabel_, nullptr, "Xg") + 14.0f};
     }
@@ -155,13 +155,13 @@ public:
           pendingLabelTarget = nullptr;
           continue;
         }
-        WidgetKey key{meta->ordinal, -1};
+        WidgetKey key{effectiveKey(*meta), -1};
         seenKeys.insert(key);
         MwWidget widget = ensureWidget(key, *meta);
 
         if (meta->kind == NativeWidgetKind::Checkbox || meta->kind == NativeWidgetKind::Radio || meta->kind == NativeWidgetKind::Switch) {
           pendingCheckboxWidget = widget;
-          pendingCheckboxOrdinal = meta->ordinal;
+          pendingCheckboxOrdinal = effectiveKey(*meta);
         } else {
           positionWidget(widget, command->boundingBox);
           pendingLabelTarget = widget;
@@ -173,7 +173,7 @@ public:
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_IMAGE) {
         auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
         if (!meta) continue;
-        WidgetKey key{meta->ordinal, -1};
+        WidgetKey key{effectiveKey(*meta), -1};
         seenKeys.insert(key);
         MwWidget widget = ensureWidget(key, *meta);
         positionWidget(widget, command->boundingBox);
@@ -429,10 +429,12 @@ private:
     bool operator<(const WidgetKey &other) const { return ordinal != other.ordinal ? ordinal < other.ordinal : subIndex < other.subIndex; }
   };
 
+  static int effectiveKey(const n8v::detail::NativeWidgetMeta &meta) { return n8v::detail::stableWidgetKey(meta); }
+
   MwWidget ensureWidget(const WidgetKey &key, const NativeWidgetMeta &meta) {
     auto it = widgets_.find(key);
     if (it != widgets_.end()) {
-      ClickAction &action = actions_[meta.ordinal];
+      ClickAction &action = actions_[effectiveKey(meta)];
       if (meta.kind == NativeWidgetKind::Button) {
         action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
         MwSetInteger(it->second, MwNflat, meta.buttonFlat ? 1 : 0);
@@ -442,7 +444,7 @@ private:
         MwSetInteger(it->second, MwNchecked, *meta.checked ? 1 : 0);
       } else if (meta.kind == NativeWidgetKind::Entry) {
         MwSetInteger(it->second, MwNhideInput, meta.password ? 1 : 0);
-        syncEntry(it->second, meta, entryStates_[meta.ordinal]);
+        syncEntry(it->second, meta, entryStates_[effectiveKey(meta)]);
         action.callback = toStdFunction(meta.onEntrySubmit, meta.onEntrySubmitUserdata);
       } else if (meta.kind == NativeWidgetKind::Radio && meta.radioSelected) {
         action.radioSelected = meta.radioSelected;
@@ -466,7 +468,7 @@ private:
       return it->second;
     }
 
-    ClickAction &action = actions_[meta.ordinal];
+    ClickAction &action = actions_[effectiveKey(meta)];
 
     MwWidget widget = nullptr;
     if (meta.kind == NativeWidgetKind::Checkbox || meta.kind == NativeWidgetKind::Switch) {
@@ -478,7 +480,7 @@ private:
     } else if (meta.kind == NativeWidgetKind::Entry) {
       widget = MwCreateWidget(MwEntryClass, "n8v-entry", currentParent(), 0, 0, 1, 1);
       MwSetInteger(widget, MwNhideInput, meta.password ? 1 : 0);
-      syncEntry(widget, meta, entryStates_[meta.ordinal]);
+      syncEntry(widget, meta, entryStates_[effectiveKey(meta)]);
       action.callback = toStdFunction(meta.onEntrySubmit, meta.onEntrySubmitUserdata);
       MwAddUserHandler(widget, MwNactivateHandler, onActivate, &action);
     } else if (meta.kind == NativeWidgetKind::Radio) {

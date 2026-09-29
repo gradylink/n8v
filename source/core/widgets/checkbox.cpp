@@ -72,6 +72,7 @@ void _n8v_checkbox_commit(const char *label) {
   n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
   meta.kind = n8v::NativeWidgetKind::Checkbox;
   meta.ordinal = ordinal;
+  if (opts.id) meta.id = opts.id;
   meta.checked = opts.checked;
   meta.onChange = opts.on_change;
   meta.onChangeUserdata = opts.on_change_userdata;

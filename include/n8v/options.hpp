@@ -59,16 +59,19 @@ struct ButtonOptions {
   std::string icon;
   IconVariant iconVariant = IconVariant::Outline;
   IconPosition iconPosition = IconPosition::Leading;
+  std::string_view id = {};
 };
 
 struct CheckboxOptions {
   bool *checked = nullptr;
   std::function<void(bool)> onChange = nullptr;
+  std::string_view id = {};
 };
 
 struct ToggleOptions {
   bool *checked = nullptr;
   std::function<void(bool)> onChange = nullptr;
+  std::string_view id = {};
 };
 
 struct RadioOptions {
@@ -76,6 +79,7 @@ struct RadioOptions {
   int *selected = nullptr;
   int value = 0;
   std::function<void(int)> onChange = nullptr;
+  std::string_view id = {};
 };
 
 struct EntryOptions {
@@ -84,6 +88,7 @@ struct EntryOptions {
   bool password = false;
   std::function<void(std::string_view)> onChange = nullptr;
   std::function<void()> onSubmit = nullptr;
+  std::string_view id = {};
 };
 
 struct DropdownOptions {
@@ -92,6 +97,7 @@ struct DropdownOptions {
   int *selected = nullptr;
   std::string_view placeholder = {};
   std::function<void(int)> onChange = nullptr;
+  std::string_view id = {};
 };
 
 struct SliderOptions {
@@ -99,6 +105,7 @@ struct SliderOptions {
   float min = 0.0f;
   float max = 1.0f;
   std::function<void(float)> onChange = nullptr;
+  std::string_view id = {};
 };
 
 enum class ImageSource {
@@ -140,6 +147,8 @@ struct PageOptions {
   std::string_view icon = {};
   /** Mutually exclusive with `icon`. */
   std::string_view image = {};
+  /** Only affects `.image`; ignored when `.icon` is used. */
+  Rounding imageRounding = Rounding::styleDefault();
 };
 
 struct IconOptions {

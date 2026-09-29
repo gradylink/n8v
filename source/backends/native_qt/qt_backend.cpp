@@ -229,7 +229,7 @@ public:
     return {(float)size.width(), (float)size.height()};
   }
 
-  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view text, uint16_t fontSize, bool hasIcon) const override {
+  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view text, uint16_t fontSize, bool hasIcon, float /*iconBoxSize*/ = 0.0f) const override {
     QString qtext = QString::fromUtf8(text.data(), (int)text.size());
     if (kind == NativeWidgetKind::Switch) {
       measureSwitch_->setText(qtext);
@@ -306,7 +306,7 @@ public:
           pendingLabelTarget = nullptr;
           continue;
         }
-        WidgetKey key{meta->ordinal, -1};
+        WidgetKey key{effectiveKey(*meta), -1};
         seenKeys.insert(key);
         QWidget *widget = ensureWidget(key, *meta);
         positionWidget(widget, command->boundingBox);
@@ -320,7 +320,7 @@ public:
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_IMAGE) {
         auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
         if (!meta) continue;
-        WidgetKey key{meta->ordinal, -1};
+        WidgetKey key{effectiveKey(*meta), -1};
         seenKeys.insert(key);
         QWidget *widget = ensureWidget(key, *meta);
         positionWidget(widget, command->boundingBox);
@@ -445,6 +445,8 @@ private:
     int subIndex; // -1 for a button/link. 0, 1, 2... per wrapped line of standalone text
     bool operator<(const WidgetKey &other) const { return ordinal != other.ordinal ? ordinal < other.ordinal : subIndex < other.subIndex; }
   };
+
+  static int effectiveKey(const n8v::detail::NativeWidgetMeta &meta) { return n8v::detail::stableWidgetKey(meta); }
 
   static QString linkHtml(const QString &text, const QString &url) { return QStringLiteral("<a href=\"%1\">%2</a>").arg(url, text.toHtmlEscaped()); }
 
@@ -742,13 +744,14 @@ private:
 
   QWidget *ensureWidget(const WidgetKey &key, const NativeWidgetMeta &meta) {
     auto it = widgets_.find(key);
+    const int stateKey = effectiveKey(meta);
     if (it != widgets_.end()) {
       if (it->second->parent() != currentParent()) {
         it->second->setParent(currentParent());
         it->second->setVisible(true);
       }
       if (meta.kind == NativeWidgetKind::Button) {
-        callbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
+        callbacks_[stateKey] = toStdFunction(meta.onClick, meta.onClickUserdata);
         static_cast<N8VButton *>(it->second)->setFlat(meta.buttonFlat);
       } else if (meta.kind == NativeWidgetKind::Link) {
         auto *label = static_cast<N8VLinkLabel *>(it->second);
@@ -768,8 +771,8 @@ private:
         auto *lineEdit = static_cast<N8VLineEdit *>(it->second);
         lineEdit->setEchoMode(meta.password ? QLineEdit::Password : QLineEdit::Normal);
         lineEdit->setPlaceholderText(meta.placeholder ? QString::fromStdString(*meta.placeholder) : QString());
-        syncEntry(lineEdit, meta, entryStates_[meta.ordinal]);
-        lineEdit->onSubmit = &entryStates_[meta.ordinal].onSubmit;
+        syncEntry(lineEdit, meta, entryStates_[stateKey]);
+        lineEdit->onSubmit = &entryStates_[stateKey].onSubmit;
       } else if (meta.kind == NativeWidgetKind::Radio && meta.radioSelected) {
         auto *radio = static_cast<N8VRadioButton *>(it->second);
         radio->selectedPtr = meta.radioSelected;
@@ -778,9 +781,9 @@ private:
         bool shouldBeChecked = *meta.radioSelected == meta.radioValue;
         if (radio->isChecked() != shouldBeChecked) radio->setChecked(shouldBeChecked);
       } else if (meta.kind == NativeWidgetKind::Dropdown) {
-        syncDropdown(static_cast<QComboBox *>(it->second), meta, dropdownStates_[meta.ordinal]);
+        syncDropdown(static_cast<QComboBox *>(it->second), meta, dropdownStates_[stateKey]);
       } else if (meta.kind == NativeWidgetKind::Slider) {
-        syncSlider(static_cast<QSlider *>(it->second), meta, sliderStates_[meta.ordinal]);
+        syncSlider(static_cast<QSlider *>(it->second), meta, sliderStates_[stateKey]);
       } else if (meta.kind == NativeWidgetKind::Panel) {
         if (meta.panelRole != n8v::PanelRole::ListItem) applyPanelStyle(it->second, meta);
       }
@@ -790,8 +793,8 @@ private:
     QWidget *widget = nullptr;
     if (meta.kind == NativeWidgetKind::Button) {
       auto *button = new N8VButton(currentParent());
-      callbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
-      button->callback = &callbacks_[meta.ordinal];
+      callbacks_[stateKey] = toStdFunction(meta.onClick, meta.onClickUserdata);
+      button->callback = &callbacks_[stateKey];
       button->setFlat(meta.buttonFlat);
       widget = button;
     } else if (meta.kind == NativeWidgetKind::Checkbox) {
@@ -811,8 +814,8 @@ private:
       auto *lineEdit = new N8VLineEdit(currentParent());
       lineEdit->setEchoMode(meta.password ? QLineEdit::Password : QLineEdit::Normal);
       lineEdit->setPlaceholderText(meta.placeholder ? QString::fromStdString(*meta.placeholder) : QString());
-      syncEntry(lineEdit, meta, entryStates_[meta.ordinal]);
-      lineEdit->onSubmit = &entryStates_[meta.ordinal].onSubmit;
+      syncEntry(lineEdit, meta, entryStates_[stateKey]);
+      lineEdit->onSubmit = &entryStates_[stateKey].onSubmit;
       widget = lineEdit;
     } else if (meta.kind == NativeWidgetKind::Radio) {
       auto *radio = new N8VRadioButton(currentParent());
@@ -832,7 +835,7 @@ private:
       if (meta.dropdownItems) {
         for (const std::string &item : *meta.dropdownItems) combo->addItem(QString::fromStdString(item));
       }
-      DropdownState &state = dropdownStates_[meta.ordinal];
+      DropdownState &state = dropdownStates_[stateKey];
 
       int initialIndex = meta.dropdownSelected && *meta.dropdownSelected >= 0 ? *meta.dropdownSelected : -1;
       combo->setCurrentIndex(initialIndex);
@@ -842,7 +845,7 @@ private:
     } else if (meta.kind == NativeWidgetKind::Slider) {
       auto *sliderWidget = new QSlider(Qt::Horizontal, currentParent());
       sliderWidget->setRange(0, sliderSteps);
-      SliderState &state = sliderStates_[meta.ordinal];
+      SliderState &state = sliderStates_[stateKey];
       int initialPos = meta.sliderValue ? sliderPositionFor(*meta.sliderValue, meta.sliderMin, meta.sliderMax) : 0;
       sliderWidget->setValue(initialPos);
       state.lastSynced = initialPos;

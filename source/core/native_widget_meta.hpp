@@ -17,6 +17,7 @@ struct DecodedImage;
 struct NativeWidgetMeta {
   NativeWidgetKind kind;
   int ordinal;
+  std::string id;                                           // optional stable cross-frame identity; empty falls back to `ordinal`
   n8v_click_fn onClick = nullptr;                           // Button/Link
   void *onClickUserdata = nullptr;                          // Button/Link
   std::string *url = nullptr;                               // Link only
@@ -55,6 +56,8 @@ struct NativeWidgetMeta {
   n8v::Color chevronColor{};                                // DropdownChevron only
   bool chevronPointsUp = false;                             // DropdownChevron only
   const DecodedImage *image = nullptr;                      // Image/Icon - the bundled-fallback raster, always decoded eagerly by core
+  float imageBoxSize = 0.0f;                                 // Button/sidebar page with `.image` only - forces the native icon widget to this square pixel size
+  n8v::CornerRadius imageCornerRadius{};                     // Button/sidebar page with `.image` only - resolved from PageOptions::imageRounding
   const char *iconName = nullptr;                           // Icon widget, and Button when an icon was requested - canonical name, for backends with a native icon theme/set
   n8v::IconVariant iconVariant = n8v::IconVariant::Outline; // Icon/Button only
   bool iconTrailing = false;                                // Button only
@@ -79,6 +82,14 @@ struct NativeWidgetMeta {
   float panelBorderWidth = 0.0f;                   // Panel only
   n8v::CornerRadius panelCornerRadius{};           // Panel only
 };
+
+inline int stableWidgetKey(std::string_view id, int ordinal) {
+  if (id.empty()) return ordinal;
+  size_t h = std::hash<std::string_view>{}(id);
+  return -(int)(h % 2000000000) - 1;
+}
+
+inline int stableWidgetKey(const NativeWidgetMeta &meta) { return stableWidgetKey(meta.id, meta.ordinal); }
 
 inline std::function<void()> toStdFunction(n8v_click_fn fn, void *userdata) {
   return fn ? std::function<void()>([fn, userdata] { fn(userdata); }) : std::function<void()>{};

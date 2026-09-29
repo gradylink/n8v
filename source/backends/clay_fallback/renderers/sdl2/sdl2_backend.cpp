@@ -152,9 +152,9 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
         if (justClicked_ && hit) {
           pendingEntryClicked = true;
           textSel_ = TextSelState{};
-        } else if (justClicked_ && entry_.ordinal == meta->ordinal) {
+        } else if (justClicked_ && entry_.ordinal == stableWidgetKey(*meta)) {
           entry_ = EntryEditState{};
-        } else if (mouseSelecting_ && entry_.ordinal == meta->ordinal) {
+        } else if (mouseSelecting_ && entry_.ordinal == stableWidgetKey(*meta)) {
           pendingEntryDragging = true;
         }
       }
@@ -162,7 +162,7 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
       const Clay_Color &color = command->renderData.rectangle.backgroundColor;
       if (color.a > 0.0f) drawRoundedRect(command->boundingBox, color, command->renderData.rectangle.cornerRadius);
 
-      if (meta && meta->kind == NativeWidgetKind::Entry && meta->ordinal == entry_.ordinal && !meta->entryHasCustomBorder) {
+      if (meta && meta->kind == NativeWidgetKind::Entry && stableWidgetKey(*meta) == entry_.ordinal && !meta->entryHasCustomBorder) {
         drawFocusRing(command->boundingBox, command->renderData.rectangle.cornerRadius);
       }
       break;

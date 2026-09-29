@@ -103,6 +103,7 @@ void _n8v_button_commit(const char *label) {
   n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
   meta.kind = n8v::NativeWidgetKind::Button;
   meta.ordinal = ordinal;
+  if (opts.id) meta.id = opts.id;
   meta.onClick = opts.on_click;
   meta.onClickUserdata = opts.on_click_userdata;
   meta.image = iconImage;

@@ -108,6 +108,7 @@ void n8v_dropdown(n8v_dropdown_options options) {
   n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
   meta.kind = n8v::NativeWidgetKind::Dropdown;
   meta.ordinal = ordinal;
+  if (options.id) meta.id = options.id;
   meta.dropdownItems = &itemsCopy;
   meta.dropdownSelected = options.selected;
   meta.onDropdownChange = options.on_change;

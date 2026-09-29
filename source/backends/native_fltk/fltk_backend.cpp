@@ -110,7 +110,7 @@ public:
     return {(float)w, (float)h};
   }
 
-  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view text, uint16_t fontSize, bool hasIcon) const override {
+  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view text, uint16_t fontSize, bool hasIcon, float /*iconBoxSize*/ = 0.0f) const override {
     if (kind == NativeWidgetKind::Dropdown) {
       fl_font(FL_HELVETICA, fontSize);
       return {0, (float)fl_height() + 14.0f};
@@ -172,7 +172,7 @@ public:
           pendingLabelTarget = nullptr;
           continue;
         }
-        WidgetKey key{meta->ordinal, -1};
+        WidgetKey key{effectiveKey(*meta), -1};
         seenKeys.insert(key);
         Fl_Widget *widget = ensureWidget(key, *meta);
         positionWidget(widget, command->boundingBox, cacheContainerChildPositions());
@@ -186,7 +186,7 @@ public:
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_IMAGE) {
         auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
         if (!meta) continue;
-        WidgetKey key{meta->ordinal, -1};
+        WidgetKey key{effectiveKey(*meta), -1};
         seenKeys.insert(key);
         Fl_Widget *widget = ensureWidget(key, *meta);
         positionWidget(widget, command->boundingBox, cacheContainerChildPositions());
@@ -452,6 +452,8 @@ private:
     bool operator<(const WidgetKey &other) const { return ordinal != other.ordinal ? ordinal < other.ordinal : subIndex < other.subIndex; }
   };
 
+  static int effectiveKey(const n8v::detail::NativeWidgetMeta &meta) { return n8v::detail::stableWidgetKey(meta); }
+
   struct ContainerFrame {
     Fl_Group *scroll = nullptr;
     bool skipRedundantResize = true;
@@ -499,7 +501,7 @@ private:
   Fl_Widget *ensureWidget(const WidgetKey &key, const NativeWidgetMeta &meta) {
     auto it = widgets_.find(key);
     if (it != widgets_.end()) {
-      WidgetAction &action = actions_[meta.ordinal];
+      WidgetAction &action = actions_[effectiveKey(meta)];
       if (meta.kind == NativeWidgetKind::Button) {
         action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
         auto *button = static_cast<Fl_Button *>(it->second);
@@ -515,7 +517,7 @@ private:
       } else if (meta.kind == NativeWidgetKind::Entry) {
         auto *input = static_cast<Fl_Input *>(it->second);
         input->input_type(meta.password ? FL_SECRET_INPUT : FL_NORMAL_INPUT);
-        syncEntry(input, meta, entryStates_[meta.ordinal]);
+        syncEntry(input, meta, entryStates_[effectiveKey(meta)]);
         action.callback = toStdFunction(meta.onEntrySubmit, meta.onEntrySubmitUserdata);
       } else if (meta.kind == NativeWidgetKind::Radio && meta.radioSelected) {
         action.radioSelected = meta.radioSelected;
@@ -544,7 +546,7 @@ private:
     }
 
     Fl_Widget *widget = nullptr;
-    WidgetAction &action = actions_[meta.ordinal];
+    WidgetAction &action = actions_[effectiveKey(meta)];
     if (meta.kind == NativeWidgetKind::Button) {
       auto *button = new Fl_Button(0, 0, 1, 1);
       action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
@@ -573,7 +575,7 @@ private:
     } else if (meta.kind == NativeWidgetKind::Entry) {
       auto *input = new Fl_Input(0, 0, 1, 1);
       input->input_type(meta.password ? FL_SECRET_INPUT : FL_NORMAL_INPUT);
-      syncEntry(input, meta, entryStates_[meta.ordinal]);
+      syncEntry(input, meta, entryStates_[effectiveKey(meta)]);
       action.callback = toStdFunction(meta.onEntrySubmit, meta.onEntrySubmitUserdata);
       input->when(FL_WHEN_ENTER_KEY);
       input->callback(&FltkBackend::onButtonClicked, &action);

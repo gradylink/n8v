@@ -33,8 +33,12 @@ struct Backend {
    */
   virtual Clay_Dimensions measureText(std::string_view text, FontFamily family, uint16_t fontSize, bool bold, bool italic) const = 0;
 
-  virtual Clay_Dimensions measureNativeChrome(NativeWidgetKind, std::string_view, uint16_t, bool hasIcon = false) const {
+  /** @param iconBoxSize When nonzero, the icon/image should occupy a square box of this many pixels (rather than the
+   *  small glyph size implied by `hasIcon` alone) - used for `.image` sidebar pages, which read as too small in a
+   *  slot sized for a small glyph icon. */
+  virtual Clay_Dimensions measureNativeChrome(NativeWidgetKind, std::string_view, uint16_t, bool hasIcon = false, float iconBoxSize = 0.0f) const {
     (void)hasIcon;
+    (void)iconBoxSize;
     return {0, 0};
   }
 

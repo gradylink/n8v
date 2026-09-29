@@ -92,6 +92,7 @@ void n8v_slider(n8v_slider_options options) {
   n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
   meta.kind = n8v::NativeWidgetKind::Slider;
   meta.ordinal = ordinal;
+  if (options.id) meta.id = options.id;
   meta.sliderValue = options.value;
   meta.sliderMin = options.min;
   meta.sliderMax = options.max;

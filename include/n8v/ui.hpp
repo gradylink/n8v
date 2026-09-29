@@ -594,6 +594,7 @@ inline bool openPage(const PageOptions &options) {
   c_opts.name = nameStorage.c_str();
   c_opts.icon = iconStorage.empty() ? nullptr : iconStorage.c_str();
   c_opts.image = imageStorage.empty() ? nullptr : imageStorage.c_str();
+  c_opts.image_rounding = toC(options.imageRounding);
   return n8v_open_page(c_opts);
 }
 
@@ -610,12 +611,14 @@ struct LeafBuilder {
     std::string labelStorage(label);
     if (isButton) {
       std::string iconStorage(buttonOptions.icon);
+      std::string idStorage(buttonOptions.id);
       n8v_button_options c_opts{};
       c_opts.style = toC(buttonOptions.style);
       if (buttonOptions.onClick) callback_bridge::bridge(callback_bridge::clickClosures, std::move(buttonOptions.onClick), c_opts.on_click, c_opts.on_click_userdata);
       c_opts.icon = iconStorage.empty() ? nullptr : iconStorage.c_str();
       c_opts.icon_variant = toC(buttonOptions.iconVariant);
       c_opts.icon_position = toC(buttonOptions.iconPosition);
+      c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
       _n8v_set_button_opts(c_opts);
       _n8v_button_commit(labelStorage.c_str());
     } else {
@@ -638,9 +641,11 @@ struct CheckboxBuilder {
 
   void operator()(std::string_view label) && {
     std::string labelStorage(label);
+    std::string idStorage(options.id);
     n8v_checkbox_options c_opts{};
     c_opts.checked = options.checked;
     if (options.onChange) callback_bridge::bridge(callback_bridge::boolChangeClosures, std::move(options.onChange), c_opts.on_change, c_opts.on_change_userdata);
+    c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
     _n8v_set_checkbox_opts(c_opts);
     _n8v_checkbox_commit(labelStorage.c_str());
   }
@@ -651,9 +656,11 @@ struct ToggleBuilder {
 
   void operator()(std::string_view label) && {
     std::string labelStorage(label);
+    std::string idStorage(options.id);
     n8v_toggle_options c_opts{};
     c_opts.checked = options.checked;
     if (options.onChange) callback_bridge::bridge(callback_bridge::boolChangeClosures, std::move(options.onChange), c_opts.on_change, c_opts.on_change_userdata);
+    c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
     _n8v_set_toggle_opts(c_opts);
     _n8v_toggle_commit(labelStorage.c_str());
   }
@@ -664,10 +671,12 @@ struct RadioBuilder {
 
   void operator()(std::string_view label) && {
     std::string labelStorage(label);
+    std::string idStorage(options.id);
     n8v_radio_options c_opts{};
     c_opts.selected = options.selected;
     c_opts.value = options.value;
     if (options.onChange) callback_bridge::bridge(callback_bridge::intChangeClosures, std::move(options.onChange), c_opts.on_change, c_opts.on_change_userdata);
+    c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
     _n8v_set_radio_opts(c_opts);
     _n8v_radio_commit(labelStorage.c_str());
   }
@@ -699,9 +708,11 @@ inline void syncStringBuf(n8v_string_buf &buf, std::string_view value) {
 
 inline void entry(EntryOptions options) {
   std::string placeholderStorage(options.placeholder);
+  std::string idStorage(options.id);
   n8v_entry_options c_opts{};
   c_opts.placeholder = placeholderStorage.c_str();
   c_opts.password = options.password;
+  c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
 
   n8v_string_buf *buf = nullptr;
   EntryShadow *shadow = nullptr;
@@ -726,6 +737,7 @@ inline void entry(EntryOptions options) {
 
 inline void dropdown(DropdownOptions options) {
   std::string placeholderStorage(options.placeholder);
+  std::string idStorage(options.id);
   std::vector<std::string> itemStorage(options.items.begin(), options.items.end());
   std::vector<const char *> itemPtrs;
   itemPtrs.reserve(itemStorage.size());
@@ -736,16 +748,19 @@ inline void dropdown(DropdownOptions options) {
   c_opts.item_count = itemPtrs.size();
   c_opts.selected = options.selected;
   c_opts.placeholder = placeholderStorage.c_str();
+  c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
   if (options.onChange) callback_bridge::bridge(callback_bridge::intChangeClosures, std::move(options.onChange), c_opts.on_change, c_opts.on_change_userdata);
 
   n8v_dropdown(c_opts);
 }
 
 inline void slider(SliderOptions options) {
+  std::string idStorage(options.id);
   n8v_slider_options c_opts{};
   c_opts.value = options.value;
   c_opts.min = options.min;
   c_opts.max = options.max;
+  c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
   if (options.onChange) callback_bridge::bridge(callback_bridge::floatChangeClosures, std::move(options.onChange), c_opts.on_change, c_opts.on_change_userdata);
 
   n8v_slider(c_opts);

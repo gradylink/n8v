@@ -166,7 +166,7 @@ public:
     return {(float)natW, (float)natH};
   }
 
-  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view text, uint16_t fontSize, bool hasIcon) const override {
+  Clay_Dimensions measureNativeChrome(NativeWidgetKind kind, std::string_view text, uint16_t fontSize, bool hasIcon, float iconBoxSize = 0.0f) const override {
     if (kind == NativeWidgetKind::Entry) {
       int minW = 0, natW = 0, minH = 0, natH = 0;
       gtk_widget_measure(measureEntry_, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
@@ -211,14 +211,17 @@ public:
       return {(float)natW, (float)natH};
     }
     if (hasIcon && text.empty()) {
-      float size = fontSize + 20.0f;
+      float size = iconBoxSize > 0 ? iconBoxSize + 20.0f : fontSize + 20.0f;
       return {size, size};
     }
     gtk_button_set_label(GTK_BUTTON(measureButton_), std::string(text).c_str());
     int minW = 0, natW = 0, minH = 0, natH = 0;
     gtk_widget_measure(measureButton_, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
     gtk_widget_measure(measureButton_, GTK_ORIENTATION_VERTICAL, -1, &minH, &natH, nullptr, nullptr);
-    if (hasIcon) natW += fontSize * 1.5;
+    if (hasIcon) {
+      natW += iconBoxSize > 0 ? (int)iconBoxSize + fontSize / 2 : (int)(fontSize * 1.5f);
+      natH = std::max(natH, (int)iconBoxSize);
+    }
     return {(float)natW, (float)natH};
   }
 
@@ -287,7 +290,7 @@ public:
           continue;
         }
         pendingIsActionRow = false;
-        WidgetKey key{meta->ordinal, -1};
+        WidgetKey key{effectiveKey(*meta), -1};
         seenKeys.insert(key);
         GtkWidget *widget = ensureWidget(key, *meta);
         positionWidget(widget, command->boundingBox);
@@ -295,14 +298,14 @@ public:
         pendingKind = meta->kind;
         pendingLinkUrl = meta->kind == NativeWidgetKind::Link && meta->url ? *meta->url : std::string();
         pendingButtonIconLabel = meta->kind == NativeWidgetKind::Button ? ensureButtonIcon(widget, *meta) : nullptr;
-        pendingSwitchLabel = meta->kind == NativeWidgetKind::Switch ? switchStates_[meta->ordinal].label : nullptr;
+        pendingSwitchLabel = meta->kind == NativeWidgetKind::Switch ? switchStates_[effectiveKey(*meta)].label : nullptr;
         continue;
       }
 
       if (command->commandType == CLAY_RENDER_COMMAND_TYPE_IMAGE) {
         auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
         if (!meta) continue;
-        WidgetKey key{meta->ordinal, -1};
+        WidgetKey key{effectiveKey(*meta), -1};
         seenKeys.insert(key);
         GtkWidget *widget = ensureWidget(key, *meta);
         positionWidget(widget, command->boundingBox);
@@ -405,15 +408,22 @@ public:
     }
 
     for (auto it = actionRows_.begin(); it != actionRows_.end();) {
-      if (!seenActionRowOrdinals.count(it->first)) {
-        gtk_list_box_remove(GTK_LIST_BOX(gtk_widget_get_parent(it->second)), it->second);
-        buttonCallbacks_.erase(it->first);
-        rowLabels_.erase(it->first);
-        rowIcons_.erase(it->first);
-        it = actionRows_.erase(it);
-      } else {
+      if (seenActionRowOrdinals.count(it->first)) {
+        actionRowMissStreak_.erase(it->first);
         ++it;
+        continue;
       }
+      int &missStreak = actionRowMissStreak_[it->first];
+      if (++missStreak < kActionRowMissTolerance) {
+        ++it;
+        continue;
+      }
+      gtk_list_box_remove(GTK_LIST_BOX(gtk_widget_get_parent(it->second)), it->second);
+      buttonCallbacks_.erase(it->first);
+      rowLabels_.erase(it->first);
+      rowIcons_.erase(it->first);
+      actionRowMissStreak_.erase(it->first);
+      it = actionRows_.erase(it);
     }
 
     for (auto it = widgets_.begin(); it != widgets_.end();) {
@@ -666,6 +676,8 @@ private:
     bool operator<(const WidgetKey &other) const { return ordinal != other.ordinal ? ordinal < other.ordinal : subIndex < other.subIndex; }
   };
 
+  static int effectiveKey(const n8v::detail::NativeWidgetMeta &meta) { return n8v::detail::stableWidgetKey(meta); }
+
   void destroyWidgetEntry(const WidgetKey &key, GtkWidget *widget) {
     gtk_widget_unparent(widget);
     buttonCallbacks_.erase(key.ordinal);
@@ -701,13 +713,14 @@ private:
       widgets_.erase(it);
       it = widgets_.end();
     }
+    const int stateKey = effectiveKey(meta);
     if (it != widgets_.end()) {
       if (meta.kind == NativeWidgetKind::Button) {
-        buttonCallbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
+        buttonCallbacks_[stateKey] = toStdFunction(meta.onClick, meta.onClickUserdata);
         if (meta.buttonFlat) gtk_widget_add_css_class(it->second, "flat");
         else gtk_widget_remove_css_class(it->second, "flat");
       } else if (meta.kind == NativeWidgetKind::Checkbox && meta.checked) {
-        CheckboxState &state = checkboxStates_[meta.ordinal];
+        CheckboxState &state = checkboxStates_[stateKey];
         state.checked = meta.checked;
         state.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
         gboolean current = gtk_check_button_get_active(GTK_CHECK_BUTTON(it->second));
@@ -715,9 +728,9 @@ private:
       } else if (meta.kind == NativeWidgetKind::Entry) {
         gtk_entry_set_visibility(GTK_ENTRY(it->second), !meta.password);
         gtk_entry_set_placeholder_text(GTK_ENTRY(it->second), meta.placeholder ? meta.placeholder->c_str() : "");
-        syncEntry(it->second, meta, entryStates_[meta.ordinal]);
+        syncEntry(it->second, meta, entryStates_[stateKey]);
       } else if (meta.kind == NativeWidgetKind::Radio && meta.radioSelected) {
-        RadioState &state = radioStates_[meta.ordinal];
+        RadioState &state = radioStates_[stateKey];
         state.selected = meta.radioSelected;
         state.value = meta.radioValue;
         state.onChange = toStdFunction(meta.onRadioChange, meta.onRadioChangeUserdata);
@@ -725,13 +738,13 @@ private:
         gboolean current = gtk_check_button_get_active(GTK_CHECK_BUTTON(it->second));
         if ((bool)current != shouldBeActive) gtk_check_button_set_active(GTK_CHECK_BUTTON(it->second), shouldBeActive);
       } else if (meta.kind == NativeWidgetKind::Switch && meta.checked) {
-        SwitchState &state = switchStates_[meta.ordinal];
+        SwitchState &state = switchStates_[stateKey];
         state.checked = meta.checked;
         state.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
         gboolean current = gtk_switch_get_active(GTK_SWITCH(state.sw));
         if ((bool)current != *meta.checked) gtk_switch_set_active(GTK_SWITCH(state.sw), *meta.checked);
       } else if (meta.kind == NativeWidgetKind::Dropdown && meta.dropdownSelected) {
-        DropdownState &state = dropdownStates_[meta.ordinal];
+        DropdownState &state = dropdownStates_[stateKey];
         state.selected = meta.dropdownSelected;
         state.onChange = toStdFunction(meta.onDropdownChange, meta.onDropdownChangeUserdata);
         guint wantSelected = *meta.dropdownSelected >= 0 ? (guint)*meta.dropdownSelected : GTK_INVALID_LIST_POSITION;
@@ -740,9 +753,9 @@ private:
       } else if (meta.kind == NativeWidgetKind::Panel) {
         if (meta.panelRole != n8v::PanelRole::ListItem) ensurePanelStyle(it->second, meta);
       } else if (meta.kind == NativeWidgetKind::Link) {
-        buttonCallbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
+        buttonCallbacks_[stateKey] = toStdFunction(meta.onClick, meta.onClickUserdata);
       } else if (meta.kind == NativeWidgetKind::Slider && meta.sliderValue) {
-        SliderState &state = sliderStates_[meta.ordinal];
+        SliderState &state = sliderStates_[stateKey];
         state.value = meta.sliderValue;
         state.onChange = toStdFunction(meta.onSliderChange, meta.onSliderChangeUserdata);
         gtk_range_set_range(GTK_RANGE(it->second), meta.sliderMin, meta.sliderMax);
@@ -754,25 +767,25 @@ private:
     GtkWidget *widget = nullptr;
     if (meta.kind == NativeWidgetKind::Button) {
       widget = gtk_button_new_with_label("");
-      buttonCallbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
-      connectOrdinal(widget, "clicked", G_CALLBACK(&Gtk4Backend::onButtonClicked), this, meta.ordinal);
+      buttonCallbacks_[stateKey] = toStdFunction(meta.onClick, meta.onClickUserdata);
+      connectOrdinal(widget, "clicked", G_CALLBACK(&Gtk4Backend::onButtonClicked), this, stateKey);
       if (meta.buttonFlat) gtk_widget_add_css_class(widget, "flat");
     } else if (meta.kind == NativeWidgetKind::Checkbox) {
       widget = gtk_check_button_new();
-      CheckboxState &state = checkboxStates_[meta.ordinal];
+      CheckboxState &state = checkboxStates_[stateKey];
       state.checked = meta.checked;
       state.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
       gtk_check_button_set_active(GTK_CHECK_BUTTON(widget), meta.checked && *meta.checked);
-      connectOrdinal(widget, "toggled", G_CALLBACK(&Gtk4Backend::onCheckboxToggled), this, meta.ordinal);
+      connectOrdinal(widget, "toggled", G_CALLBACK(&Gtk4Backend::onCheckboxToggled), this, stateKey);
     } else if (meta.kind == NativeWidgetKind::Entry) {
       widget = gtk_entry_new();
       gtk_entry_set_visibility(GTK_ENTRY(widget), !meta.password);
       gtk_entry_set_placeholder_text(GTK_ENTRY(widget), meta.placeholder ? meta.placeholder->c_str() : "");
-      syncEntry(widget, meta, entryStates_[meta.ordinal]);
-      connectOrdinal(widget, "activate", G_CALLBACK(&Gtk4Backend::onEntryActivated), this, meta.ordinal);
+      syncEntry(widget, meta, entryStates_[stateKey]);
+      connectOrdinal(widget, "activate", G_CALLBACK(&Gtk4Backend::onEntryActivated), this, stateKey);
     } else if (meta.kind == NativeWidgetKind::Radio) {
       widget = gtk_check_button_new();
-      RadioState &state = radioStates_[meta.ordinal];
+      RadioState &state = radioStates_[stateKey];
       state.selected = meta.radioSelected;
       state.value = meta.radioValue;
       state.onChange = toStdFunction(meta.onRadioChange, meta.onRadioChangeUserdata);
@@ -782,9 +795,9 @@ private:
         if (leader) gtk_check_button_set_group(GTK_CHECK_BUTTON(widget), GTK_CHECK_BUTTON(leader));
         else leader = widget;
       }
-      connectOrdinal(widget, "toggled", G_CALLBACK(&Gtk4Backend::onRadioToggled), this, meta.ordinal);
+      connectOrdinal(widget, "toggled", G_CALLBACK(&Gtk4Backend::onRadioToggled), this, stateKey);
     } else if (meta.kind == NativeWidgetKind::Switch) {
-      SwitchState &state = switchStates_[meta.ordinal];
+      SwitchState &state = switchStates_[stateKey];
       state.box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
       state.sw = gtk_switch_new();
       state.label = gtk_label_new("");
@@ -793,7 +806,7 @@ private:
       state.checked = meta.checked;
       state.onChange = toStdFunction(meta.onChange, meta.onChangeUserdata);
       gtk_switch_set_active(GTK_SWITCH(state.sw), meta.checked && *meta.checked);
-      connectOrdinal(state.sw, "notify::active", G_CALLBACK(&Gtk4Backend::onSwitchToggled), this, meta.ordinal);
+      connectOrdinal(state.sw, "notify::active", G_CALLBACK(&Gtk4Backend::onSwitchToggled), this, stateKey);
       widget = state.box;
     } else if (meta.kind == NativeWidgetKind::Dropdown) {
       std::vector<const char *> cstrs;
@@ -803,20 +816,20 @@ private:
       }
       cstrs.push_back(nullptr);
       widget = gtk_drop_down_new_from_strings(cstrs.data());
-      DropdownState &state = dropdownStates_[meta.ordinal];
+      DropdownState &state = dropdownStates_[stateKey];
       state.selected = meta.dropdownSelected;
       state.onChange = toStdFunction(meta.onDropdownChange, meta.onDropdownChangeUserdata);
       guint initialSelected = meta.dropdownSelected && *meta.dropdownSelected >= 0 ? (guint)*meta.dropdownSelected : GTK_INVALID_LIST_POSITION;
       gtk_drop_down_set_selected(GTK_DROP_DOWN(widget), initialSelected);
-      connectOrdinal(widget, "notify::selected", G_CALLBACK(&Gtk4Backend::onDropdownChanged), this, meta.ordinal);
+      connectOrdinal(widget, "notify::selected", G_CALLBACK(&Gtk4Backend::onDropdownChanged), this, stateKey);
     } else if (meta.kind == NativeWidgetKind::Slider) {
       widget = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, meta.sliderMin, meta.sliderMax, (meta.sliderMax - meta.sliderMin) / 1000.0);
       gtk_scale_set_draw_value(GTK_SCALE(widget), FALSE);
-      SliderState &state = sliderStates_[meta.ordinal];
+      SliderState &state = sliderStates_[stateKey];
       state.value = meta.sliderValue;
       state.onChange = toStdFunction(meta.onSliderChange, meta.onSliderChangeUserdata);
       if (meta.sliderValue) gtk_range_set_value(GTK_RANGE(widget), *meta.sliderValue);
-      connectOrdinal(widget, "value-changed", G_CALLBACK(&Gtk4Backend::onSliderChanged), this, meta.ordinal);
+      connectOrdinal(widget, "value-changed", G_CALLBACK(&Gtk4Backend::onSliderChanged), this, stateKey);
     } else if (meta.kind == NativeWidgetKind::Image) {
       widget = gtk_picture_new();
       gtk_picture_set_content_fit(GTK_PICTURE(widget), GTK_CONTENT_FIT_FILL);
@@ -904,10 +917,11 @@ private:
   }
 
   GtkWidget *ensureButtonIcon(GtkWidget *button, const NativeWidgetMeta &meta) {
-    ButtonIconState &state = buttonIconStates_[meta.ordinal];
+    const int stateKey = effectiveKey(meta);
+    ButtonIconState &state = buttonIconStates_[stateKey];
     bool wantIcon = meta.iconName != nullptr || meta.image != nullptr;
     if (!wantIcon) {
-      if (state.hasIcon) buttonIconStates_.erase(meta.ordinal);
+      if (state.hasIcon) buttonIconStates_.erase(stateKey);
       return nullptr;
     }
 
@@ -964,16 +978,29 @@ private:
     }
 
     if (!meta.image) return;
-    auto it = imageTextureSources_.find(widget);
-    if (it != imageTextureSources_.end() && it->second == meta.image) return;
 
-    gsize size = (gsize)meta.image->width * (gsize)meta.image->height * 4;
-    GBytes *bytes = g_bytes_new(meta.image->rgba, size);
-    GdkTexture *texture = gdk_memory_texture_new(meta.image->width, meta.image->height, GDK_MEMORY_R8G8B8A8, bytes, (gsize)meta.image->width * 4);
+    gtk_image_set_pixel_size(GTK_IMAGE(widget), meta.imageBoxSize > 0 ? (int)meta.imageBoxSize : -1);
+
+    const n8v::detail::DecodedImage *image = n8v::detail::getOrBakeRoundedImage(
+      meta.image,
+      meta.image->width,
+      meta.image->height,
+      meta.imageCornerRadius.topLeft,
+      meta.imageCornerRadius.topRight,
+      meta.imageCornerRadius.bottomLeft,
+      meta.imageCornerRadius.bottomRight
+    );
+
+    auto it = imageTextureSources_.find(widget);
+    if (it != imageTextureSources_.end() && it->second == image) return;
+
+    gsize size = (gsize)image->width * (gsize)image->height * 4;
+    GBytes *bytes = g_bytes_new(image->rgba, size);
+    GdkTexture *texture = gdk_memory_texture_new(image->width, image->height, GDK_MEMORY_R8G8B8A8, bytes, (gsize)image->width * 4);
     g_bytes_unref(bytes);
     gtk_image_set_from_paintable(GTK_IMAGE(widget), GDK_PAINTABLE(texture));
     g_object_unref(texture);
-    imageTextureSources_[widget] = meta.image;
+    imageTextureSources_[widget] = image;
   }
 
   void ensureImageTexture(GtkWidget *widget, const NativeWidgetMeta &meta, int targetW, int targetH, const Clay_CornerRadius &corner) {
@@ -1222,9 +1249,8 @@ private:
 
     auto rowIconIt = rowIcons_.find(meta.ordinal);
     if (rowIconIt != rowIcons_.end()) {
-      const char *freedesktopName = meta.iconName ? n8v::detail::resolveFreedesktopIconName(meta.iconName) : nullptr;
-      if (freedesktopName) {
-        gtk_image_set_from_icon_name(GTK_IMAGE(rowIconIt->second), freedesktopName);
+      if (meta.iconName || meta.image) {
+        ensureIconImage(rowIconIt->second, meta);
         gtk_widget_set_visible(rowIconIt->second, TRUE);
       } else {
         gtk_widget_set_visible(rowIconIt->second, FALSE);
@@ -1266,9 +1292,12 @@ private:
   float pointerY_ = 0.0f;
   bool pointerDown_ = false;
 
+  static constexpr int kActionRowMissTolerance = 4;
+
   std::map<WidgetKey, GtkWidget *> widgets_;
   std::map<WidgetKey, NativeWidgetKind> widgetKinds_;
   std::unordered_map<int, GtkWidget *> actionRows_;
+  std::unordered_map<int, int> actionRowMissStreak_;
   std::unordered_map<int, GtkWidget *> rowLabels_;
   std::unordered_map<int, GtkWidget *> rowIcons_;
   std::unordered_map<int, std::function<void()>> buttonCallbacks_;

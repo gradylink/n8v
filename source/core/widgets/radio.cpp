@@ -70,6 +70,7 @@ void _n8v_radio_commit(const char *label) {
   n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
   meta.kind = n8v::NativeWidgetKind::Radio;
   meta.ordinal = ordinal;
+  if (opts.id) meta.id = opts.id;
   meta.radioSelected = opts.selected;
   meta.radioValue = opts.value;
   meta.onRadioChange = opts.on_change;
