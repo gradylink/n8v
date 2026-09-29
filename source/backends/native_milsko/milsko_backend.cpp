@@ -5,6 +5,7 @@
 #include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
 #include "core/native_widget_meta.hpp"
+#include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
 #include "core/ui_core_internal.hpp"
 
@@ -264,6 +265,7 @@ public:
         MwDestroyWidget(it->second);
         actions_.erase(it->first.ordinal);
         entryStates_.erase(it->first.ordinal);
+        documentLastText_.erase(it->first.ordinal);
         it = widgets_.erase(it);
       } else {
         ++it;
@@ -303,6 +305,11 @@ private:
   static void MWAPI onActivate(MwWidget /*handle*/, void *userData, void * /*callData*/) {
     auto *action = static_cast<ClickAction *>(userData);
     if (action && action->callback) action->callback();
+  }
+
+  static void MWAPI onDocumentActivate(MwWidget /*handle*/, void * /*userData*/, void *callData) {
+    const char *href = static_cast<const char *>(callData);
+    if (href) n8v::detail::openUrl(href);
   }
 
   static void MWAPI onCheckboxChanged(MwWidget handle, void *userData, void * /*callData*/) {
@@ -462,6 +469,12 @@ private:
         action.onSliderChange = toStdFunction(meta.onSliderChange, meta.onSliderChangeUserdata);
         MwSetInteger(it->second, MwNvalue, sliderPositionFor(*meta.sliderValue, meta.sliderMin, meta.sliderMax));
       } else if (meta.kind == NativeWidgetKind::Panel) {
+      } else if (meta.kind == NativeWidgetKind::Document && meta.documentSource) {
+        std::string &lastText = documentLastText_[effectiveKey(meta)];
+        if (*meta.documentSource != lastText) {
+          MwSetString(it->second, MwNtext, meta.documentSource->c_str());
+          lastText = *meta.documentSource;
+        }
       } else {
         action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
       }
@@ -514,6 +527,13 @@ private:
     } else if (meta.kind == NativeWidgetKind::Panel) {
       widget = MwCreateWidget(MwButtonClass, "n8v-widget", currentParent(), 0, 0, 1, 1);
       MwSetInteger(widget, MwNflat, 1);
+    } else if (meta.kind == NativeWidgetKind::Document) {
+      widget = MwCreateWidget(MwDocumentClass, "n8v-document", currentParent(), 0, 0, 1, 1);
+      if (meta.documentSource) {
+        MwSetString(widget, MwNtext, meta.documentSource->c_str());
+        documentLastText_[effectiveKey(meta)] = *meta.documentSource;
+      }
+      MwAddUserHandler(widget, MwNdocumentActivateHandler, onDocumentActivate, nullptr);
     } else {
       action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
 
@@ -625,6 +645,7 @@ private:
   std::map<WidgetKey, MwWidget> widgets_;
   std::unordered_map<int, ClickAction> actions_;
   std::unordered_map<int, EntryState> entryStates_;
+  std::unordered_map<int, std::string> documentLastText_;
   std::unordered_map<MwWidget, const void *> imagePixmapSources_;
   std::unordered_map<uint32_t, ContainerFrame> scrollContainers_;
   std::vector<ContainerFrame> containerStack_;

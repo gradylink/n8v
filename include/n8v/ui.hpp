@@ -794,6 +794,18 @@ inline void icon(IconOptions options) {
   n8v_icon(c_opts);
 }
 
+inline void document(DocumentOptions options) {
+  std::string markdownStorage(options.markdown);
+  std::string idStorage(options.id);
+  n8v_document_options c_opts{};
+  c_opts.markdown = markdownStorage.c_str();
+  c_opts.width = toC(options.width);
+  c_opts.height = toC(options.height);
+  c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
+
+  n8v_document(c_opts);
+}
+
 } // namespace n8v::detail
 
 namespace n8v {
@@ -820,6 +832,8 @@ inline void slider(SliderOptions options) { detail::slider(std::move(options)); 
 inline void image(ImageOptions options) { detail::image(std::move(options)); }
 
 inline void icon(IconOptions options) { detail::icon(std::move(options)); }
+
+inline void document(DocumentOptions options) { detail::document(std::move(options)); }
 
 inline void scrollToBottom(std::string_view containerId) {
   std::string storage(containerId);

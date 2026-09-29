@@ -348,6 +348,9 @@ set(N8V_SOURCES
   source/core/widgets/icon.cpp
   source/core/widgets/sidebar.cpp
   source/core/widgets/panel.cpp
+  source/core/widgets/document.cpp
+  source/core/markdown/markdown.cpp
+  source/core/markdown/markdown_to_html.cpp
   source/styles/style_registry.cpp
   source/styles/plain/plain_style.cpp
   source/styles/material/material_style.cpp
@@ -370,6 +373,7 @@ if(EMSCRIPTEN)
     source/backends/clay_fallback/renderers/html/text_measure.cpp
     source/backends/clay_fallback/renderers/html/js_bridge.cpp
     source/backends/clay_fallback/renderers/html/image_field.cpp
+    source/backends/clay_fallback/renderers/html/document_field.cpp
   )
 else()
   list(APPEND N8V_SOURCES
@@ -380,6 +384,7 @@ else()
     source/backends/clay_fallback/renderers/sdl2/indicators.cpp
     source/backends/clay_fallback/renderers/sdl2/draw_primitives.cpp
     source/backends/clay_fallback/renderers/sdl2/image_field.cpp
+    source/backends/clay_fallback/renderers/sdl2/document_field.cpp
   )
 endif()
 
@@ -415,6 +420,7 @@ foreach(_n8v_target ${_n8v_targets})
   cl_add_dep(${_n8v_target} clay PRIVATE)
   cl_add_dep(${_n8v_target} stb_truetype PRIVATE)
   cl_add_dep(${_n8v_target} stb_image PRIVATE)
+  cl_add_dep(${_n8v_target} md4c PRIVATE)
 
   if(NOT EMSCRIPTEN)
     target_link_libraries(${_n8v_target} PUBLIC sdl2_lazy)

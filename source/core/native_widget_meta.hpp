@@ -3,6 +3,9 @@
 #include <n8v/n8v_c.h>
 #include <n8v/types.hpp>
 
+#include "core/markdown/markdown.hpp"
+
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -56,8 +59,8 @@ struct NativeWidgetMeta {
   n8v::Color chevronColor{};                                // DropdownChevron only
   bool chevronPointsUp = false;                             // DropdownChevron only
   const DecodedImage *image = nullptr;                      // Image/Icon - the bundled-fallback raster, always decoded eagerly by core
-  float imageBoxSize = 0.0f;                                 // Button/sidebar page with `.image` only - forces the native icon widget to this square pixel size
-  n8v::CornerRadius imageCornerRadius{};                     // Button/sidebar page with `.image` only - resolved from PageOptions::imageRounding
+  float imageBoxSize = 0.0f;                                // Button/sidebar page with `.image` only - forces the native icon widget to this square pixel size
+  n8v::CornerRadius imageCornerRadius{};                    // Button/sidebar page with `.image` only - resolved from PageOptions::imageRounding
   const char *iconName = nullptr;                           // Icon widget, and Button when an icon was requested - canonical name, for backends with a native icon theme/set
   n8v::IconVariant iconVariant = n8v::IconVariant::Outline; // Icon/Button only
   bool iconTrailing = false;                                // Button only
@@ -66,21 +69,27 @@ struct NativeWidgetMeta {
   bool sidebarCompact = false;                              // Sidebar and its page rows
   n8v::Color iconTint{}; // Icon widget only - the tint used to decode `image`, so backends can re-decode a freedesktop-theme file (found on disk, not in the bundle) with the
                          // same color
-  n8v::Color switchTrackColor{};                   // Switch only - eased track fill (on/off interpolated)
-  n8v::Color switchTrackBorderColor{};             // Switch only
-  float switchTrackBorderWidth = 0.0f;             // Switch only
-  n8v::Color switchKnobColor{};                    // Switch only - the knob's own fill
-  n8v::Color switchKnobGlyphColor{};               // Switch only - Material 3 Expressive's checkmark drawn inside the "on" knob
-  float switchGlyphScale = 0.0f;                   // Switch only - eased 0..1 opacity of the in-knob glyph (0 for styles without one)
-  float switchKnobPosition = 0.0f;                 // Switch only - eased 0 (off, left) .. 1 (on, right)
-  float switchKnobSize = 0.0f;                     // Switch only - eased knob diameter (Material 3 Expressive grows it when on)
-  float switchTrackWidth = 0.0f;                   // Switch only
-  float switchTrackHeight = 0.0f;                  // Switch only
-  n8v::PanelRole panelRole = n8v::PanelRole::Card; // Panel only
-  n8v::Color panelBackground{};                    // Panel only
-  n8v::Color panelBorderColor{};                   // Panel only
-  float panelBorderWidth = 0.0f;                   // Panel only
-  n8v::CornerRadius panelCornerRadius{};           // Panel only
+  n8v::Color switchTrackColor{};                                // Switch only - eased track fill (on/off interpolated)
+  n8v::Color switchTrackBorderColor{};                          // Switch only
+  float switchTrackBorderWidth = 0.0f;                          // Switch only
+  n8v::Color switchKnobColor{};                                 // Switch only - the knob's own fill
+  n8v::Color switchKnobGlyphColor{};                            // Switch only - Material 3 Expressive's checkmark drawn inside the "on" knob
+  float switchGlyphScale = 0.0f;                                // Switch only - eased 0..1 opacity of the in-knob glyph (0 for styles without one)
+  float switchKnobPosition = 0.0f;                              // Switch only - eased 0 (off, left) .. 1 (on, right)
+  float switchKnobSize = 0.0f;                                  // Switch only - eased knob diameter (Material 3 Expressive grows it when on)
+  float switchTrackWidth = 0.0f;                                // Switch only
+  float switchTrackHeight = 0.0f;                               // Switch only
+  n8v::PanelRole panelRole = n8v::PanelRole::Card;              // Panel only
+  n8v::Color panelBackground{};                                 // Panel only
+  n8v::Color panelBorderColor{};                                // Panel only
+  float panelBorderWidth = 0.0f;                                // Panel only
+  n8v::CornerRadius panelCornerRadius{};                        // Panel only
+  const std::string *documentSource = nullptr;                  // Document only
+  const n8v::detail::markdown::Document *documentAst = nullptr; // Document only
+  n8v::Color documentTextColor{};                               // Document only
+  n8v::Color documentLinkColor{};                               // Document only
+  n8v::FontFamily documentFont = n8v::FontFamily::DejaVuSans;   // Document only
+  uint16_t documentFontSize = 16;                               // Document only
 };
 
 inline int stableWidgetKey(std::string_view id, int ordinal) {

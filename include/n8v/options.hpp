@@ -151,6 +151,13 @@ struct PageOptions {
   Rounding imageRounding = Rounding::styleDefault();
 };
 
+struct DocumentOptions {
+  std::string_view markdown = {};
+  Sizing width = Sizing::grow();
+  Sizing height = Sizing::grow();
+  std::string_view id = {};
+};
+
 struct IconOptions {
   std::string name;
   IconVariant variant = IconVariant::Outline;

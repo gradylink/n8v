@@ -3,7 +3,9 @@
 #include "core/icon_loader.hpp"
 #include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
+#include "core/markdown/markdown.hpp"
 #include "core/native_widget_meta.hpp"
+#include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
 #include "core/ui_core_internal.hpp"
 
@@ -59,6 +61,89 @@ bool useAdwActionRow(const n8v::detail::NativeWidgetMeta &meta) {
   (void)meta;
   return false;
 #endif
+}
+
+std::string escapeMarkup(std::string_view text) {
+  gchar *escaped = g_markup_escape_text(std::string(text).c_str(), -1);
+  std::string result = escaped;
+  g_free(escaped);
+  return result;
+}
+
+void appendInlineRunsMarkup(std::string &out, const std::vector<n8v::detail::markdown::InlineRun> &runs) {
+  for (const n8v::detail::markdown::InlineRun &run : runs) {
+    bool link = !run.linkUrl.empty();
+    if (link) {
+      out += "<a href=\"" + escapeMarkup(run.linkUrl) + "\">";
+    }
+    if (run.bold) out += "<b>";
+    if (run.italic) out += "<i>";
+    if (run.strikethrough) out += "<s>";
+    if (run.code) out += "<span font_family=\"monospace\" background=\"#00000014\">";
+    out += escapeMarkup(run.text);
+    if (run.code) out += "</span>";
+    if (run.strikethrough) out += "</s>";
+    if (run.italic) out += "</i>";
+    if (run.bold) out += "</b>";
+    if (link) out += "</a>";
+  }
+}
+
+void appendBlocksMarkup(std::string &out, const std::vector<n8v::detail::markdown::Block> &blocks) {
+  using n8v::detail::markdown::BlockKind;
+  for (size_t i = 0; i < blocks.size(); i++) {
+    const n8v::detail::markdown::Block &block = blocks[i];
+    if (i > 0) out += "\n\n";
+    switch (block.kind) {
+    case BlockKind::Heading: {
+      const char *size = block.level <= 1 ? "xx-large" : block.level == 2 ? "x-large" : block.level == 3 ? "large" : "medium";
+      out += "<span size=\"" + std::string(size) + "\" weight=\"bold\">";
+      appendInlineRunsMarkup(out, block.inlines);
+      out += "</span>";
+      break;
+    }
+    case BlockKind::Paragraph: {
+      appendInlineRunsMarkup(out, block.inlines);
+      break;
+    }
+    case BlockKind::CodeBlock: {
+      out += "<span font_family=\"monospace\" background=\"#00000014\">" + escapeMarkup(block.codeText) + "</span>";
+      break;
+    }
+    case BlockKind::BulletList: {
+      for (size_t j = 0; j < block.listItems.size(); j++) {
+        if (j > 0) out += "\n";
+        out += "• ";
+        appendInlineRunsMarkup(out, block.listItems[j]);
+      }
+      break;
+    }
+    case BlockKind::OrderedList: {
+      for (size_t j = 0; j < block.listItems.size(); j++) {
+        if (j > 0) out += "\n";
+        out += std::to_string(block.orderedStart + (int)j) + ". ";
+        appendInlineRunsMarkup(out, block.listItems[j]);
+      }
+      break;
+    }
+    case BlockKind::BlockQuote: {
+      out += "<span alpha=\"75%\"><i>";
+      appendBlocksMarkup(out, block.children);
+      out += "</i></span>";
+      break;
+    }
+    case BlockKind::ThematicBreak: {
+      out += "――――――――";
+      break;
+    }
+    }
+  }
+}
+
+std::string documentToPangoMarkup(const n8v::detail::markdown::Document &doc) {
+  std::string out;
+  appendBlocksMarkup(out, doc);
+  return out;
 }
 
 void setPlainLabelText(GtkWidget *label, std::string_view text, bool bold, bool italic, bool strikethrough = false) {
@@ -544,6 +629,20 @@ private:
     return TRUE;
   }
 
+  static gboolean onDocumentLinkActivated(GtkLabel *, const char *uri, gpointer) {
+    if (uri) n8v::detail::openUrl(uri);
+    return TRUE;
+  }
+
+  void syncDocumentMarkup(GtkLabel *label, const n8v::detail::markdown::Document &doc, int stateKey) {
+    std::string &lastMarkup = documentLastMarkup_[stateKey];
+    std::string markup = documentToPangoMarkup(doc);
+    if (markup != lastMarkup) {
+      gtk_label_set_markup(label, markup.c_str());
+      lastMarkup = std::move(markup);
+    }
+  }
+
   static void onSidebarRowActivated(GtkListBox *, GtkListBoxRow *row, gpointer userData) {
     auto *backend = static_cast<Gtk4Backend *>(userData);
     int ordinal = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(row), "n8v-ordinal"));
@@ -683,6 +782,7 @@ private:
     buttonCallbacks_.erase(key.ordinal);
     checkboxStates_.erase(key.ordinal);
     entryStates_.erase(key.ordinal);
+    documentLastMarkup_.erase(key.ordinal);
     radioStates_.erase(key.ordinal);
     for (auto groupIt = radioGroups_.begin(); groupIt != radioGroups_.end();) {
       if (groupIt->second == widget) groupIt = radioGroups_.erase(groupIt);
@@ -752,6 +852,8 @@ private:
         if (current != wantSelected) gtk_drop_down_set_selected(GTK_DROP_DOWN(it->second), wantSelected);
       } else if (meta.kind == NativeWidgetKind::Panel) {
         if (meta.panelRole != n8v::PanelRole::ListItem) ensurePanelStyle(it->second, meta);
+      } else if (meta.kind == NativeWidgetKind::Document && meta.documentAst) {
+        syncDocumentMarkup(GTK_LABEL(it->second), *meta.documentAst, stateKey);
       } else if (meta.kind == NativeWidgetKind::Link) {
         buttonCallbacks_[stateKey] = toStdFunction(meta.onClick, meta.onClickUserdata);
       } else if (meta.kind == NativeWidgetKind::Slider && meta.sliderValue) {
@@ -852,6 +954,16 @@ private:
       gtk_widget_set_valign(widget, GTK_ALIGN_START);
       buttonCallbacks_[meta.ordinal] = toStdFunction(meta.onClick, meta.onClickUserdata);
       connectOrdinal(widget, "activate-link", G_CALLBACK(&Gtk4Backend::onLinkActivated), this, meta.ordinal);
+    } else if (meta.kind == NativeWidgetKind::Document) {
+      widget = gtk_label_new("");
+      gtk_label_set_use_markup(GTK_LABEL(widget), TRUE);
+      gtk_label_set_wrap(GTK_LABEL(widget), TRUE);
+      gtk_label_set_wrap_mode(GTK_LABEL(widget), PANGO_WRAP_WORD_CHAR);
+      gtk_label_set_xalign(GTK_LABEL(widget), 0.0f);
+      gtk_label_set_yalign(GTK_LABEL(widget), 0.0f);
+      gtk_widget_set_valign(widget, GTK_ALIGN_START);
+      g_signal_connect_data(widget, "activate-link", G_CALLBACK(&Gtk4Backend::onDocumentLinkActivated), nullptr, nullptr, (GConnectFlags)0);
+      if (meta.documentAst) syncDocumentMarkup(GTK_LABEL(widget), *meta.documentAst, stateKey);
     } else {
       widget = gtk_label_new("");
       gtk_label_set_use_markup(GTK_LABEL(widget), TRUE);
@@ -1304,6 +1416,7 @@ private:
   std::unordered_map<int, CheckboxState> checkboxStates_;
   std::unordered_map<int, SwitchState> switchStates_;
   std::unordered_map<int, EntryState> entryStates_;
+  std::unordered_map<int, std::string> documentLastMarkup_;
   std::unordered_map<int, RadioState> radioStates_;
   std::unordered_map<int *, GtkWidget *> radioGroups_;
   std::unordered_map<int, DropdownState> dropdownStates_;

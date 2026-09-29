@@ -786,6 +786,8 @@ private:
         syncSlider(static_cast<QSlider *>(it->second), meta, sliderStates_[stateKey]);
       } else if (meta.kind == NativeWidgetKind::Panel) {
         if (meta.panelRole != n8v::PanelRole::ListItem) applyPanelStyle(it->second, meta);
+      } else if (meta.kind == NativeWidgetKind::Document && meta.documentSource) {
+        static_cast<QLabel *>(it->second)->setText(QString::fromUtf8(meta.documentSource->data(), (int)meta.documentSource->size()));
       }
       return it->second;
     }
@@ -865,6 +867,14 @@ private:
       frame->setAttribute(Qt::WA_TransparentForMouseEvents);
       applyPanelStyle(frame, meta);
       widget = frame;
+    } else if (meta.kind == NativeWidgetKind::Document) {
+      auto *label = new QLabel(currentParent());
+      label->setTextFormat(Qt::MarkdownText);
+      label->setWordWrap(true);
+      label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+      label->setOpenExternalLinks(true);
+      if (meta.documentSource) label->setText(QString::fromUtf8(meta.documentSource->data(), (int)meta.documentSource->size()));
+      widget = label;
     } else {
       auto *label = new N8VLinkLabel(currentParent());
       label->setTextFormat(Qt::RichText);

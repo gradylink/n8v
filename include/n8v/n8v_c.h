@@ -321,6 +321,13 @@ typedef struct n8v_sidebar_options {
   bool compact;
 } n8v_sidebar_options;
 
+typedef struct n8v_document_options {
+  const char *markdown;
+  n8v_sizing width;
+  n8v_sizing height;
+  const char *id;
+} n8v_document_options;
+
 typedef struct n8v_page_options {
   const char *name;
   const char *icon;
@@ -603,6 +610,7 @@ N8V_API void n8v_slider(n8v_slider_options options);
 N8V_API void n8v_image(n8v_image_options options);
 N8V_API void n8v_set_image_bundle_lookup(n8v_image_bundle_lookup_fn fn, void *userdata);
 N8V_API void n8v_icon(n8v_icon_options options);
+N8V_API void n8v_document(n8v_document_options options);
 
 #ifdef __cplusplus
 }

@@ -30,6 +30,7 @@ if(N8V_BACKEND_MILSKO)
         MwImageClass MwClass
         MwViewportClass MwClass
         MwBoxClass MwClass
+        MwDocumentClass MwClass
         MwTTFData "unsigned char"
         MwTTFDataSize "unsigned int"
         MwBoldTTFData "unsigned char"

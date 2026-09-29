@@ -59,6 +59,7 @@ enum class NativeWidgetKind {
   Switch,
   Sidebar,
   Panel,
+  Document,
 };
 
 enum class PanelRole {

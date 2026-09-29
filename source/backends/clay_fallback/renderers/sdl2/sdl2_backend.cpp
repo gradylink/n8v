@@ -142,6 +142,10 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
         drawDropdownChevron(command->boundingBox, Clay_Color{meta->chevronColor.r, meta->chevronColor.g, meta->chevronColor.b, meta->chevronColor.a}, meta->chevronPointsUp);
         break;
       }
+      if (meta && meta->kind == NativeWidgetKind::Document) {
+        renderDocument(*meta, command->boundingBox);
+        break;
+      }
 
       pendingEntryMeta = nullptr;
       pendingEntryClicked = false;

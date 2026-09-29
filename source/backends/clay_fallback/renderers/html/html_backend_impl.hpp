@@ -112,6 +112,7 @@ private:
   void syncEntryInput(NativeWidgetMeta &meta, const Clay_BoundingBox &fieldBox, const Clay_RenderCommand &textCommand);
   void removeUntouchedEntryInputs();
   void renderLinkText(NativeWidgetMeta &meta, const Clay_RenderCommand &command);
+  void renderDocument(NativeWidgetMeta &meta, const Clay_RenderCommand &command);
   void injectFontFaces();
 
   struct RectSignature {
@@ -184,6 +185,7 @@ private:
   std::unordered_map<int, SwitchSignature> switchSig_;
   std::unordered_map<const void *, std::string> imageDataUris_;
   std::unordered_map<ElementKey, const void *> elementImageSource_;
+  std::unordered_map<ElementKey, const void *> elementDocumentSource_;
   std::vector<ClipFrame> clipStack_;
 
   float pointerX_ = 0.0f, pointerY_ = 0.0f;

@@ -4,7 +4,9 @@
 #include "core/icon_loader.hpp"
 #include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
+#include "core/markdown/markdown_to_html.hpp"
 #include "core/native_widget_meta.hpp"
+#include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
 #include "core/ui_core_internal.hpp"
 
@@ -21,6 +23,7 @@
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Group.H>
+#include <FL/Fl_Help_View.H>
 #include <FL/Fl_Hor_Slider.H>
 #include <FL/Fl_Input.H>
 #include <FL/Fl_RGB_Image.H>
@@ -257,6 +260,7 @@ public:
         delete it->second;
         actions_.erase(it->first.ordinal);
         entryStates_.erase(it->first.ordinal);
+        documentLastHtml_.erase(it->first.ordinal);
         it = widgets_.erase(it);
       } else {
         ++it;
@@ -541,6 +545,8 @@ private:
         if (sliderWidget->value() != *meta.sliderValue) sliderWidget->value(*meta.sliderValue);
       } else if (meta.kind == NativeWidgetKind::Panel && meta.panelRole != n8v::PanelRole::ListItem) {
         applyPanelStyle(static_cast<Fl_Box *>(it->second), meta);
+      } else if (meta.kind == NativeWidgetKind::Document && meta.documentAst) {
+        syncDocumentHtml(static_cast<Fl_Help_View *>(it->second), *meta.documentAst, effectiveKey(meta));
       }
       return it->second;
     }
@@ -620,6 +626,11 @@ private:
       auto *box = new Fl_Box(0, 0, 1, 1);
       applyPanelStyle(box, meta);
       widget = box;
+    } else if (meta.kind == NativeWidgetKind::Document) {
+      auto *view = new Fl_Help_View(0, 0, 1, 1);
+      view->link(&FltkBackend::onHelpLinkClicked);
+      if (meta.documentAst) syncDocumentHtml(view, *meta.documentAst, effectiveKey(meta));
+      widget = view;
     } else {
       auto *button = new Fl_Button(0, 0, 1, 1);
       action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
@@ -638,6 +649,20 @@ private:
   void applyPanelStyle(Fl_Box *box, const NativeWidgetMeta &meta) {
     box->box(FL_ENGRAVED_BOX);
     box->color(FL_BACKGROUND_COLOR);
+  }
+
+  static const char *onHelpLinkClicked(Fl_Widget *, const char *uri) {
+    if (uri) n8v::detail::openUrl(uri);
+    return nullptr; // non-null would make Fl_Help_View navigate to it as its own document
+  }
+
+  void syncDocumentHtml(Fl_Help_View *view, const n8v::detail::markdown::Document &doc, int stateKey) {
+    std::string &lastHtml = documentLastHtml_[stateKey];
+    std::string html = n8v::detail::markdown::toHtml(doc);
+    if (html != lastHtml) {
+      view->value(html.c_str());
+      lastHtml = std::move(html);
+    }
   }
 
   Fl_Box *ensureLabel(const WidgetKey &key) {
@@ -669,6 +694,7 @@ private:
   std::map<WidgetKey, Fl_Widget *> widgets_;
   std::unordered_map<int, WidgetAction> actions_;
   std::unordered_map<int, EntryState> entryStates_;
+  std::unordered_map<int, std::string> documentLastHtml_;
   std::unordered_map<Fl_Widget *, ImageState> imageStates_;
   std::unordered_map<Fl_Widget *, Clay_BoundingBox> lastBox_;
   std::unordered_map<uint32_t, ContainerFrame> scrollContainers_;

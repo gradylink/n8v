@@ -124,6 +124,22 @@ int main() {
           }
         }
 
+        page({.name = "Document", .icon = "file"}) {
+          flex({.direction = Direction::Vertical, .padding = {20, 20, 20, 20}, .width = Sizing::grow(), .height = Sizing::grow()}) {
+            document({
+              .markdown = "# Document widget\n\n"
+                          "This renders **bold**, *italic*, ~~strikethrough~~, and `inline code`.\n\n"
+                          "It also supports [links](https://example.com), lists:\n\n"
+                          "- First item\n- Second item\n- Third item\n\n"
+                          "1. One\n2. Two\n3. Three\n\n"
+                          "> A blockquote for emphasis.\n\n"
+                          "```\nfn code_block() {\n    println!(\"hi\");\n}\n```\n",
+              .width = Sizing::grow(),
+              .height = Sizing::grow(),
+            });
+          }
+        }
+
         page({.name = "About", .icon = "info"}) {
           flex({.direction = Direction::Vertical, .gap = 12, .padding = {20, 20, 20, 20}, .width = Sizing::grow()}) {
             text({.bold = true})("About");

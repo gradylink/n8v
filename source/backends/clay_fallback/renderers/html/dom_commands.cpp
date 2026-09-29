@@ -123,6 +123,7 @@ void HtmlBackend::removeUntouchedElements() {
       elementBorderSig_.erase(it->first);
       elementChevronSig_.erase(it->first);
       elementImageSource_.erase(it->first);
+      elementDocumentSource_.erase(it->first);
       it = elementCache_.erase(it);
     } else {
       ++it;
@@ -132,6 +133,11 @@ void HtmlBackend::removeUntouchedElements() {
 
 void HtmlBackend::renderRectangle(const Clay_RenderCommand &command, PendingState &pending) {
   auto *meta = static_cast<NativeWidgetMeta *>(command.userData);
+
+  if (meta && meta->kind == NativeWidgetKind::Document) {
+    renderDocument(*meta, command);
+    return;
+  }
 
   pending.isCheckbox = meta && meta->kind == NativeWidgetKind::Checkbox;
   pending.isRadio = meta && meta->kind == NativeWidgetKind::Radio;
