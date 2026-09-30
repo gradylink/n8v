@@ -53,6 +53,12 @@ struct PendingScrollTarget {
 };
 std::vector<PendingScrollTarget> pendingScrollTargets;
 std::vector<std::string> stickyBottomContainerIds;
+
+struct StickyBottomState {
+  float lastMaxScrollY = 0.0f;
+  float lastContentHeight = -1.0f;
+};
+std::unordered_map<std::string, StickyBottomState> stickyBottomState;
 constexpr float kStickyBottomEpsilonPx = 24.0f;
 constexpr int kScrollRequestTimeoutFrames = 60;
 
@@ -79,10 +85,16 @@ void resolvePendingScrollRequests() {
     Clay_ScrollContainerData scrollData = Clay_GetScrollContainerData(cid);
     if (!scrollData.found) continue;
     float maxScrollY = std::max(scrollData.contentDimensions.height - scrollData.scrollContainerDimensions.height, 0.0f);
-    float currentY = -scrollData.scrollPosition->y;
-    if (currentY >= maxScrollY - kStickyBottomEpsilonPx) {
-      applyScrollY(backend, cid.id, maxScrollY, scrollData);
+    StickyBottomState &state = stickyBottomState[containerId];
+    if (scrollData.contentDimensions.height != state.lastContentHeight) {
+      float currentY = -scrollData.scrollPosition->y;
+      bool wasAtBottom = currentY >= state.lastMaxScrollY - kStickyBottomEpsilonPx;
+      if (wasAtBottom) {
+        applyScrollY(backend, cid.id, maxScrollY, scrollData);
+      }
+      state.lastContentHeight = scrollData.contentDimensions.height;
     }
+    state.lastMaxScrollY = maxScrollY;
   }
   stickyBottomContainerIds.clear();
 
