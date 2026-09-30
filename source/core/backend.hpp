@@ -57,6 +57,8 @@ struct Backend {
   virtual void setScrollOffsetY(uint32_t /*containerId*/, float /*y*/) {}
   virtual void setScrollOffsetX(uint32_t /*containerId*/, float /*x*/) {}
 
+  virtual Clay_Vector2 queryScrollOffset(uint32_t /*elementId*/) const { return {0, 0}; }
+
   virtual void beginFrame() = 0;
   virtual void present(Clay_RenderCommandArray commands) = 0;
   virtual void setCursor(CursorKind cursor) = 0;

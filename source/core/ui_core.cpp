@@ -8,6 +8,8 @@
 
 #include <clay.h>
 
+void Clay_SetExternalScrollHandlingEnabled(bool enabled);
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -34,6 +36,8 @@ Clay_Dimensions measureText(Clay_StringSlice text, Clay_TextElementConfig *confi
 }
 
 void clayErrorHandler(Clay_ErrorData errorData) { std::fprintf(stderr, "[n8v] Clay error: %.*s\n", (int)errorData.errorText.length, errorData.errorText.chars); }
+
+Clay_Vector2 queryScrollOffset(uint32_t elementId, void * /*userData*/) { return n8v::activeBackend().queryScrollOffset(elementId); }
 
 Clay_String toClayStr(const std::string &s) { return Clay_String{false, (int32_t)s.size(), s.data()}; }
 
@@ -149,6 +153,11 @@ void ensureInitialized() {
   Clay_Initialize(arena, n8v::activeBackend().windowSize(), Clay_ErrorHandler{clayErrorHandler, nullptr});
   Clay_SetMeasureTextFunction(measureText, nullptr);
   Clay_SetCullingEnabled(!n8v::activeBackend().rendersNativeChrome());
+
+  if (!n8v::activeBackend().ownsScrollMath()) {
+    Clay_SetExternalScrollHandlingEnabled(true);
+    Clay_SetQueryScrollOffsetFunction(queryScrollOffset, nullptr);
+  }
 }
 
 float frameDelta() {

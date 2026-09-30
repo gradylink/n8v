@@ -339,7 +339,19 @@ public:
     return {(float)natW, (float)natH};
   }
 
-  void beginFrame() override { Clay_SetPointerState({pointerX_ + rootOriginX_, pointerY_}, false); }
+  void beginFrame() override {
+    float correctedX = pointerX_;
+    float correctedY = pointerY_;
+    for (auto it = scrollRegions_.rbegin(); it != scrollRegions_.rend(); ++it) {
+      if (pointerX_ < it->x || pointerX_ > it->x + it->w || pointerY_ < it->y || pointerY_ > it->y + it->h) continue;
+      GtkAdjustment *hadj = gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(it->scrolled));
+      GtkAdjustment *vadj = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(it->scrolled));
+      correctedX += (float)gtk_adjustment_get_value(hadj);
+      correctedY += (float)gtk_adjustment_get_value(vadj);
+      break;
+    }
+    Clay_SetPointerState({correctedX + rootOriginX_, correctedY}, false);
+  }
 
   void configureAdjustment(GtkAdjustment *adj, uint32_t containerId, bool horizontal, float value) {
     Clay_ScrollContainerData scrollData = Clay_GetScrollContainerData(Clay_ElementId{containerId});
@@ -366,6 +378,14 @@ public:
     configureAdjustment(gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(it->second.scrolled)), containerId, true, x);
   }
 
+  Clay_Vector2 queryScrollOffset(uint32_t elementId) const override {
+    auto it = scrollContainers_.find(elementId);
+    if (it == scrollContainers_.end()) return {0, 0};
+    GtkAdjustment *hadj = gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(it->second.scrolled));
+    GtkAdjustment *vadj = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(it->second.scrolled));
+    return {-(float)gtk_adjustment_get_value(hadj), -(float)gtk_adjustment_get_value(vadj)};
+  }
+
   void present(Clay_RenderCommandArray commands) override {
     std::map<int, int> wrapLineCounts;
     std::set<WidgetKey> seenKeys;
@@ -380,6 +400,7 @@ public:
     std::set<int> seenSidebarOrdinals;
     containerStack_.clear();
     touchedScrollContainers_.clear();
+    scrollRegions_.clear();
 
     for (int32_t i = 0; i < commands.length; ++i) {
       Clay_RenderCommand *command = Clay_RenderCommandArray_Get(&commands, i);
@@ -1199,6 +1220,12 @@ private:
     GtkWidget *sidebarTitleLabel = nullptr;
   };
 
+  struct ScrollRegion {
+    GtkWidget *scrolled;
+    float x, y, w, h;
+  };
+  std::vector<ScrollRegion> scrollRegions_;
+
   struct SidebarPanel {
     GtkWidget *root = nullptr;
     GtkWidget *titleLabel = nullptr;
@@ -1235,6 +1262,7 @@ private:
     gtk_widget_set_size_request(frame.scrolled, (int)box.width, (int)box.height);
     frame.originX = box.x;
     frame.originY = box.y;
+    scrollRegions_.push_back(ScrollRegion{frame.scrolled, box.x - originX, box.y - originY, box.width, box.height});
 
     Clay_ScrollContainerData scrollData = Clay_GetScrollContainerData(Clay_ElementId{id});
     if (scrollData.found) {
