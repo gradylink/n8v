@@ -23,6 +23,8 @@ struct FlexOptions {
   bool clipVertical = false;
   std::string_view id = {};
   bool stickToBottom = false;
+  /** Invoked once when the pointer enters or leaves this element, with the new hover state. Requires `.id`. */
+  std::function<void(bool)> onHover = {};
 };
 
 struct PanelOptions {

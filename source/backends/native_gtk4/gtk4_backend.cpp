@@ -146,6 +146,35 @@ std::string documentToPangoMarkup(const n8v::detail::markdown::Document &doc) {
   return out;
 }
 
+bool documentHasLinks(const std::vector<n8v::detail::markdown::Block> &blocks) {
+  using n8v::detail::markdown::BlockKind;
+  auto runsHaveLink = [](const std::vector<n8v::detail::markdown::InlineRun> &runs) {
+    for (const n8v::detail::markdown::InlineRun &run : runs)
+      if (!run.linkUrl.empty()) return true;
+    return false;
+  };
+  for (const n8v::detail::markdown::Block &block : blocks) {
+    switch (block.kind) {
+    case BlockKind::Heading:
+    case BlockKind::Paragraph:
+      if (runsHaveLink(block.inlines)) return true;
+      break;
+    case BlockKind::BulletList:
+    case BlockKind::OrderedList:
+      for (const auto &item : block.listItems)
+        if (runsHaveLink(item)) return true;
+      break;
+    case BlockKind::BlockQuote:
+      if (documentHasLinks(block.children)) return true;
+      break;
+    case BlockKind::CodeBlock:
+    case BlockKind::ThematicBreak:
+      break;
+    }
+  }
+  return false;
+}
+
 void setPlainLabelText(GtkWidget *label, std::string_view text, bool bold, bool italic, bool strikethrough = false) {
   if (!bold && !italic && !strikethrough) {
     gtk_label_set_text(GTK_LABEL(label), std::string(text).c_str());
@@ -310,7 +339,7 @@ public:
     return {(float)natW, (float)natH};
   }
 
-  void beginFrame() override { Clay_SetPointerState({pointerX_, pointerY_}, false); }
+  void beginFrame() override { Clay_SetPointerState({pointerX_ + rootOriginX_, pointerY_}, false); }
 
   void configureAdjustment(GtkAdjustment *adj, uint32_t containerId, bool horizontal, float value) {
     Clay_ScrollContainerData scrollData = Clay_GetScrollContainerData(Clay_ElementId{containerId});
@@ -641,6 +670,7 @@ private:
       gtk_label_set_markup(label, markup.c_str());
       lastMarkup = std::move(markup);
     }
+    gtk_widget_set_can_target(GTK_WIDGET(label), documentHasLinks(doc) ? TRUE : FALSE);
   }
 
   static void onSidebarRowActivated(GtkListBox *, GtkListBoxRow *row, gpointer userData) {

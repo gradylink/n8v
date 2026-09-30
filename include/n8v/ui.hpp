@@ -546,6 +546,7 @@ inline void openFlex(const FlexOptions &options) {
   c_opts.clip_vertical = options.clipVertical;
   c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
   c_opts.stick_to_bottom = options.stickToBottom;
+  if (options.onHover) callback_bridge::bridge(callback_bridge::boolChangeClosures, options.onHover, c_opts.on_hover, c_opts.on_hover_userdata);
   n8v_open_flex(c_opts);
 }
 
@@ -859,6 +860,12 @@ inline void scrollToElement(std::string_view containerId, std::string_view eleme
   std::string containerStorage(containerId);
   std::string elementStorage(elementId);
   n8v_scroll_to_element(containerStorage.c_str(), elementStorage.c_str(), paddingLeft, paddingTop);
+}
+
+/** Whether the pointer was over the flex/panel element with this id as of the last completed frame. */
+inline bool isHovered(std::string_view id) {
+  std::string storage(id);
+  return n8v_is_hovered(storage.c_str());
 }
 
 inline bool initialize(int width, int height, std::string_view title) {

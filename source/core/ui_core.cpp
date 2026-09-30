@@ -12,8 +12,10 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace {
@@ -249,9 +251,25 @@ void n8v_open_flex(n8v_flex_options options) {
   }
 
   Clay__ConfigureOpenElement(decl);
+
+  if (options.on_hover && options.id && *options.id) {
+    static std::unordered_map<std::string, bool> hoverStates;
+    bool hovered = Clay_Hovered();
+    bool &stored = hoverStates[options.id];
+    if (stored != hovered) {
+      stored = hovered;
+      options.on_hover(hovered, options.on_hover_userdata);
+    }
+  }
 }
 
 void n8v_close_flex(void) { Clay__CloseElement(); }
+
+bool n8v_is_hovered(const char *id) {
+  if (!id || !*id) return false;
+  Clay_ElementId elementId = Clay_GetElementId(Clay_String{false, (int32_t)std::strlen(id), id});
+  return Clay_PointerOver(elementId);
+}
 
 void n8v_scroll_to_bottom(const char *container_id) {
   if (!container_id || !*container_id) return;

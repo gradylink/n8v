@@ -181,7 +181,13 @@ typedef struct n8v_flex_options {
   bool clip_vertical;
   const char *id;
   bool stick_to_bottom;
+  /** Fires on **both** hover enter/leave. Requires `id` to be set. */
+  n8v_bool_change_fn on_hover;
+  void *on_hover_userdata;
 } n8v_flex_options;
+
+/** Whether the pointer was over the element with this id as of the last completed frame. */
+N8V_API bool n8v_is_hovered(const char *id);
 
 typedef struct n8v_panel_options {
   n8v_panel_role role;
