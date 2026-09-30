@@ -50,4 +50,28 @@ inline Clay_SizingAxis toClay(const Sizing &sizing) {
   return CLAY_SIZING_FIT(0, 0);
 }
 
+inline Clay_FloatingAttachPointType toClay(AttachPoint point) {
+  switch (point) {
+  case AttachPoint::LeftTop:
+    return CLAY_ATTACH_POINT_LEFT_TOP;
+  case AttachPoint::LeftCenter:
+    return CLAY_ATTACH_POINT_LEFT_CENTER;
+  case AttachPoint::LeftBottom:
+    return CLAY_ATTACH_POINT_LEFT_BOTTOM;
+  case AttachPoint::CenterTop:
+    return CLAY_ATTACH_POINT_CENTER_TOP;
+  case AttachPoint::CenterCenter:
+    return CLAY_ATTACH_POINT_CENTER_CENTER;
+  case AttachPoint::CenterBottom:
+    return CLAY_ATTACH_POINT_CENTER_BOTTOM;
+  case AttachPoint::RightTop:
+    return CLAY_ATTACH_POINT_RIGHT_TOP;
+  case AttachPoint::RightCenter:
+    return CLAY_ATTACH_POINT_RIGHT_CENTER;
+  case AttachPoint::RightBottom:
+    return CLAY_ATTACH_POINT_RIGHT_BOTTOM;
+  }
+  return CLAY_ATTACH_POINT_RIGHT_TOP;
+}
+
 } // namespace n8v::detail

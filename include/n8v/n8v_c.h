@@ -334,6 +334,34 @@ typedef struct n8v_document_options {
   const char *id;
 } n8v_document_options;
 
+typedef enum n8v_attach_point {
+  N8V_ATTACH_POINT_LEFT_TOP,
+  N8V_ATTACH_POINT_LEFT_CENTER,
+  N8V_ATTACH_POINT_LEFT_BOTTOM,
+  N8V_ATTACH_POINT_CENTER_TOP,
+  N8V_ATTACH_POINT_CENTER_CENTER,
+  N8V_ATTACH_POINT_CENTER_BOTTOM,
+  N8V_ATTACH_POINT_RIGHT_TOP,
+  N8V_ATTACH_POINT_RIGHT_CENTER,
+  N8V_ATTACH_POINT_RIGHT_BOTTOM,
+} n8v_attach_point;
+
+typedef struct n8v_floating_options {
+  n8v_sizing width;
+  n8v_sizing height;
+  n8v_attach_point element_attach_point;
+  n8v_attach_point parent_attach_point;
+  float offset_x;
+  float offset_y;
+  const char *id;
+} n8v_floating_options;
+
+/** Opens a floating child of the currently-open element; it layers on top without affecting
+    that element's size or the position of its other children. Must be paired with
+    n8v_close_floating(). */
+N8V_API void n8v_open_floating(n8v_floating_options options);
+N8V_API void n8v_close_floating(void);
+
 typedef struct n8v_page_options {
   const char *name;
   const char *icon;

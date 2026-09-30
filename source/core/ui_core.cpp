@@ -271,6 +271,22 @@ bool n8v_is_hovered(const char *id) {
   return Clay_PointerOver(elementId);
 }
 
+void n8v_open_floating(n8v_floating_options options) {
+  openElementMaybeWithId(options.id);
+
+  Clay_ElementDeclaration decl = {};
+  decl.layout.sizing.width = n8v::detail::toClay(toSizing(options.width));
+  decl.layout.sizing.height = n8v::detail::toClay(toSizing(options.height));
+  decl.floating.attachTo = CLAY_ATTACH_TO_PARENT;
+  decl.floating.attachPoints.element = n8v::detail::toClay(toAttachPoint(options.element_attach_point));
+  decl.floating.attachPoints.parent = n8v::detail::toClay(toAttachPoint(options.parent_attach_point));
+  decl.floating.offset = {options.offset_x, options.offset_y};
+
+  Clay__ConfigureOpenElement(decl);
+}
+
+void n8v_close_floating(void) { Clay__CloseElement(); }
+
 void n8v_scroll_to_bottom(const char *container_id) {
   if (!container_id || !*container_id) return;
   pendingScrollTargets.push_back(PendingScrollTarget{container_id, PendingScrollTarget::Kind::Bottom, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0});

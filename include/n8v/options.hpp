@@ -160,6 +160,19 @@ struct DocumentOptions {
   std::string_view id = {};
 };
 
+/**
+ * Layers a child over the currently-open element without affecting its size or the position of its other children
+ */
+struct FloatingOptions {
+  Sizing width = Sizing::fit();
+  Sizing height = Sizing::fit();
+  AttachPoint elementAttachPoint = AttachPoint::RightTop;
+  AttachPoint parentAttachPoint = AttachPoint::RightTop;
+  float offsetX = 0.0f;
+  float offsetY = 0.0f;
+  std::string_view id = {};
+};
+
 struct IconOptions {
   std::string name;
   IconVariant variant = IconVariant::Outline;

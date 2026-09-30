@@ -15,6 +15,19 @@ enum class Align {
   End,
 };
 
+/** A corner or edge-center point used to attach a floating element to another element. */
+enum class AttachPoint {
+  LeftTop,
+  LeftCenter,
+  LeftBottom,
+  CenterTop,
+  CenterCenter,
+  CenterBottom,
+  RightTop,
+  RightCenter,
+  RightBottom,
+};
+
 enum class ButtonStyle {
   Primary,
   Secondary,

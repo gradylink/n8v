@@ -44,6 +44,30 @@ inline n8v::ButtonStyle toButtonStyle(n8v_button_style s) {
   return n8v::ButtonStyle::Primary;
 }
 
+inline n8v::AttachPoint toAttachPoint(n8v_attach_point p) {
+  switch (p) {
+  case N8V_ATTACH_POINT_LEFT_TOP:
+    return n8v::AttachPoint::LeftTop;
+  case N8V_ATTACH_POINT_LEFT_CENTER:
+    return n8v::AttachPoint::LeftCenter;
+  case N8V_ATTACH_POINT_LEFT_BOTTOM:
+    return n8v::AttachPoint::LeftBottom;
+  case N8V_ATTACH_POINT_CENTER_TOP:
+    return n8v::AttachPoint::CenterTop;
+  case N8V_ATTACH_POINT_CENTER_CENTER:
+    return n8v::AttachPoint::CenterCenter;
+  case N8V_ATTACH_POINT_CENTER_BOTTOM:
+    return n8v::AttachPoint::CenterBottom;
+  case N8V_ATTACH_POINT_RIGHT_TOP:
+    return n8v::AttachPoint::RightTop;
+  case N8V_ATTACH_POINT_RIGHT_CENTER:
+    return n8v::AttachPoint::RightCenter;
+  case N8V_ATTACH_POINT_RIGHT_BOTTOM:
+    return n8v::AttachPoint::RightBottom;
+  }
+  return n8v::AttachPoint::RightTop;
+}
+
 inline n8v::IconVariant toIconVariant(n8v_icon_variant v) { return v == N8V_ICON_VARIANT_FILLED ? n8v::IconVariant::Filled : n8v::IconVariant::Outline; }
 
 inline n8v::PanelRole toPanelRole(n8v_panel_role r) { return r == N8V_PANEL_ROLE_LIST_ITEM ? n8v::PanelRole::ListItem : n8v::PanelRole::Card; }

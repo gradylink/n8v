@@ -31,6 +31,30 @@ inline n8v_align toC(Align a) {
   return N8V_ALIGN_START;
 }
 
+inline n8v_attach_point toC(AttachPoint p) {
+  switch (p) {
+  case AttachPoint::LeftTop:
+    return N8V_ATTACH_POINT_LEFT_TOP;
+  case AttachPoint::LeftCenter:
+    return N8V_ATTACH_POINT_LEFT_CENTER;
+  case AttachPoint::LeftBottom:
+    return N8V_ATTACH_POINT_LEFT_BOTTOM;
+  case AttachPoint::CenterTop:
+    return N8V_ATTACH_POINT_CENTER_TOP;
+  case AttachPoint::CenterCenter:
+    return N8V_ATTACH_POINT_CENTER_CENTER;
+  case AttachPoint::CenterBottom:
+    return N8V_ATTACH_POINT_CENTER_BOTTOM;
+  case AttachPoint::RightTop:
+    return N8V_ATTACH_POINT_RIGHT_TOP;
+  case AttachPoint::RightCenter:
+    return N8V_ATTACH_POINT_RIGHT_CENTER;
+  case AttachPoint::RightBottom:
+    return N8V_ATTACH_POINT_RIGHT_BOTTOM;
+  }
+  return N8V_ATTACH_POINT_RIGHT_TOP;
+}
+
 inline n8v_button_style toC(ButtonStyle s) {
   switch (s) {
   case ButtonStyle::Primary:
@@ -807,6 +831,21 @@ inline void document(DocumentOptions options) {
   n8v_document(c_opts);
 }
 
+inline void openFloating(const FloatingOptions &options) {
+  std::string idStorage(options.id);
+  n8v_floating_options c_opts{};
+  c_opts.width = toC(options.width);
+  c_opts.height = toC(options.height);
+  c_opts.element_attach_point = toC(options.elementAttachPoint);
+  c_opts.parent_attach_point = toC(options.parentAttachPoint);
+  c_opts.offset_x = options.offsetX;
+  c_opts.offset_y = options.offsetY;
+  c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
+  n8v_open_floating(c_opts);
+}
+
+inline void closeFloating() { n8v_close_floating(); }
+
 } // namespace n8v::detail
 
 namespace n8v {
@@ -935,6 +974,8 @@ inline void setCustomPaint(Paint &paint) {
 #define flex(...) for (uint8_t n8v_flexLatch = (n8v::detail::openFlex(__VA_ARGS__), 0); n8v_flexLatch < 1; n8v_flexLatch = 1, n8v::detail::closeFlex())
 
 #define panel(...) for (uint8_t n8v_panelLatch = (n8v::detail::openPanel(__VA_ARGS__), 0); n8v_panelLatch < 1; n8v_panelLatch = 1, n8v::detail::closePanel())
+
+#define floating(...) for (uint8_t n8v_floatingLatch = (n8v::detail::openFloating(__VA_ARGS__), 0); n8v_floatingLatch < 1; n8v_floatingLatch = 1, n8v::detail::closeFloating())
 
 #define sidebar(...) for (uint8_t n8v_sidebarLatch = (n8v::detail::openSidebar(__VA_ARGS__), 0); n8v_sidebarLatch < 1; n8v_sidebarLatch = 1, n8v::detail::closeSidebar())
 
