@@ -64,11 +64,6 @@ void n8v_open_panel(n8v_panel_options opts) {
   if ((opts.clip_horizontal || opts.clip_vertical) && n8v::activeBackend().ownsScrollMath()) {
     decl.clip.childOffset = Clay_GetScrollOffset();
   }
-  // Clay skips emitting a rectangle render command entirely when alpha is exactly 0
-  // (see clay.h's `backgroundColor.a > 0` gate). For native-chrome backends that
-  // command is what drives creating the panel's underlying host widget, so a fully
-  // transparent background would make it never get created at all. Clamp to a
-  // barely-nonzero alpha so the host widget always exists.
   n8v::Color background = paint.background;
   if (background.a <= 0.0f) background.a = 1.0f;
   decl.backgroundColor = n8v::detail::toClay(background);

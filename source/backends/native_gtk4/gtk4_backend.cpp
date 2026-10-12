@@ -20,6 +20,7 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <functional>
 #include <map>
@@ -1218,6 +1219,8 @@ private:
     float originY = 0.0f;
     GtkWidget *rowListBox = nullptr;
     GtkWidget *sidebarTitleLabel = nullptr;
+    float width = 0.0f;
+    float height = 0.0f;
   };
 
   struct ScrollRegion {
@@ -1233,7 +1236,21 @@ private:
     bool isPrimary = false;
   };
 
-  void ensureScrollContainer(uint32_t id, const Clay_BoundingBox &box, const Clay_ClipRenderData &clip) {
+  uint32_t resolveScrollContainerId(uint32_t id, const Clay_BoundingBox &box) const {
+    if (scrollContainers_.count(id)) return id;
+    constexpr float kEpsilon = 0.5f;
+    for (const auto &[existingId, frame] : scrollContainers_) {
+      if (
+        std::fabs(frame.originX - box.x) < kEpsilon && std::fabs(frame.originY - box.y) < kEpsilon && std::fabs(frame.width - box.width) < kEpsilon &&
+        std::fabs(frame.height - box.height) < kEpsilon
+      )
+        return existingId;
+    }
+    return id;
+  }
+
+  void ensureScrollContainer(uint32_t idParam, const Clay_BoundingBox &box, const Clay_ClipRenderData &clip) {
+    uint32_t id = resolveScrollContainerId(idParam, box);
     auto it = scrollContainers_.find(id);
     if (it == scrollContainers_.end()) {
       GtkWidget *scrolled = gtk_scrolled_window_new();
@@ -1262,6 +1279,8 @@ private:
     gtk_widget_set_size_request(frame.scrolled, (int)box.width, (int)box.height);
     frame.originX = box.x;
     frame.originY = box.y;
+    frame.width = box.width;
+    frame.height = box.height;
     scrollRegions_.push_back(ScrollRegion{frame.scrolled, box.x - originX, box.y - originY, box.width, box.height});
 
     Clay_ScrollContainerData scrollData = Clay_GetScrollContainerData(Clay_ElementId{id});

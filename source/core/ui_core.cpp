@@ -299,6 +299,7 @@ void n8v_open_floating(n8v_floating_options options) {
   decl.layout.sizing.width = n8v::detail::toClay(toSizing(options.width));
   decl.layout.sizing.height = n8v::detail::toClay(toSizing(options.height));
   decl.floating.attachTo = CLAY_ATTACH_TO_PARENT;
+  decl.floating.clipTo = CLAY_CLIP_TO_ATTACHED_PARENT;
   decl.floating.attachPoints.element = n8v::detail::toClay(toAttachPoint(options.element_attach_point));
   decl.floating.attachPoints.parent = n8v::detail::toClay(toAttachPoint(options.parent_attach_point));
   decl.floating.offset = {options.offset_x, options.offset_y};
