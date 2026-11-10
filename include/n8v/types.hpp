@@ -29,8 +29,8 @@ enum class AttachPoint {
 };
 
 enum class ButtonStyle {
-  Primary,
   Secondary,
+  Primary,
   /** Transparent background */
   Ghost,
 };

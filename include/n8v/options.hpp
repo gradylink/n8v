@@ -55,7 +55,7 @@ struct TextOptions {
 };
 
 struct ButtonOptions {
-  ButtonStyle style = ButtonStyle::Primary;
+  ButtonStyle style = ButtonStyle::Secondary;
   /** Fires on press, not release. */
   std::function<void()> onClick = nullptr;
   std::string icon;

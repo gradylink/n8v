@@ -108,6 +108,7 @@ func Link(url string) Option         { return func(c *config) { c.url = url } }
 func Icon(name string) Option        { return func(c *config) { c.icon = name } }
 func FilledIcon() Option             { return func(c *config) { c.filled = true } }
 func TrailingIcon() Option           { return func(c *config) { c.trailing = true } }
+func Primary() Option                { return func(c *config) { c.buttonStyle = C.N8V_BUTTON_STYLE_PRIMARY } }
 func Secondary() Option              { return func(c *config) { c.buttonStyle = C.N8V_BUTTON_STYLE_SECONDARY } }
 func Ghost() Option                  { return func(c *config) { c.buttonStyle = C.N8V_BUTTON_STYLE_GHOST } }
 func Placeholder(text string) Option { return func(c *config) { c.placeholder = text } }

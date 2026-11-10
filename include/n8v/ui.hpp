@@ -64,7 +64,7 @@ inline n8v_button_style toC(ButtonStyle s) {
   case ButtonStyle::Secondary:
     return N8V_BUTTON_STYLE_SECONDARY;
   }
-  return N8V_BUTTON_STYLE_PRIMARY;
+  return N8V_BUTTON_STYLE_SECONDARY;
 }
 inline ButtonStyle fromC(n8v_button_style s) {
   switch (s) {
@@ -75,7 +75,7 @@ inline ButtonStyle fromC(n8v_button_style s) {
   case N8V_BUTTON_STYLE_SECONDARY:
     return ButtonStyle::Secondary;
   }
-  return ButtonStyle::Primary;
+  return ButtonStyle::Secondary;
 }
 
 inline n8v_icon_variant toC(IconVariant v) { return v == IconVariant::Outline ? N8V_ICON_VARIANT_OUTLINE : N8V_ICON_VARIANT_FILLED; }

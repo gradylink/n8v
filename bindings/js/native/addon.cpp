@@ -255,7 +255,7 @@ Napi::Value Button(const Napi::CallbackInfo &info) {
   Napi::Object o = info[0].As<Napi::Object>();
   std::string label = info[1].As<Napi::String>().Utf8Value();
   n8v_button_options b{};
-  b.style = (n8v_button_style)EnumOr(o, "style", N8V_BUTTON_STYLE_PRIMARY);
+  b.style = (n8v_button_style)EnumOr(o, "style", N8V_BUTTON_STYLE_SECONDARY);
   std::string iconStorage;
   StrOr(o, "icon", b.icon, iconStorage);
   b.icon_variant = (n8v_icon_variant)EnumOr(o, "iconVariant", N8V_ICON_VARIANT_OUTLINE);

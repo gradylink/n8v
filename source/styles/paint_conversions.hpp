@@ -54,7 +54,7 @@ inline n8v_button_style toC(ButtonStyle s) {
   case ButtonStyle::Primary:
     return N8V_BUTTON_STYLE_PRIMARY;
   }
-  return N8V_BUTTON_STYLE_PRIMARY;
+  return N8V_BUTTON_STYLE_SECONDARY;
 }
 inline n8v_panel_role toC(PanelRole r) {
   switch (r) {
@@ -84,7 +84,7 @@ inline ButtonStyle fromC(n8v_button_style s) {
   case N8V_BUTTON_STYLE_PRIMARY:
     return ButtonStyle::Primary;
   }
-  return ButtonStyle::Primary;
+  return ButtonStyle::Secondary;
 }
 
 inline n8v_text_options toC(const TextOptions &options) {

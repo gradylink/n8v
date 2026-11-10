@@ -27,8 +27,8 @@ export const DIRECTION: Record<Direction, number> = {
 };
 export const ALIGN: Record<Align, number> = { start: 0, center: 1, end: 2 };
 export const BUTTON_STYLE: Record<ButtonStyle, number> = {
-  primary: 0,
-  secondary: 1,
+  secondary: 0,
+  primary: 1,
   ghost: 2,
 };
 export const PANEL_ROLE: Record<PanelRole, number> = { card: 0, listItem: 1 };

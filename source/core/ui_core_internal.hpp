@@ -43,7 +43,7 @@ inline n8v::ButtonStyle toButtonStyle(n8v_button_style s) {
   case N8V_BUTTON_STYLE_PRIMARY:
     return n8v::ButtonStyle::Primary;
   }
-  return n8v::ButtonStyle::Primary;
+  return n8v::ButtonStyle::Secondary;
 }
 
 inline n8v::AttachPoint toAttachPoint(n8v_attach_point p) {

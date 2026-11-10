@@ -258,7 +258,7 @@ export interface ButtonOptions {
 export function button(label: string, opts: ButtonOptions = {}): void {
   n().button(
     {
-      style: BUTTON_STYLE[opts.style ?? "primary"],
+      style: BUTTON_STYLE[opts.style ?? "secondary"],
       icon: opts.icon,
       iconVariant: ICON_VARIANT[opts.iconVariant ?? "outline"],
       iconPosition: ICON_POSITION[opts.iconPosition ?? "leading"],
