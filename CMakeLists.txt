@@ -575,6 +575,7 @@ if(N8V_EXAMPLES)
   add_subdirectory(examples/basic_c)
   add_subdirectory(examples/custom_style)
   add_subdirectory(examples/file_dialog)
+  add_subdirectory(examples/multiline_entry)
 endif()
 
 option(N8V_BUILD_JS_BINDING "Build the n8v.node N-API addon for the JS/TS bindings (bindings/js)." OFF)

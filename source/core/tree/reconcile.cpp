@@ -19,6 +19,7 @@ std::vector<std::string> keysFor(const std::vector<Node *> &children) {
     const size_t kind = child->props.index();
     const char *id = idOf(child->props);
     std::string key = std::to_string(kind);
+    if (const auto *entry = std::get_if<n8v_entry_options>(&child->props); entry && entry->multiline) key += entry->match_entry_style ? "ms" : "m"; // the single-line style is a different widget tree on GTK
     if (id) {
       key += "#";
       key += id;

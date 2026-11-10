@@ -12,6 +12,7 @@ struct TextStyleFlags {
   bool ownedByWidget = false;
   int ordinal = 0;
   bool strikethrough = false;
+  bool isEntryLabel = false;
 };
 
 constexpr uint16_t textFontId(FontFamily font, bool bold, bool italic) { return (uint16_t)(((uint16_t)font << 2) | (bold ? 1 : 0) | (italic ? 2 : 0)); }

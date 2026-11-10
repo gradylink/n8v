@@ -35,6 +35,12 @@ struct NativeWidgetMeta {
   void *onEntryChangeUserdata = nullptr;                    // Entry only
   n8v_click_fn onEntrySubmit = nullptr;                     // Entry only - fires on Enter/Return
   void *onEntrySubmitUserdata = nullptr;                    // Entry only
+  bool entryMultiline = false;                              // Entry only
+  const char *entryDisplayBase = nullptr;                   // Entry only - multiline only
+  n8v_submit_mode entrySubmitMode = N8V_SUBMIT_ON_ENTER;    // Entry only - multiline only
+  int entryMinLines = 1;                                    // Entry only - multiline only
+  int entryMaxLines = 1;                                    // Entry only - multiline only
+  bool entryFixedLines = true;                              // Entry only - multiline only: no growing, scroll past entryMinLines
   bool entryHasCustomBorder = false;                        // Entry only - skip the generic focus ring; the style's own border already changes color/width on focus
   int *radioSelected = nullptr;                             // Radio only
   int radioValue = 0;                                       // Radio only

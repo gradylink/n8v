@@ -33,13 +33,28 @@ EM_JS(void, n8vHtmlInstallListeners, (), {
       send(ordinalOf(el), 'input', el.value);
     } else if (el.tagName === 'INPUT') {
       send(ordinalOf(el), 'input', el.value);
+    } else if (el.tagName === 'TEXTAREA') {
+      window.n8vAutoGrow(el);
+      send(ordinalOf(el), 'input', el.value);
     }
   });
+
+  window.n8vAutoGrow = function(el) {
+    if (!el.hasAttribute('data-n8v-grow')) return;
+    el.style.height = 'auto';
+    el.style.height = (el.scrollHeight + el.offsetHeight - el.clientHeight) + 'px';
+  };
 
   document.addEventListener('keydown', function(e) {
     var el = e.target;
     if (e.key === 'Enter' && el.tagName === 'INPUT' && el.type !== 'checkbox' && el.type !== 'radio' && el.hasAttribute('data-n8v')) {
       send(ordinalOf(el), 'submit', '');
+    } else if (e.key === 'Enter' && el.tagName === 'TEXTAREA' && el.hasAttribute('data-n8v') && !e.isComposing) {
+      var ctrlMode = el.getAttribute('data-n8v-submit') === 'ctrl';
+      if (ctrlMode ? (e.ctrlKey || e.metaKey) : !e.shiftKey) {
+        e.preventDefault();
+        send(ordinalOf(el), 'submit', '');
+      }
     }
   });
 

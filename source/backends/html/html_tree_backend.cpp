@@ -3,6 +3,7 @@
 #include "html_assets.hpp"
 #include "html_css.hpp"
 
+#include "core/entry_lines.hpp"
 #include "core/icon_loader.hpp"
 #include "core/image_loader.hpp"
 #include "core/markdown/markdown.hpp"
@@ -274,8 +275,6 @@ public:
 
   void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back(PendingScroll{request, emscripten_get_now()}); }
 
-  // The browser can't hand out a writable path, so only open dialogs work: picked files are copied into the in-memory
-  // filesystem (/n8v-uploads/...) and those paths are returned. The picker has to open inside the click that asked for it.
   bool showFileDialog(const FileDialogRequest &request, FileDialogDone done) override {
     if (request.kind == N8V_FILE_DIALOG_SAVE_FILE) return false;
     const std::string accept = request.kind == N8V_FILE_DIALOG_OPEN_FILE ? acceptAttribute(request.filters) : std::string();
@@ -474,6 +473,7 @@ private:
   void build(NativeNode &nn);
   void apply(NativeNode &nn);
   void applyButton(NativeNode &nn, const n8v_button_options &o);
+  std::string multilineEntryCss(NativeNode &nn, const n8v_entry_options &o, const Paint &paint);
   void applyPage(NativeNode &nn, const n8v_page_options &o);
   void applyLayout(NativeNode &nn);
   std::string containerCss(NativeNode &nn);
@@ -779,8 +779,13 @@ void HtmlTreeBackend::build(NativeNode &nn) {
     break;
   }
   case Kind::Entry: {
-    nn.outer = nn.widget = createEl("input");
-    nn.widget.set("type", std::string("text"));
+    const auto *entry = propsOf<n8v_entry_options>(*nn.node);
+    if (entry && entry->multiline) {
+      nn.outer = nn.widget = createEl("textarea");
+    } else {
+      nn.outer = nn.widget = createEl("input");
+      nn.widget.set("type", std::string("text"));
+    }
     break;
   }
   case Kind::Dropdown:
@@ -874,6 +879,24 @@ void HtmlTreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   layoutPageContent(nn);
 }
 
+std::string HtmlTreeBackend::multilineEntryCss(NativeNode &nn, const n8v_entry_options &o, const Paint &paint) {
+  const EntryLines lines = entryLines(o);
+  const EntryPaint idle = paint.entry(false, false);
+  const std::string chrome = css::cssNumber((float)(idle.padding.top + idle.padding.bottom) + 2.0f * idle.borderWidth) + "px";
+  auto heightFor = [&](int count) { return "calc(" + std::to_string(count) + " * 1lh + " + chrome + ")"; };
+
+  setAttr(nn.widget, "data-n8v-submit", o.submit_mode == N8V_SUBMIT_ON_CTRL_ENTER ? "ctrl" : "enter");
+  std::string extra = "&{resize:none;overflow-y:auto;display:block;";
+  if (lines.fixed) {
+    extra += "height:" + heightFor(lines.min) + ";}\n";
+    nn.widget.call<void>("removeAttribute", std::string("data-n8v-grow"));
+  } else {
+    extra += "height:auto;field-sizing:content;min-height:" + heightFor(lines.min) + ";max-height:" + heightFor(lines.max) + ";}\n";
+    setAttr(nn.widget, "data-n8v-grow", "1");
+  }
+  return extra;
+}
+
 void HtmlTreeBackend::apply(NativeNode &nn) {
   PNode &pn = *nn.node;
   const Paint &paint = activePaint();
@@ -941,12 +964,15 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
         if (const int *selected = std::get_if<int>(&pn.bound)) nn.widget.set("checked", *selected == o.value);
       },
       [&](const n8v_entry_options &o) {
-        setClass(nn.outer, classFor(css::entryCss(paint)));
+        setClass(nn.outer, classFor(css::entryCss(paint) + (o.multiline ? multilineEntryCss(nn, o, paint) : std::string())));
         bindEvents(nn, nn.widget, false);
-        nn.widget.set("type", std::string(o.password ? "password" : "text"));
+        if (!o.multiline) nn.widget.set("type", std::string(o.password ? "password" : "text"));
         nn.widget.set("placeholder", std::string(o.placeholder ? o.placeholder : ""));
         if (const std::string *text = std::get_if<std::string>(&pn.bound)) {
-          if (nn.widget["value"].as<std::string>() != *text) nn.widget.set("value", *text);
+          if (nn.widget["value"].as<std::string>() != *text) {
+            nn.widget.set("value", *text);
+            if (o.multiline) val::global("n8vAutoGrow")(nn.widget);
+          }
         }
       },
       [&](const n8v_dropdown_options &o) {

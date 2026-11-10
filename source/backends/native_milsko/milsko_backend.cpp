@@ -90,6 +90,8 @@ public:
 
   bool pointerDown() const override { return pointerDown_; }
 
+  bool supportsMultilineEntry() const override { return false; }
+
   bool aliasesSwitchAsCheckbox() const override { return true; }
 
   Clay_Dimensions windowSize() const override { return {(float)MwGetInteger(window_, MwNwidth), (float)MwGetInteger(window_, MwNheight)}; }

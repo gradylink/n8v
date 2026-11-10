@@ -737,6 +737,11 @@ inline void entry(EntryOptions options) {
   c_opts.placeholder = placeholderStorage.c_str();
   c_opts.password = options.password;
   c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
+  c_opts.multiline = options.multiline;
+  c_opts.submit_mode = options.submitMode == SubmitMode::CtrlEnter ? N8V_SUBMIT_ON_CTRL_ENTER : N8V_SUBMIT_ON_ENTER;
+  c_opts.min_lines = options.minLines;
+  c_opts.max_lines = options.maxLines;
+  c_opts.match_entry_style = options.matchEntryStyle;
 
   n8v_string_buf *buf = nullptr;
   EntryShadow *shadow = nullptr;

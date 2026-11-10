@@ -48,12 +48,23 @@ private:
     void *onChangeUserdata = nullptr;
     n8v_click_fn onSubmit = nullptr;
     void *onSubmitUserdata = nullptr;
+    bool multiline = false;
+    n8v_submit_mode submitMode = N8V_SUBMIT_ON_ENTER;
     int ordinal = -1;
     size_t cursor = 0;
     size_t anchor = 0;
     bool hasSelection() const { return anchor != cursor; }
     size_t selStart() const { return std::min(cursor, anchor); }
     size_t selEnd() const { return std::max(cursor, anchor); }
+  };
+
+  struct EntryLineBox {
+    size_t start = 0;
+    size_t end = 0;
+    Clay_BoundingBox box{};
+    std::string_view text;
+    FontFamily family = FontFamily::DejaVuSans;
+    uint16_t fontSize = 16;
   };
 
   struct TextSelState {
@@ -77,6 +88,12 @@ private:
   void moveEntryCursor(size_t newPos, bool extendSelection);
   void handleEntryKey(SDL_Keysym keysym);
   void renderEntryText(NativeWidgetMeta *meta, const Clay_RenderCommand &command, bool clicked, bool dragging);
+  void renderEntryLine(NativeWidgetMeta *meta, const Clay_RenderCommand &command);
+  void finishMultilineEntry();
+  size_t entryLineForCursor(const std::vector<EntryLineBox> &lines, size_t cursor) const;
+  size_t entryOffsetAt(const std::vector<EntryLineBox> &lines, float x, float y) const;
+  void moveEntryCursorVertically(int direction, bool extendSelection);
+  void moveEntryCursorToLineEdge(bool toEnd, bool extendSelection);
 
   void handleTextClick(int ordinal, std::string_view lineText, size_t localHitOffset, size_t lineOffset);
   void moveTextCursor(size_t newPos, bool extendSelection);
@@ -123,6 +140,15 @@ private:
   bool mouseSelecting_ = false;
   bool textMouseSelecting_ = false;
   EntryEditState entry_;
+  NativeWidgetMeta *multilineMeta_ = nullptr;
+  Clay_BoundingBox multilineBox_{};
+  uint32_t multilineId_ = 0;
+  bool multilineClicked_ = false;
+  bool multilineDragging_ = false;
+  const char *multilineBase_ = nullptr;
+  std::vector<EntryLineBox> multilineLines_;
+  std::vector<EntryLineBox> focusedLines_;
+  bool scrollToCaret_ = false;
   TextSelState textSel_;
   int textLineTrackOrdinal_ = -1;
   const char *textLineTrackBase_ = nullptr;

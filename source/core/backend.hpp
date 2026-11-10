@@ -65,6 +65,8 @@ struct Backend {
 
   virtual bool isEntryFocused(int) const { return false; }
 
+  virtual bool supportsMultilineEntry() const { return true; }
+
   virtual bool rendersNativeChrome() const { return true; }
 
   virtual bool aliasesSwitchAsCheckbox() const { return false; }

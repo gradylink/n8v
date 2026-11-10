@@ -91,6 +91,12 @@ struct EntryOptions {
   std::function<void(std::string_view)> onChange = nullptr;
   std::function<void()> onSubmit = nullptr;
   std::string_view id = {};
+  bool multiline = false;
+  SubmitMode submitMode = SubmitMode::Enter;
+  uint16_t minLines = 3;
+  uint16_t maxLines = 0;
+  /** GTK4 Only. */
+  bool matchEntryStyle = false;
 };
 
 struct DropdownOptions {

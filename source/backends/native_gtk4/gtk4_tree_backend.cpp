@@ -2,6 +2,7 @@
 
 #include "gtk4_markup.hpp"
 
+#include "core/entry_lines.hpp"
 #include "core/icon_loader.hpp"
 #include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
@@ -58,6 +59,9 @@ template <typename T> const T *propsOf(const PNode &node) { return std::get_if<T
 
 constexpr double kStickyBottomEpsilonPx = 24.0;
 constexpr int kDefaultIconSize = 16;
+constexpr int kMultilineEntryMarginPx = 8;
+constexpr int kMultilineSideMarginPx = 9;
+constexpr int kMultilineFrameMarginPx = 6;
 
 void warnOnce(bool &flag, const char *message) {
   if (flag) return;
@@ -98,6 +102,8 @@ struct NativeNode {
   GtkWidget *image = nullptr;
   GtkWidget *startSpacer = nullptr;
   GtkWidget *endSpacer = nullptr;
+  GtkWidget *backdrop = nullptr;
+  int entryHeight = 0;
 
   // sidebar
   GtkWidget *panelRoot = nullptr;
@@ -162,6 +168,14 @@ public:
     gtk_css_provider_load_from_string(cardCss_, ".n8v-card { border: 1px solid alpha(currentColor, 0.2); border-radius: 6px; }\n");
     gtk_style_context_add_provider_for_display(gtk_widget_get_display(window_), GTK_STYLE_PROVIDER(cardCss_), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
+    multilineCss_ = gtk_css_provider_new();
+    gtk_css_provider_load_from_string(
+      multilineCss_,
+      "scrolledwindow.n8v-multiline-scroll, textview.n8v-multiline-text, textview.n8v-multiline-text text { background: none; background-color: transparent; border: none; "
+      "box-shadow: none; }\n"
+    );
+    gtk_style_context_add_provider_for_display(gtk_widget_get_display(window_), GTK_STYLE_PROVIDER(multilineCss_), GTK_STYLE_PROVIDER_PRIORITY_USER + 100);
+
     gtk_window_present(GTK_WINDOW(window_));
     return true;
   }
@@ -184,6 +198,7 @@ public:
   void setCursor(CursorKind) override {}
 
   void commitFrame() override {
+    updateMultilineHeights();
     applyStickyBottom();
     resolvePendingScrolls();
     if (++frames_ == 30 && std::getenv("N8V_GTK_DUMP")) dumpWidget(window_, 0);
@@ -383,6 +398,9 @@ private:
   void applyFlex(NativeNode &nn, const n8v_flex_options &o);
   void applyPanel(NativeNode &nn, const n8v_panel_options &o);
   void applyButton(NativeNode &nn, const n8v_button_options &o);
+  void applyMultilineEntry(NativeNode &nn, const n8v_entry_options &o);
+  void updateMultilineHeight(NativeNode &nn);
+  void updateMultilineHeights();
   void applySidebar(NativeNode &nn, const n8v_sidebar_options &o);
   void applyPage(NativeNode &nn, const n8v_page_options &o);
 
@@ -421,6 +439,32 @@ private:
   }
   static void onEntryActivate(GtkEntry *, gpointer userData) {
     if (PNode *node = liveNode(userData)) dispatch::submit(*node);
+  }
+  static std::string textBufferText(GtkTextBuffer *buffer) {
+    GtkTextIter start, end;
+    gtk_text_buffer_get_bounds(buffer, &start, &end);
+    char *raw = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+    std::string text = raw ? raw : "";
+    g_free(raw);
+    return text;
+  }
+  static constexpr GtkStateFlags kFocusFlags = (GtkStateFlags)(GTK_STATE_FLAG_FOCUSED | GTK_STATE_FLAG_FOCUS_WITHIN | GTK_STATE_FLAG_FOCUS_VISIBLE);
+  static void onMultilineFocusEnter(GtkEventControllerFocus *, gpointer backdrop) { gtk_widget_set_state_flags(GTK_WIDGET(backdrop), kFocusFlags, FALSE); }
+  static void onMultilineFocusLeave(GtkEventControllerFocus *, gpointer backdrop) { gtk_widget_unset_state_flags(GTK_WIDGET(backdrop), kFocusFlags); }
+  static void onTextBufferChanged(GtkTextBuffer *buffer, gpointer userData) {
+    PNode *node = liveNode(userData);
+    if (node && !self_->updating_) dispatch::setText(*node, textBufferText(buffer));
+  }
+  static void onTextBufferPlaceholder(GtkTextBuffer *buffer, gpointer placeholder) {
+    gtk_widget_set_visible(GTK_WIDGET(placeholder), gtk_text_buffer_get_char_count(buffer) == 0);
+  }
+  static gboolean onMultilineKey(GtkEventControllerKey *, guint keyval, guint, GdkModifierType state, gpointer userData) {
+    if (keyval != GDK_KEY_Return && keyval != GDK_KEY_KP_Enter && keyval != GDK_KEY_ISO_Enter) return FALSE;
+    PNode *node = liveNode(userData);
+    const auto *o = node ? propsOf<n8v_entry_options>(*node) : nullptr;
+    if (!o || !enterSubmits(o->submit_mode, (state & GDK_CONTROL_MASK) != 0, (state & GDK_SHIFT_MASK) != 0)) return FALSE;
+    dispatch::submit(*node);
+    return TRUE;
   }
   static void onDropdownSelected(GObject *object, GParamSpec *, gpointer userData) {
     PNode *node = liveNode(userData);
@@ -532,6 +576,7 @@ private:
   GtkWidget *window_ = nullptr;
   GtkWidget *rootBox_ = nullptr;
   GtkCssProvider *cardCss_ = nullptr;
+  GtkCssProvider *multilineCss_ = nullptr;
   NativeNode root_;
   std::unordered_set<PNode *> live_;
   std::unordered_map<std::string, NativeNode *> byId_;
@@ -539,6 +584,7 @@ private:
   std::vector<PendingScroll> pendingScrolls_;
   bool closeRequested_ = false;
   bool updating_ = false;
+  int lineHeight_ = 0;
   int frames_ = 0;
 
   bool warnedPercent_ = false;
@@ -1120,9 +1166,72 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
     break;
   }
   case Kind::Entry: {
-    nn.outer = nn.widget = gtk_entry_new();
-    connect(nn.widget, "changed", &Gtk4TreeBackend::onEntryChanged, pn);
-    connect(nn.widget, "activate", &Gtk4TreeBackend::onEntryActivate, pn);
+    const auto *entry = propsOf<n8v_entry_options>(pn);
+    if (entry && entry->multiline) {
+      const bool matchStyle = entry->match_entry_style;
+      nn.widget = gtk_text_view_new();
+      gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(nn.widget), GTK_WRAP_WORD_CHAR);
+      gtk_text_view_set_left_margin(GTK_TEXT_VIEW(nn.widget), kMultilineSideMarginPx);
+      gtk_text_view_set_right_margin(GTK_TEXT_VIEW(nn.widget), kMultilineSideMarginPx);
+      if (!matchStyle) {
+        gtk_text_view_set_top_margin(GTK_TEXT_VIEW(nn.widget), kMultilineFrameMarginPx);
+        gtk_text_view_set_bottom_margin(GTK_TEXT_VIEW(nn.widget), kMultilineFrameMarginPx);
+      }
+
+      nn.scrolled = gtk_scrolled_window_new();
+      gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(nn.scrolled), GTK_POLICY_NEVER, GTK_POLICY_EXTERNAL);
+      gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(nn.scrolled), TRUE);
+      gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(nn.scrolled), nn.widget);
+
+      nn.label = gtk_label_new("");
+      gtk_widget_set_halign(nn.label, GTK_ALIGN_START);
+      gtk_widget_set_valign(nn.label, GTK_ALIGN_START);
+      gtk_widget_set_can_target(nn.label, FALSE);
+      gtk_widget_add_css_class(nn.label, "dim-label");
+
+      nn.outer = gtk_overlay_new();
+      if (matchStyle) {
+        gtk_widget_add_css_class(nn.widget, "n8v-multiline-text");
+        gtk_widget_add_css_class(nn.scrolled, "n8v-multiline-scroll");
+        gtk_scrolled_window_set_has_frame(GTK_SCROLLED_WINDOW(nn.scrolled), FALSE);
+        gtk_widget_set_margin_top(nn.scrolled, kMultilineEntryMarginPx);
+        gtk_widget_set_margin_bottom(nn.scrolled, kMultilineEntryMarginPx);
+        gtk_widget_set_margin_start(nn.label, kMultilineSideMarginPx);
+        gtk_widget_set_margin_top(nn.label, kMultilineEntryMarginPx);
+
+        nn.backdrop = gtk_entry_new();
+        gtk_widget_set_can_target(nn.backdrop, FALSE);
+        gtk_widget_set_focusable(nn.backdrop, FALSE);
+        gtk_widget_set_vexpand(nn.backdrop, TRUE);
+
+        gtk_overlay_set_child(GTK_OVERLAY(nn.outer), nn.backdrop);
+        gtk_overlay_add_overlay(GTK_OVERLAY(nn.outer), nn.scrolled);
+        gtk_overlay_set_measure_overlay(GTK_OVERLAY(nn.outer), nn.scrolled, TRUE);
+
+        GtkEventController *focus = gtk_event_controller_focus_new();
+        g_signal_connect_data(focus, "enter", G_CALLBACK(&Gtk4TreeBackend::onMultilineFocusEnter), nn.backdrop, nullptr, (GConnectFlags)0);
+        g_signal_connect_data(focus, "leave", G_CALLBACK(&Gtk4TreeBackend::onMultilineFocusLeave), nn.backdrop, nullptr, (GConnectFlags)0);
+        gtk_widget_add_controller(nn.widget, focus);
+      } else {
+        gtk_scrolled_window_set_has_frame(GTK_SCROLLED_WINDOW(nn.scrolled), TRUE);
+        gtk_widget_set_margin_start(nn.label, kMultilineSideMarginPx + 1);
+        gtk_widget_set_margin_top(nn.label, kMultilineFrameMarginPx + 1);
+        gtk_overlay_set_child(GTK_OVERLAY(nn.outer), nn.scrolled);
+      }
+      gtk_overlay_add_overlay(GTK_OVERLAY(nn.outer), nn.label);
+
+      GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(nn.widget));
+      connect(buffer, "changed", &Gtk4TreeBackend::onTextBufferChanged, pn);
+      g_signal_connect_data(buffer, "changed", G_CALLBACK(&Gtk4TreeBackend::onTextBufferPlaceholder), nn.label, nullptr, (GConnectFlags)0);
+      GtkEventController *keys = gtk_event_controller_key_new();
+      gtk_event_controller_set_propagation_phase(keys, GTK_PHASE_CAPTURE);
+      connect(keys, "key-pressed", &Gtk4TreeBackend::onMultilineKey, pn);
+      gtk_widget_add_controller(nn.widget, keys);
+    } else {
+      nn.outer = nn.widget = gtk_entry_new();
+      connect(nn.widget, "changed", &Gtk4TreeBackend::onEntryChanged, pn);
+      connect(nn.widget, "activate", &Gtk4TreeBackend::onEntryActivate, pn);
+    }
     break;
   }
   case Kind::Dropdown: {
@@ -1138,7 +1247,9 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
     break;
   }
   case Kind::Image: {
-    nn.outer = nn.widget = gtk_image_new();
+    nn.outer = nn.widget = gtk_picture_new();
+    gtk_picture_set_can_shrink(GTK_PICTURE(nn.widget), TRUE);
+    gtk_picture_set_content_fit(GTK_PICTURE(nn.widget), GTK_CONTENT_FIT_FILL);
     break;
   }
   case Kind::Icon: {
@@ -1361,6 +1472,55 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   if (hasIcon) setIconImage(nn, nn.image, o.icon, kDefaultIconSize);
 }
 
+void Gtk4TreeBackend::applyMultilineEntry(NativeNode &nn, const n8v_entry_options &o) {
+  gtk_label_set_text(GTK_LABEL(nn.label), o.placeholder ? o.placeholder : "");
+
+  GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(nn.widget));
+  if (const std::string *text = std::get_if<std::string>(&nn.node->bound)) {
+    if (*text != textBufferText(buffer)) gtk_text_buffer_set_text(buffer, text->c_str(), -1);
+  }
+  gtk_widget_set_visible(nn.label, gtk_text_buffer_get_char_count(buffer) == 0);
+  nn.entryHeight = 0;
+  updateMultilineHeight(nn);
+}
+
+void Gtk4TreeBackend::updateMultilineHeight(NativeNode &nn) {
+  const auto *o = propsOf<n8v_entry_options>(*nn.node);
+  if (!o || !o->multiline || !nn.scrolled) return;
+  GtkTextView *view = GTK_TEXT_VIEW(nn.widget);
+  GtkTextBuffer *buffer = gtk_text_view_get_buffer(view);
+  GtkTextIter start, end;
+  gtk_text_buffer_get_start_iter(buffer, &start);
+  gtk_text_buffer_get_end_iter(buffer, &end);
+  GdkRectangle first{}, last{};
+  gtk_text_view_get_iter_location(view, &start, &first);
+  gtk_text_view_get_iter_location(view, &end, &last);
+  if (first.height > 0) lineHeight_ = first.height;
+  const int lineHeight = lineHeight_ > 0 ? lineHeight_ : 18;
+
+  const EntryLines lines = entryLines(*o);
+  const int chrome = o->match_entry_style ? 0 : 2 * kMultilineFrameMarginPx;
+  const int minHeight = chrome + lines.min * lineHeight;
+  const int maxHeight = chrome + lines.max * lineHeight;
+  const int height = lines.fixed ? minHeight : std::clamp(chrome + last.y + std::max(last.height, lineHeight), minHeight, maxHeight);
+  const bool overflowing = chrome + last.y + std::max(last.height, lineHeight) > height;
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(nn.scrolled), GTK_POLICY_NEVER, overflowing && height >= 56 ? GTK_POLICY_AUTOMATIC : GTK_POLICY_EXTERNAL);
+  if (!overflowing) {
+    GtkAdjustment *adjustment = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(nn.scrolled));
+    if (gtk_adjustment_get_value(adjustment) != 0.0) gtk_adjustment_set_value(adjustment, 0.0);
+  }
+  if (height == nn.entryHeight) return;
+  nn.entryHeight = height;
+  gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(nn.scrolled), height);
+  gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(nn.scrolled), height);
+}
+
+void Gtk4TreeBackend::updateMultilineHeights() {
+  for (PNode *pn : live_) {
+    if (pn->handle && propsOf<n8v_entry_options>(*pn)) updateMultilineHeight(*native(*pn));
+  }
+}
+
 void Gtk4TreeBackend::apply(NativeNode &nn) {
   Guard guard;
   PNode &pn = *nn.node;
@@ -1388,6 +1548,10 @@ void Gtk4TreeBackend::apply(NativeNode &nn) {
         if (const int *selected = std::get_if<int>(&pn.bound)) gtk_check_button_set_active(GTK_CHECK_BUTTON(nn.widget), *selected == o.value);
       },
       [&](const n8v_entry_options &o) {
+        if (o.multiline) {
+          applyMultilineEntry(nn, o);
+          return;
+        }
         gtk_entry_set_placeholder_text(GTK_ENTRY(nn.widget), o.placeholder ? o.placeholder : "");
         gtk_entry_set_visibility(GTK_ENTRY(nn.widget), !o.password);
         if (const std::string *text = std::get_if<std::string>(&pn.bound)) {
@@ -1429,7 +1593,7 @@ void Gtk4TreeBackend::apply(NativeNode &nn) {
       [&](const n8v_image_options &o) {
         const DecodedImage *decoded = getOrDecodeImage(o);
         if (!decoded) {
-          gtk_image_clear(GTK_IMAGE(nn.widget));
+          gtk_picture_set_paintable(GTK_PICTURE(nn.widget), nullptr);
           nn.textureSource = nullptr;
           nn.imageWidth = nn.imageHeight = 0;
           return;
@@ -1453,11 +1617,11 @@ void Gtk4TreeBackend::apply(NativeNode &nn) {
         const DecodedImage *baked = getOrBakeRoundedImage(decoded, targetW, targetH, radius.topLeft, radius.topRight, radius.bottomLeft, radius.bottomRight);
         if (nn.textureSource != baked) {
           GdkTexture *texture = makeTexture(baked);
-          gtk_image_set_from_paintable(GTK_IMAGE(nn.widget), GDK_PAINTABLE(texture));
-          gtk_image_set_pixel_size(GTK_IMAGE(nn.widget), std::max(targetW, targetH));
+          gtk_picture_set_paintable(GTK_PICTURE(nn.widget), GDK_PAINTABLE(texture));
           g_object_unref(texture);
           nn.textureSource = baked;
         }
+        gtk_widget_set_size_request(nn.widget, targetW, targetH);
       },
       [&](const n8v_icon_options &o) {
         const int size = o.width.mode == N8V_SIZING_FIXED ? (int)o.width.value : kDefaultIconSize;

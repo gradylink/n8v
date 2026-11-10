@@ -91,6 +91,10 @@ type config struct {
 	stickToBottom          bool
 	onHover                func(bool)
 	onChange               func(int)
+	multiline              bool
+	submitCtrlEnter        bool
+	minLines, maxLines     int
+	matchEntryStyle        bool
 	minWidth, maxWidth     float64
 	compact                bool
 	onClick                func()
@@ -130,6 +134,21 @@ func StickToBottom() Option { return func(c *config) { c.stickToBottom = true } 
 
 // OnHover fires on both hover enter and leave. Requires ID.
 func OnHover(fn func(bool)) Option { return func(c *config) { c.onHover = fn } }
+
+// Multiline makes an Entry a soft-wrapping text area (Password is ignored). Milsko has no multi-line widget, so there it stays single-line.
+func Multiline() Option { return func(c *config) { c.multiline = true } }
+
+// SubmitOnCtrlEnter makes a multiline Entry submit on Ctrl+Enter (Cmd+Enter on macOS) and insert a newline on Enter. Without it, Enter
+// submits and Shift+Enter inserts a newline. Single-line entries always submit on Enter.
+func SubmitOnCtrlEnter() Option { return func(c *config) { c.submitCtrlEnter = true } }
+
+// MatchEntryStyle draws a multiline Entry like a single-line one (same fill and shape in the toolkit's theme) instead of the toolkit's plain
+// text area. Only GTK4 draws the two differently; elsewhere this does nothing.
+func MatchEntryStyle() Option { return func(c *config) { c.matchEntryStyle = true } }
+
+// Lines sizes a multiline Entry: it shows min lines, and with max > min it grows with its text up to max lines, then scrolls. With
+// max <= min the height is fixed at min lines and the text scrolls. min <= 0 means 3.
+func Lines(min, max int) Option { return func(c *config) { c.minLines, c.maxLines = min, max } }
 
 // OnChange is called with the new selection when a Sidebar's selected page changes.
 func OnChange(fn func(int)) Option { return func(c *config) { c.onChange = fn } }
@@ -391,9 +410,15 @@ func Radio(label string, selected *Int, value int, opts ...Option) {
 func Entry(value *String, opts ...Option) {
 	c := apply(opts)
 	fn, ud := callback(c.onSubmit)
+	mode := C.n8v_submit_mode(C.N8V_SUBMIT_ON_ENTER)
+	if c.submitCtrlEnter {
+		mode = C.N8V_SUBMIT_ON_CTRL_ENTER
+	}
 	C.n8v_entry(C.n8v_entry_options{
 		value: value.p, placeholder: cstr(c.placeholder), password: C.bool(c.password),
 		on_submit: fn, on_submit_userdata: ud, id: cstr(c.id),
+		multiline: C.bool(c.multiline), submit_mode: mode, match_entry_style: C.bool(c.matchEntryStyle),
+		min_lines: C.uint16_t(max(c.minLines, 0)), max_lines: C.uint16_t(max(c.maxLines, 0)),
 	})
 }
 

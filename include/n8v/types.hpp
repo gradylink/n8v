@@ -28,6 +28,11 @@ enum class AttachPoint {
   RightBottom,
 };
 
+enum class SubmitMode {
+  Enter,
+  CtrlEnter,
+};
+
 enum class ButtonStyle {
   Secondary,
   Primary,

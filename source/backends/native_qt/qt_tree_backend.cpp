@@ -2,6 +2,7 @@
 
 #include "qt_icons.hpp"
 
+#include "core/entry_lines.hpp"
 #include "core/freedesktop_icon_theme.hpp"
 #include "core/icon_loader.hpp"
 #include "core/icon_registry.hpp"
@@ -37,6 +38,7 @@
 #include <QListWidgetItem>
 #include <QMouseEvent>
 #include <QPixmap>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QScrollArea>
@@ -191,6 +193,25 @@ protected:
   }
 };
 
+class N8VPlainTextEdit final : public QPlainTextEdit {
+public:
+  using QPlainTextEdit::QPlainTextEdit;
+  PNode *node = nullptr;
+
+protected:
+  void keyPressEvent(QKeyEvent *event) override {
+    if (node && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)) {
+      const auto *o = propsOf<n8v_entry_options>(*node);
+      if (o && enterSubmits(o->submit_mode, event->modifiers() & Qt::ControlModifier, event->modifiers() & Qt::ShiftModifier)) {
+        dispatch::submit(*node);
+        event->accept();
+        return;
+      }
+    }
+    QPlainTextEdit::keyPressEvent(event);
+  }
+};
+
 class N8VRootWidget final : public QWidget {
 public:
   using QWidget::QWidget;
@@ -217,6 +238,7 @@ struct NativeNode {
   QBoxLayout *layout = nullptr;
   QScrollArea *scroll = nullptr;
   QWidget *widget = nullptr;
+  int entryHeight = 0;
 
   // sidebar
   QWidget *panelRoot = nullptr;
@@ -264,7 +286,10 @@ n8v_sizing sizingFor(const NativeNode &nn, bool horizontal) {
       [&](const n8v_icon_options &o) { return horizontal ? o.width : o.height; },
       [&](const n8v_image_options &o) { return horizontal ? o.width : o.height; },
       [&](const n8v_sidebar_options &) { return growSizing(); },
-      [&](const n8v_entry_options &) { return horizontal ? growSizing() : fitSizing(); },
+      [&](const n8v_entry_options &o) {
+        if (horizontal) return growSizing();
+        return o.multiline && nn.entryHeight > 0 ? n8v_sizing_fixed((float)nn.entryHeight) : fitSizing();
+      },
       [&](const n8v_dropdown_options &) { return horizontal ? growSizing() : fitSizing(); },
       [&](const n8v_slider_options &) { return horizontal ? growSizing() : fitSizing(); },
       [&](const auto &) { return fitSizing(); },
@@ -541,6 +566,7 @@ private:
 
   BoundValue readWidget(NativeNode &nn);
   void pollNative();
+  void updateMultilineHeight(NativeNode &nn);
   void updatePercentSizes();
   void updateFloating();
   void applyStickyBottom();
@@ -804,6 +830,7 @@ BoundValue QtTreeBackend::readWidget(NativeNode &nn) {
   case Kind::Radio:
     return static_cast<QRadioButton *>(nn.widget)->isChecked();
   case Kind::Entry:
+    if (const auto *entry = propsOf<n8v_entry_options>(*nn.node); entry && entry->multiline) return static_cast<QPlainTextEdit *>(nn.widget)->toPlainText().toStdString();
     return static_cast<QLineEdit *>(nn.widget)->text().toStdString();
   case Kind::Dropdown:
     return static_cast<QComboBox *>(nn.widget)->currentIndex();
@@ -814,6 +841,22 @@ BoundValue QtTreeBackend::readWidget(NativeNode &nn) {
   default:
     return {};
   }
+}
+
+void QtTreeBackend::updateMultilineHeight(NativeNode &nn) {
+  const auto *o = propsOf<n8v_entry_options>(*nn.node);
+  if (!o || !o->multiline) return;
+  auto *edit = static_cast<QPlainTextEdit *>(nn.widget);
+  const EntryLines lines = entryLines(*o);
+  int count = lines.min;
+  if (!lines.fixed) count = std::clamp((int)std::ceil(edit->document()->size().height()), lines.min, lines.max);
+  const int chrome = 2 * edit->frameWidth() + (int)std::ceil(2 * edit->document()->documentMargin()) + 2;
+  const int height = chrome + count * edit->fontMetrics().lineSpacing();
+  const bool overflowing = (int)std::ceil(edit->document()->size().height()) > lines.max;
+  edit->setVerticalScrollBarPolicy(lines.fixed || overflowing ? Qt::ScrollBarAsNeeded : Qt::ScrollBarAlwaysOff);
+  if (height == nn.entryHeight) return;
+  nn.entryHeight = height;
+  if (nn.parentNode) layoutChild(nn);
 }
 
 void QtTreeBackend::pollNative() {
@@ -832,6 +875,7 @@ void QtTreeBackend::pollNative() {
     default:
       continue;
     }
+    if (nn.kind() == Kind::Entry) updateMultilineHeight(nn);
     BoundValue current = readWidget(nn);
     if (current == nn.lastValue) continue;
     nn.lastValue = current;
@@ -1072,6 +1116,13 @@ void QtTreeBackend::build(NativeNode &nn) {
     break;
   }
   case Kind::Entry: {
+    if (const auto *entry = propsOf<n8v_entry_options>(pn); entry && entry->multiline) {
+      auto *edit = new N8VPlainTextEdit();
+      edit->node = &pn;
+      edit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+      nn.outer = nn.widget = edit;
+      break;
+    }
     auto *edit = new N8VLineEdit();
     edit->node = &pn;
     nn.outer = nn.widget = edit;
@@ -1273,6 +1324,16 @@ void QtTreeBackend::apply(NativeNode &nn) {
         if (const int *selected = std::get_if<int>(&pn.bound)) radio->setChecked(*selected == o.value);
       },
       [&](const n8v_entry_options &o) {
+        if (o.multiline) {
+          auto *edit = static_cast<QPlainTextEdit *>(nn.widget);
+          edit->setPlaceholderText(qstr(o.placeholder));
+          if (const std::string *text = std::get_if<std::string>(&pn.bound)) {
+            const QString want = qstr(*text);
+            if (edit->toPlainText() != want) edit->setPlainText(want);
+          }
+          updateMultilineHeight(nn);
+          return;
+        }
         auto *edit = static_cast<QLineEdit *>(nn.widget);
         edit->setPlaceholderText(qstr(o.placeholder));
         edit->setEchoMode(o.password ? QLineEdit::Password : QLineEdit::Normal);

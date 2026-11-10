@@ -22,6 +22,8 @@ import {
   STYLE_FAMILY,
   type StyleFamily,
   styleFamilyFromNative,
+  SUBMIT_MODE,
+  type SubmitMode,
 } from "./types.ts";
 
 export * from "./types.ts";
@@ -301,10 +303,20 @@ export interface EntryOptions {
   onChange?: (text: string) => void;
   onSubmit?: () => void;
   id?: string;
+  multiline?: boolean;
+  submitMode?: SubmitMode;
+  minLines?: number;
+  maxLines?: number;
+  matchEntryStyle?: boolean;
 }
 
 export function entry(opts: EntryOptions): void {
-  n().entry(opts);
+  n().entry({
+    ...opts,
+    submitMode: SUBMIT_MODE[opts.submitMode ?? "enter"],
+    minLines: opts.minLines ?? 0,
+    maxLines: opts.maxLines ?? 0,
+  });
 }
 
 export interface DropdownOptions {

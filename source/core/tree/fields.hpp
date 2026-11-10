@@ -116,6 +116,11 @@ template <typename V> void visitFields(n8v_entry_options &o, V &v) {
   v.ptr(o.on_submit);
   v.ptr(o.on_submit_userdata);
   v.str(o.id);
+  v.num(o.multiline);
+  v.num(o.submit_mode);
+  v.num(o.min_lines);
+  v.num(o.max_lines);
+  v.num(o.match_entry_style);
 }
 
 template <typename V> void visitFields(n8v_dropdown_options &o, V &v) {

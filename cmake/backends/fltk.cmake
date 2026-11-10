@@ -19,6 +19,7 @@ if(N8V_BACKEND_FLTK)
       LIBRARY "${_N8V_FLTK_SO}"
       VARIABLES
         fl_graphics_driver Fl_Graphics_Driver*
+      RTTI_SHIMS Fl_Multiline_Input Fl_Input
     )
     target_include_directories(fltk_lazy PUBLIC "${_N8V_FLTK_INCLUDE_DIR}")
   else()

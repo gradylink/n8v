@@ -256,6 +256,11 @@ typedef struct n8v_radio_options {
   const char *id;
 } n8v_radio_options;
 
+typedef enum n8v_submit_mode {
+  N8V_SUBMIT_ON_ENTER,
+  N8V_SUBMIT_ON_CTRL_ENTER,
+} n8v_submit_mode;
+
 typedef struct n8v_entry_options {
   n8v_string_buf *value;
   const char *placeholder;
@@ -265,6 +270,12 @@ typedef struct n8v_entry_options {
   n8v_click_fn on_submit;
   void *on_submit_userdata;
   const char *id;
+  bool multiline;
+  n8v_submit_mode submit_mode;
+  uint16_t min_lines;
+  uint16_t max_lines;
+  /** GTK4 Only. */
+  bool match_entry_style;
 } n8v_entry_options;
 
 typedef struct n8v_dropdown_options {

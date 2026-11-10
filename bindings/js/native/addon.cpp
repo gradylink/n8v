@@ -316,6 +316,11 @@ Napi::Value Entry(const Napi::CallbackInfo &info) {
   std::string placeholderStorage;
   StrOr(o, "placeholder", e.placeholder, placeholderStorage);
   e.password = BoolOr(o, "password", false);
+  e.multiline = BoolOr(o, "multiline", false);
+  e.submit_mode = (n8v_submit_mode)EnumOr(o, "submitMode", N8V_SUBMIT_ON_ENTER);
+  e.min_lines = U16Or(o, "minLines", 0);
+  e.max_lines = U16Or(o, "maxLines", 0);
+  e.match_entry_style = BoolOr(o, "matchEntryStyle", false);
   WireCallback(o, "onChange", TextChangeTrampoline, e.on_change, e.on_change_userdata);
   WireCallback(o, "onSubmit", ClickTrampoline, e.on_submit, e.on_submit_userdata);
   std::string idStorage;

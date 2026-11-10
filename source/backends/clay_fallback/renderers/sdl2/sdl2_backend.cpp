@@ -126,8 +126,13 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
   bool pendingEntryClicked = false;
   bool pendingEntryDragging = false;
 
+  multilineMeta_ = nullptr;
   for (int32_t i = 0; i < commands.length; ++i) {
     Clay_RenderCommand *command = Clay_RenderCommandArray_Get(&commands, i);
+    if (multilineMeta_) {
+      const auto *lineFlags = command->commandType == CLAY_RENDER_COMMAND_TYPE_TEXT ? static_cast<TextStyleFlags *>(command->userData) : nullptr;
+      if (!lineFlags || lineFlags->isEntryLabel) finishMultilineEntry();
+    }
     switch (command->commandType) {
     case CLAY_RENDER_COMMAND_TYPE_RECTANGLE: {
       auto *meta = static_cast<NativeWidgetMeta *>(command->userData);
@@ -161,6 +166,18 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
         } else if (mouseSelecting_ && entry_.ordinal == stableWidgetKey(*meta)) {
           pendingEntryDragging = true;
         }
+        if (meta->entryMultiline) {
+          multilineMeta_ = meta;
+          multilineBox_ = command->boundingBox;
+          multilineId_ = command->id;
+          multilineClicked_ = pendingEntryClicked;
+          multilineDragging_ = pendingEntryDragging;
+          multilineBase_ = nullptr;
+          multilineLines_.clear();
+          pendingEntryMeta = nullptr;
+          pendingEntryClicked = false;
+          pendingEntryDragging = false;
+        }
       }
 
       const Clay_Color &color = command->renderData.rectangle.backgroundColor;
@@ -182,6 +199,11 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
         renderSwitchIndicator(*pendingIndicatorMeta, command->boundingBox);
         pendingIsSwitch = false;
         pendingIndicatorMeta = nullptr;
+      }
+
+      if (multilineMeta_) {
+        renderEntryLine(multilineMeta_, *command);
+        break;
       }
 
       if (pendingEntryMeta) {
@@ -236,6 +258,7 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
       break;
     }
   }
+  if (multilineMeta_) finishMultilineEntry();
   justClicked_ = false;
   SDL_RenderPresent(renderer_);
 }

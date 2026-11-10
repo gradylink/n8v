@@ -4,6 +4,7 @@
 #include "core/style.hpp"
 
 #include "core/clay_convert.hpp"
+#include "core/entry_lines.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
 #include "core/tree/emit.hpp"
@@ -61,9 +62,19 @@ void entry(const n8v_entry_options &options, int ordinal) {
   const bool floatingLabelStyle = paint.labelColor.a > 0.0f;
   const bool labelFloated = floatingLabelStyle && (hasValue || focused);
 
+  const bool multiline = options.multiline && n8v::activeBackend().supportsMultilineEntry();
+  const n8v::detail::EntryLines lines = n8v::detail::entryLines(options);
+
   std::string maskedBuffer;
   std::string_view displayText;
-  if (hasValue && options.password) {
+  if (multiline && hasValue) {
+    if (shadow->back() == '\n') {
+      maskedBuffer = *shadow + ' ';
+      displayText = maskedBuffer;
+    } else {
+      displayText = *shadow;
+    }
+  } else if (hasValue && options.password) {
     size_t count = 0;
     for (size_t i = 0; i < shadow->size();) {
       unsigned char c = (unsigned char)(*shadow)[i];
@@ -93,7 +104,15 @@ void entry(const n8v_entry_options &options, int ordinal) {
 
   Clay_Dimensions nativeSize = n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Entry, placeholderView, paint.fontSize);
   float fieldHeight = (float)paint.padding.top + (float)paint.fontSize * 1.2f + (float)paint.padding.bottom;
-  if (nativeSize.height > 0) {
+  if (multiline) {
+    float lineHeight = n8v::activeBackend().measureText("Ag", paint.font, paint.fontSize, false, false).height;
+    if (lineHeight <= 0.0f) lineHeight = (float)paint.fontSize * 1.2f;
+    const float oneLine = nativeSize.height > 0 ? nativeSize.height : (float)paint.padding.top + lineHeight + (float)paint.padding.bottom;
+    const float minHeight = oneLine + (float)(lines.min - 1) * lineHeight;
+    const float maxHeight = oneLine + (float)(lines.max - 1) * lineHeight;
+    decl.layout.sizing.height = lines.fixed ? CLAY_SIZING_FIXED(minHeight) : CLAY_SIZING_FIT(minHeight, maxHeight);
+    fieldHeight = oneLine;
+  } else if (nativeSize.height > 0) {
     decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
     fieldHeight = nativeSize.height;
   } else if (floatingLabelStyle) {
@@ -102,6 +121,8 @@ void entry(const n8v_entry_options &options, int ordinal) {
 
   placeholderStorage.emplace_back(placeholderView);
 
+  const Clay_String displayInterned = internString(displayText);
+
   widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
   n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
   meta.kind = n8v::NativeWidgetKind::Entry;
@@ -109,7 +130,13 @@ void entry(const n8v_entry_options &options, int ordinal) {
   if (options.id) meta.id = options.id;
   meta.entryValue = shadow;
   meta.placeholder = &placeholderStorage.back();
-  meta.password = options.password;
+  meta.password = options.password && !multiline;
+  meta.entryMultiline = multiline;
+  meta.entryDisplayBase = displayInterned.chars;
+  meta.entrySubmitMode = options.submit_mode;
+  meta.entryMinLines = lines.min;
+  meta.entryMaxLines = lines.max;
+  meta.entryFixedLines = lines.fixed;
   meta.entryHasCustomBorder = paint.borderWidth > 0.0f;
   meta.entryBuf = options.value;
   meta.onEntryChange = options.on_change;
@@ -117,6 +144,11 @@ void entry(const n8v_entry_options &options, int ordinal) {
   meta.onEntrySubmit = options.on_submit;
   meta.onEntrySubmitUserdata = options.on_submit_userdata;
   decl.userData = &meta;
+
+  if (multiline && !n8v::activeBackend().rendersNativeChrome()) {
+    decl.clip.vertical = true;
+    if (n8v::activeBackend().ownsScrollMath()) decl.clip.childOffset = Clay_GetScrollOffset();
+  }
 
   Clay__ConfigureOpenElement(decl);
 
@@ -126,9 +158,9 @@ void entry(const n8v_entry_options &options, int ordinal) {
     textConfig.textColor = n8v::detail::toClay(hasValue ? paint.textColor : paint.placeholderColor);
     textConfig.fontSize = paint.fontSize;
     textConfig.fontId = n8v::detail::textFontId(paint.font, false, false);
-    textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
+    textConfig.wrapMode = multiline ? CLAY_TEXT_WRAP_WORDS : CLAY_TEXT_WRAP_NONE;
     textConfig.userData = &textStyleStorage.back();
-    CLAY_TEXT(internString(displayText), textConfig);
+    CLAY_TEXT(displayInterned, textConfig);
   }
 
   if (floatingLabelStyle && !placeholderView.empty()) {
@@ -155,7 +187,7 @@ void entry(const n8v_entry_options &options, int ordinal) {
     }
     Clay__ConfigureOpenElement(labelDecl);
 
-    textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal});
+    textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, ordinal, false, true});
     Clay_TextElementConfig labelTextConfig = {};
     labelTextConfig.textColor = n8v::detail::toClay(paint.labelColor);
     labelTextConfig.fontSize = labelFontSize;

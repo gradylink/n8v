@@ -4,6 +4,7 @@ export type ButtonStyle = "primary" | "secondary" | "ghost";
 export type PanelRole = "card" | "listItem";
 export type IconVariant = "outline" | "filled";
 export type IconPosition = "leading" | "trailing";
+export type SubmitMode = "enter" | "ctrlEnter";
 export type AttachPoint =
   | "leftTop"
   | "leftCenter"
@@ -39,6 +40,10 @@ export const ICON_VARIANT: Record<IconVariant, number> = {
 export const ICON_POSITION: Record<IconPosition, number> = {
   leading: 0,
   trailing: 1,
+};
+export const SUBMIT_MODE: Record<SubmitMode, number> = {
+  enter: 0,
+  ctrlEnter: 1,
 };
 export const ATTACH_POINT: Record<AttachPoint, number> = {
   leftTop: 0,
@@ -174,7 +179,12 @@ export interface NativeRounding {
 export interface RoundingConstructors {
   styleDefault(): NativeRounding;
   none(): NativeRounding;
-  fixed(topLeft: number, topRight: number, bottomLeft: number, bottomRight: number): NativeRounding;
+  fixed(
+    topLeft: number,
+    topRight: number,
+    bottomLeft: number,
+    bottomRight: number,
+  ): NativeRounding;
 }
 
 export const Rounding: RoundingConstructors = {

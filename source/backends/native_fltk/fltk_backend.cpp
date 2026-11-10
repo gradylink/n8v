@@ -1,5 +1,6 @@
 #include "fltk_backend.hpp"
 
+#include "core/entry_lines.hpp"
 #include "core/freedesktop_icon_theme.hpp"
 #include "core/icon_loader.hpp"
 #include "core/icon_registry.hpp"
@@ -26,6 +27,7 @@
 #include <FL/Fl_Help_View.H>
 #include <FL/Fl_Hor_Slider.H>
 #include <FL/Fl_Input.H>
+#include <FL/Fl_Multiline_Input.H>
 #include <FL/Fl_Native_File_Chooser.H>
 #include <FL/Fl_RGB_Image.H>
 #include <FL/Fl_Round_Button.H>
@@ -70,6 +72,32 @@ struct WidgetAction {
 
   float *sliderValue = nullptr;
   std::function<void(float)> onSliderChange;
+};
+
+class N8VMultilineInput final : public Fl_Multiline_Input {
+public:
+  N8VMultilineInput() : Fl_Multiline_Input(0, 0, 1, 1) { type(FL_MULTILINE_INPUT | FL_INPUT_WRAP); }
+
+  n8v_submit_mode mode = N8V_SUBMIT_ON_ENTER;
+  std::function<void()> onSubmit;
+
+  int handle(int event) override {
+    if (event == FL_KEYBOARD && (Fl::event_key(FL_Enter) || Fl::event_key(FL_KP_Enter))) {
+#ifdef __APPLE__
+      const bool command = Fl::get_key(FL_Meta_L) || Fl::get_key(FL_Meta_R);
+#else
+      const bool command = Fl::get_key(FL_Control_L) || Fl::get_key(FL_Control_R);
+#endif
+      const bool shift = Fl::get_key(FL_Shift_L) || Fl::get_key(FL_Shift_R);
+      if (n8v::detail::enterSubmits(mode, command, shift)) {
+        if (onSubmit) onSubmit();
+      } else {
+        replace(position(), mark(), "\n", 1);
+      }
+      return 1;
+    }
+    return Fl_Multiline_Input::handle(event);
+  }
 };
 
 class FltkBackend final : public Backend {
@@ -566,7 +594,13 @@ private:
         if ((button->value() != 0) != *meta.checked) button->value(*meta.checked);
       } else if (meta.kind == NativeWidgetKind::Entry) {
         auto *input = static_cast<Fl_Input *>(it->second);
-        input->input_type(meta.password ? FL_SECRET_INPUT : FL_NORMAL_INPUT);
+        if (meta.entryMultiline) {
+          auto *multiline = static_cast<N8VMultilineInput *>(input);
+          multiline->mode = meta.entrySubmitMode;
+          multiline->onSubmit = toStdFunction(meta.onEntrySubmit, meta.onEntrySubmitUserdata);
+        } else {
+          input->input_type(meta.password ? FL_SECRET_INPUT : FL_NORMAL_INPUT);
+        }
         syncEntry(input, meta, entryStates_[effectiveKey(meta)]);
         action.callback = toStdFunction(meta.onEntrySubmit, meta.onEntrySubmitUserdata);
       } else if (meta.kind == NativeWidgetKind::Radio && meta.radioSelected) {
@@ -624,6 +658,12 @@ private:
       button->when(FL_WHEN_CHANGED);
       button->callback(&FltkBackend::onCheckboxChanged, &action);
       widget = button;
+    } else if (meta.kind == NativeWidgetKind::Entry && meta.entryMultiline) {
+      auto *input = new N8VMultilineInput();
+      input->mode = meta.entrySubmitMode;
+      input->onSubmit = toStdFunction(meta.onEntrySubmit, meta.onEntrySubmitUserdata);
+      syncEntry(input, meta, entryStates_[effectiveKey(meta)]);
+      widget = input;
     } else if (meta.kind == NativeWidgetKind::Entry) {
       auto *input = new Fl_Input(0, 0, 1, 1);
       input->input_type(meta.password ? FL_SECRET_INPUT : FL_NORMAL_INPUT);
