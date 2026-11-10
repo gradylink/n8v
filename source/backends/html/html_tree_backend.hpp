@@ -6,6 +6,6 @@
 
 namespace n8v::detail {
 
-std::unique_ptr<Backend> makeGtk4Backend();
+std::unique_ptr<Backend> makeHtmlTreeBackend();
 
 } // namespace n8v::detail

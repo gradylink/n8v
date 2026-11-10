@@ -6,6 +6,7 @@
 #include "core/clay_convert.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
+#include "core/tree/emit.hpp"
 #include "core/ui_core_internal.hpp"
 
 #include <clay.h>
@@ -58,6 +59,8 @@ void dispatchDropdownSelect(Clay_ElementId /*elementId*/, Clay_PointerData point
 
 namespace n8v::detail::ui_internal {
 
+void releaseDropdownState(int ordinal) { dropdownOpenState.erase(ordinal); }
+
 void resetDropdownFrameState() {
   dropdownItemsStorage.clear();
   dropdownOrdinalStorage.clear();
@@ -66,12 +69,11 @@ void resetDropdownFrameState() {
 
 } // namespace n8v::detail::ui_internal
 
-extern "C" {
+namespace n8v::detail::emit {
 
-void n8v_dropdown(n8v_dropdown_options options) {
+void dropdown(const n8v_dropdown_options &options, int ordinal) {
   Clay__OpenElement();
 
-  const int ordinal = widgetOrdinal++;
   const bool hovered = Clay_Hovered();
   const bool pressed = hovered && n8v::activeBackend().pointerDown();
   const bool open = dropdownOpenState[ordinal];
@@ -277,4 +279,4 @@ void n8v_dropdown(n8v_dropdown_options options) {
   Clay__CloseElement();
 }
 
-} // extern "C"
+} // namespace n8v::detail::emit

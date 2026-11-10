@@ -3,19 +3,19 @@
 #include <cstring>
 
 #ifdef __EMSCRIPTEN__
-#include "renderers/html/html_backend.hpp"
+#include "backends/html/html_tree_backend.hpp"
 #else
 #include "renderers/sdl2/sdl2_backend.hpp"
 #include "sdl2_lazy_vars.h"
 #endif
 
 #ifdef N8V_HAS_GTK4_BACKEND
-#include "backends/native_gtk4/gtk4_backend.hpp"
+#include "backends/native_gtk4/gtk4_tree_backend.hpp"
 #include "gtk4_lazy_vars.h"
 #endif
 
 #ifdef N8V_HAS_QT_BACKEND
-#include "backends/native_qt/qt_backend.hpp"
+#include "backends/native_qt/qt_tree_backend.hpp"
 #include "qt6widgets_lazy_vars.h"
 #endif
 
@@ -53,18 +53,18 @@ public:
 
 std::unique_ptr<Backend> selectBackend() {
 #ifdef __EMSCRIPTEN__
-  return detail::makeHtmlBackend();
+  return detail::makeHtmlTreeBackend();
 #else
   const char *preferredBackend = std::getenv("N8V_BACKEND");
 
 #ifdef N8V_HAS_GTK4_BACKEND
   if ((!preferredBackend || std::strcmp(preferredBackend, "gtk") == 0 || strcmp(preferredBackend, "gtk4") == 0) && lzy_gtk4_lazy_is_available()) {
-    return detail::makeGtk4Backend();
+    return detail::makeGtk4TreeBackend();
   }
 #endif
 #ifdef N8V_HAS_QT_BACKEND
   if ((!preferredBackend || std::strcmp(preferredBackend, "qt") == 0 || std::strcmp(preferredBackend, "qt6") == 0) && lzy_qt6widgets_lazy_is_available()) {
-    return detail::makeQtBackend();
+    return detail::makeQtTreeBackend();
   }
 #endif
 #ifdef N8V_HAS_MILSKO_BACKEND

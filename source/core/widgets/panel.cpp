@@ -5,6 +5,7 @@
 
 #include "core/clay_convert.hpp"
 #include "core/native_widget_meta.hpp"
+#include "core/tree/emit.hpp"
 #include "core/ui_core_internal.hpp"
 
 #include <clay.h>
@@ -28,12 +29,11 @@ uint16_t snapGapToGrid(uint16_t value, float unit) {
 
 } // namespace
 
-extern "C" {
+namespace n8v::detail::emit {
 
-void n8v_open_panel(n8v_panel_options opts) {
+void openPanel(const n8v_panel_options &opts, int ordinal) {
   openElementMaybeWithId(opts.id);
 
-  const int ordinal = widgetOrdinal++;
   const n8v::PanelRole role = toPanelRole(opts.role);
   const bool hovered = Clay_Hovered();
   const bool pressed = hovered && n8v::activeBackend().pointerDown();
@@ -85,6 +85,6 @@ void n8v_open_panel(n8v_panel_options opts) {
   Clay__ConfigureOpenElement(decl);
 }
 
-void n8v_close_panel(void) { Clay__CloseElement(); }
+void closePanel() { Clay__CloseElement(); }
 
-} // extern "C"
+} // namespace n8v::detail::emit

@@ -1,14 +1,13 @@
-#include "html_backend_impl.hpp"
+#include "html_assets.hpp"
 
-#include "core/image_loader.hpp"
-#include "core/native_widget_meta.hpp"
+#include "backends/clay_fallback/text/bundled_font.hpp"
+#include "html_css.hpp"
 
 #include <cstdint>
-#include <cstring>
-#include <string>
+#include <unordered_map>
 #include <vector>
 
-namespace n8v::detail {
+namespace n8v::detail::html_assets {
 namespace {
 
 void put32(std::vector<uint8_t> &buf, uint32_t v) {
@@ -51,12 +50,12 @@ std::vector<uint8_t> encodeBmp(const DecodedImage &image) {
   put32(buf, 0);
   put32(buf, 0);
   put32(buf, 0);
-  put32(buf, 0x00FF0000);                     // R mask
-  put32(buf, 0x0000FF00);                     // G mask
-  put32(buf, 0x000000FF);                     // B mask
-  put32(buf, 0xFF000000);                     // A mask
-  put32(buf, 0x73524742);                     // LCS_sRGB
-  for (int i = 0; i < 12; ++i) put32(buf, 0); // CIEXYZTRIPLE endpoints
+  put32(buf, 0x00FF0000);                    // R mask
+  put32(buf, 0x0000FF00);                    // G mask
+  put32(buf, 0x000000FF);                    // B mask
+  put32(buf, 0xFF000000);                    // A mask
+  put32(buf, 0x73524742);                    // LCS_sRGB
+  for (int i = 0; i < 9; ++i) put32(buf, 0); // CIEXYZTRIPLE endpoints: 3 colours x 3 components (was 12, which pushed the header to 120 bytes)
   put32(buf, 0);
   put32(buf, 0);
   put32(buf, 0);
@@ -103,33 +102,33 @@ std::string base64Encode(const std::vector<uint8_t> &data) {
   return out;
 }
 
-} // namespace
-
-void HtmlBackend::renderImage(const Clay_RenderCommand &command) {
-  auto *meta = static_cast<NativeWidgetMeta *>(command.userData);
-  if (!meta || !meta->image) return;
-
-  ElementKey key = elementKey(command.id, CLAY_RENDER_COMMAND_TYPE_IMAGE);
-  bool created = false;
-  emscripten::val el = getOrCreateElement(command.id, CLAY_RENDER_COMMAND_TYPE_IMAGE, "img", created);
-  positionElement(el, elementLastBox_[key], command.boundingBox);
-  if (created) {
-    el["style"].set("objectFit", std::string("fill"));
-    el["style"].set("pointerEvents", std::string("none"));
-  }
-
-  setCornerRadii(el, command.renderData.image.cornerRadius);
-
-  const void *&lastSource = elementImageSource_[key];
-  if (lastSource == meta->image) return;
-  lastSource = meta->image;
-
-  std::string &dataUri = imageDataUris_[meta->image];
-  if (dataUri.empty()) {
-    std::vector<uint8_t> bmp = encodeBmp(*meta->image);
-    dataUri = "data:image/bmp;base64," + base64Encode(bmp);
-  }
-  el.set("src", dataUri);
+void appendFace(std::string &css, FontFamily family, bool bold, bool italic) {
+  std::vector<unsigned char> bytes = bundledFontBytes(family, bold, italic);
+  std::string stack = html_css::cssFontFamily(family);
+  std::string name = stack.substr(0, stack.find(','));
+  css += "@font-face{font-family:" + name + ";font-weight:" + (bold ? "bold" : "normal") + ";font-style:" + (italic ? "italic" : "normal") + ";src:url(data:font/ttf;base64," +
+         base64Encode(std::vector<uint8_t>(bytes.begin(), bytes.end())) + ") format('truetype');}\n";
 }
 
-} // namespace n8v::detail
+} // namespace
+
+std::string fontFaceCss() {
+  std::string css;
+  const FontFamily families[] = {FontFamily::DejaVuSans, FontFamily::Roboto, FontFamily::Inter, FontFamily::Selawik};
+  for (FontFamily family : families) {
+    appendFace(css, family, false, false);
+    appendFace(css, family, true, false);
+    appendFace(css, family, false, true);
+    appendFace(css, family, true, true);
+  }
+  return css;
+}
+
+const std::string &imageDataUri(const DecodedImage &image) {
+  static std::unordered_map<const DecodedImage *, std::string> cache;
+  std::string &uri = cache[&image];
+  if (uri.empty()) uri = "data:image/bmp;base64," + base64Encode(encodeBmp(image));
+  return uri;
+}
+
+} // namespace n8v::detail::html_assets

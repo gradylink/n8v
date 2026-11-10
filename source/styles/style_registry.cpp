@@ -20,6 +20,7 @@ StyleFamily parseStyleFamily(const char *value, StyleFamily fallback) {
 StyleFamily currentFamily = parseStyleFamily(std::getenv("N8V_STYLE"), StyleFamily::Plain);
 
 bool currentFamilyExplicit = false;
+uint64_t styleGeneration = 0;
 
 } // namespace
 
@@ -42,14 +43,20 @@ const Paint &activePaint() {
 void setStyleFamily(StyleFamily family) {
   currentFamily = family;
   currentFamilyExplicit = true;
+  ++styleGeneration;
 }
+
+uint64_t activeStyleGeneration() { return styleGeneration; }
 
 StyleFamily activeStyleFamily() { return currentFamily; }
 
 namespace detail {
 
 void suppressEnvStyleDefault() {
-  if (!currentFamilyExplicit) currentFamily = StyleFamily::Plain;
+  if (!currentFamilyExplicit) {
+    currentFamily = StyleFamily::Plain;
+    ++styleGeneration;
+  }
 }
 
 } // namespace detail

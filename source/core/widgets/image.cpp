@@ -4,6 +4,7 @@
 #include "core/image_loader.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/style.hpp"
+#include "core/tree/emit.hpp"
 #include "core/ui_core_internal.hpp"
 
 #include <clay.h>
@@ -20,15 +21,14 @@ void resetImageFrameState() {}
 
 } // namespace n8v::detail::ui_internal
 
-extern "C" {
+namespace n8v::detail::emit {
 
-void n8v_image(n8v_image_options options) {
+void image(const n8v_image_options &options, int ordinal) {
   const n8v::detail::DecodedImage *decoded = n8v::detail::getOrDecodeImage(options);
   if (!decoded) return;
 
   Clay__OpenElement();
 
-  const int ordinal = widgetOrdinal++;
 
   n8v::Rounding rounding = toRounding(options.rounding);
   n8v::CornerRadius effectiveRadius;
@@ -65,6 +65,10 @@ void n8v_image(n8v_image_options options) {
   Clay__ConfigureOpenElement(decl);
   Clay__CloseElement();
 }
+
+} // namespace n8v::detail::emit
+
+extern "C" {
 
 void n8v_set_image_bundle_lookup(n8v_image_bundle_lookup_fn fn, void *userdata) { n8v::detail::setImageBundleLookup(fn, userdata); }
 

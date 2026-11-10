@@ -176,9 +176,6 @@ bundle_add(n8v_fonts
   DIRECTORIES "${_N8V_FONT_STAGE}"
 )
 
-# Fixes bundle_add recipe override
-cl_repo("${CMAKE_CURRENT_SOURCE_DIR}/cmake/recipes")
-
 set(_N8V_ICON_STAGE "${CMAKE_CURRENT_BINARY_DIR}/n8v_icons")
 
 cl_import_source(
@@ -191,8 +188,8 @@ set(_N8V_PLAIN_ICONS
   "settings:settings" "search:search" "check:check" "close:x" "menu:menu"
   "add:plus" "remove:minus" "delete:trash" "edit:pencil" "copy:copy"
   "download:download" "upload:upload" "refresh:refresh-cw" "share:share-2"
-  "star:star" "heart:heart" "home:house" "info:info" "warning:triangle-alert"
-  "error:circle-alert" "notification:bell" "calendar:calendar" "clock:clock"
+  "star:star" "heart:heart" "home:house" "info:info" "warning:triangle-exclamation-point"
+  "error:circle-exclamation-point" "notification:bell" "calendar:calendar" "clock:clock"
   "mail:mail" "folder:folder" "file:file" "image:image" "link:link" "lock:lock"
   "unlock:lock-open" "visibility:eye" "visibility-off:eye-off" "wifi:wifi"
   "volume:volume-2" "mute:volume-x" "chevron-left:chevron-left" "chevron-right:chevron-right"
@@ -337,6 +334,11 @@ set(N8V_SOURCES
   source/core/image_loader.cpp
   source/core/icon_registry.cpp
   source/core/icon_loader.cpp
+  source/core/tree/recorder.cpp
+  source/core/tree/walker.cpp
+  source/core/tree/props.cpp
+  source/core/tree/reconcile.cpp
+  source/core/tree/dispatch.cpp
   source/core/widgets/leaf.cpp
   source/core/widgets/checkbox.cpp
   source/core/widgets/radio.cpp
@@ -365,15 +367,10 @@ set(N8V_SOURCES
 
 if(EMSCRIPTEN)
   list(APPEND N8V_SOURCES
-    source/backends/clay_fallback/renderers/html/html_backend.cpp
-    source/backends/clay_fallback/renderers/html/dom_commands.cpp
-    source/backends/clay_fallback/renderers/html/indicators.cpp
-    source/backends/clay_fallback/renderers/html/entry_field.cpp
-    source/backends/clay_fallback/renderers/html/fonts.cpp
-    source/backends/clay_fallback/renderers/html/text_measure.cpp
-    source/backends/clay_fallback/renderers/html/js_bridge.cpp
-    source/backends/clay_fallback/renderers/html/image_field.cpp
-    source/backends/clay_fallback/renderers/html/document_field.cpp
+    source/backends/html/html_tree_backend.cpp
+    source/backends/html/html_css.cpp
+    source/backends/html/html_assets.cpp
+    source/backends/html/js_bridge.cpp
   )
 else()
   list(APPEND N8V_SOURCES
@@ -392,7 +389,7 @@ option(N8V_BUILD_STATIC "Build a shared libn8v.so." ON)
 option(N8V_BUILD_SHARED "Build a shared libn8v.so." ON)
 if(EMSCRIPTEN)
   set(N8V_BUILD_SHARED OFF)
-  set(N8V_BUILD_STATIC OFF)
+  set(N8V_BUILD_STATIC ON)
 elseif(NOT N8V_BUILD_STATIC AND NOT N8V_BUILD_SHARED)
   message(FATAL_ERROR "You must enable either 'N8V_BUILD_STATIC' or 'N8V_BUILD_SHARED'.")
 endif()
@@ -432,12 +429,12 @@ foreach(_n8v_target ${_n8v_targets})
       "SHELL:-sALLOW_MEMORY_GROWTH=1"
       "SHELL:-sEXPORTED_RUNTIME_METHODS=[\"ccall\"]"
       "--bind"
-      "SHELL:--shell-file ${CMAKE_CURRENT_SOURCE_DIR}/source/backends/clay_fallback/renderers/html/shell_minimal.html"
+      "SHELL:--shell-file ${CMAKE_CURRENT_SOURCE_DIR}/source/backends/html/shell_minimal.html"
     )
   endif()
 
   if(N8V_HAVE_GTK4)
-    target_sources(${_n8v_target} PRIVATE source/backends/native_gtk4/gtk4_backend.cpp)
+    target_sources(${_n8v_target} PRIVATE source/backends/native_gtk4/gtk4_tree_backend.cpp)
     target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_GTK4_BACKEND)
     target_link_libraries(${_n8v_target} PUBLIC gtk4_lazy gobject_lazy glib_lazy)
     if(N8V_HAVE_ADWAITA)
@@ -447,7 +444,7 @@ foreach(_n8v_target ${_n8v_targets})
   endif()
 
   if(N8V_HAVE_QT)
-    target_sources(${_n8v_target} PRIVATE source/backends/native_qt/qt_backend.cpp)
+    target_sources(${_n8v_target} PRIVATE source/backends/native_qt/qt_tree_backend.cpp)
     target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_QT_BACKEND)
     target_link_libraries(${_n8v_target} PUBLIC qt6widgets_lazy qt6gui_lazy qt6core_lazy)
   endif()

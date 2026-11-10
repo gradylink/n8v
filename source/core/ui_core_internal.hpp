@@ -6,9 +6,11 @@
 
 #include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
+#include "core/tree/persistent.hpp"
 
 #include <clay.h>
 
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <deque>
@@ -166,21 +168,25 @@ inline std::deque<std::string> textStorage;
 inline std::deque<n8v::detail::TextStyleFlags> textStyleStorage;
 inline std::deque<n8v::detail::NativeWidgetMeta> widgetMetaStorage;
 
-inline int widgetOrdinal = 0;
 inline n8v::CursorKind pendingCursor = n8v::CursorKind::Default;
 inline float currentDelta = 0.0f;
 
-inline int animKey(int ordinal, int slot) { return ordinal * 64 + slot; }
+inline int64_t animKey(int ordinal, int slot) { return (int64_t)ordinal * 64 + slot; }
 
-inline float easeValue(int key, float target, float duration) {
-  struct ValueAnimation {
-    float start = 0.0f;
-    float current = 0.0f;
-    float target = 0.0f;
-    float elapsed = 0.0f;
-  };
-  static std::unordered_map<int, ValueAnimation> animations;
+struct ValueAnimation {
+  float start = 0.0f;
+  float current = 0.0f;
+  float target = 0.0f;
+  float elapsed = 0.0f;
+};
+inline std::unordered_map<int64_t, ValueAnimation> animations;
 
+inline void forgetAnimations(int ordinal) {
+  for (int owner = ordinal; owner < ordinal + n8v::detail::tree::kOrdinalStride; ++owner)
+    for (int slot = 0; slot < 64; ++slot) animations.erase(animKey(owner, slot));
+}
+
+inline float easeValue(int64_t key, float target, float duration) {
   ValueAnimation &anim = animations[key];
   if (anim.target != target) {
     anim.start = anim.current;
@@ -237,5 +243,9 @@ void resetDropdownFrameState();
 void resetSliderFrameState();
 void resetImageFrameState();
 void resetSidebarFrameState();
+
+void releaseDropdownState(int ordinal);
+void releaseSliderState(int ordinal);
+void releaseSidebarState(int ordinal);
 
 } // namespace n8v::detail::ui_internal

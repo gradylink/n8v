@@ -5,6 +5,7 @@
 #include "core/markdown/markdown.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/style.hpp"
+#include "core/tree/emit.hpp"
 #include "core/ui_core_internal.hpp"
 
 #include <clay.h>
@@ -123,12 +124,11 @@ float measureDocumentHeight(const n8v::detail::markdown::Document &doc, n8v::Fon
 
 } // namespace
 
-extern "C" {
+namespace n8v::detail::emit {
 
-void n8v_document(n8v_document_options options) {
+void document(const n8v_document_options &options, int ordinal) {
   openElementMaybeWithId(options.id);
 
-  const int ordinal = widgetOrdinal++;
   const n8v::detail::markdown::CachedDocument cached = n8v::detail::markdown::getOrParse(toView(options.markdown));
 
   Clay_ElementDeclaration decl = {};
@@ -166,4 +166,4 @@ void n8v_document(n8v_document_options options) {
   Clay__CloseElement();
 }
 
-} // extern "C"
+} // namespace n8v::detail::emit

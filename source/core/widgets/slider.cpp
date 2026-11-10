@@ -5,6 +5,7 @@
 
 #include "core/clay_convert.hpp"
 #include "core/native_widget_meta.hpp"
+#include "core/tree/emit.hpp"
 #include "core/ui_core_internal.hpp"
 
 #include <clay.h>
@@ -39,12 +40,15 @@ namespace n8v::detail::ui_internal {
 
 void resetSliderFrameState() {}
 
+void releaseSliderState(int ordinal) {
+  if (draggingSliderOrdinal == ordinal) draggingSliderOrdinal = -1;
+}
+
 } // namespace n8v::detail::ui_internal
 
-extern "C" {
+namespace n8v::detail::emit {
 
-void n8v_slider(n8v_slider_options options) {
-  const int ordinal = widgetOrdinal++;
+void slider(const n8v_slider_options &options, int ordinal) {
 
   if (draggingSliderOrdinal == ordinal && options.value) {
     Clay_PointerData globalPointer = Clay_GetPointerState();
@@ -212,4 +216,4 @@ void n8v_slider(n8v_slider_options options) {
   Clay__CloseElement(); // outer
 }
 
-} // extern "C"
+} // namespace n8v::detail::emit

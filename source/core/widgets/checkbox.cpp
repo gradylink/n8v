@@ -6,6 +6,7 @@
 #include "core/clay_convert.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
+#include "core/tree/emit.hpp"
 #include "core/ui_core_internal.hpp"
 
 #include <clay.h>
@@ -14,7 +15,6 @@ namespace {
 
 using namespace n8v::detail::ui_internal;
 
-n8v_checkbox_options pendingCheckboxOpts;
 
 void dispatchCheckboxToggle(Clay_ElementId /*elementId*/, Clay_PointerData pointerData, void *userData) {
   if (pointerData.state != CLAY_POINTER_DATA_PRESSED_THIS_FRAME) return;
@@ -32,17 +32,12 @@ void resetCheckboxFrameState() {}
 
 } // namespace n8v::detail::ui_internal
 
-extern "C" {
+namespace n8v::detail::emit {
 
-void _n8v_set_checkbox_opts(n8v_checkbox_options opts) { pendingCheckboxOpts = opts; }
-
-void _n8v_checkbox_commit(const char *label) {
-  n8v_checkbox_options opts = pendingCheckboxOpts;
-  std::string_view labelView = toView(label);
+void checkbox(const n8v_checkbox_options &opts, std::string_view labelView, int ordinal) {
 
   Clay__OpenElement();
 
-  const int ordinal = widgetOrdinal++;
   const bool hovered = Clay_Hovered();
   const bool pressed = hovered && n8v::activeBackend().pointerDown();
   const bool checkedValue = opts.checked && *opts.checked;
@@ -102,4 +97,4 @@ void _n8v_checkbox_commit(const char *label) {
   Clay__CloseElement();
 }
 
-} // extern "C"
+} // namespace n8v::detail::emit

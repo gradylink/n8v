@@ -5,9 +5,25 @@
 #include <clay.h>
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 namespace n8v {
+
+namespace detail::tree {
+struct TreeOps;
+}
+
+struct NativeScrollRequest {
+  enum class Kind { Bottom, Top, Left, Right, Offset, Element };
+  Kind kind = Kind::Top;
+  std::string containerId;
+  std::string elementId;
+  float x = 0.0f;
+  float y = 0.0f;
+  float paddingLeft = 0.0f;
+  float paddingTop = 0.0f;
+};
 
 struct Backend {
   virtual ~Backend() = default;
@@ -58,6 +74,16 @@ struct Backend {
   virtual void setScrollOffsetX(uint32_t /*containerId*/, float /*x*/) {}
 
   virtual Clay_Vector2 queryScrollOffset(uint32_t /*elementId*/) const { return {0, 0}; }
+
+  virtual detail::tree::TreeOps *treeOps() { return nullptr; }
+
+  virtual bool rendersFromClay() const { return true; }
+
+  virtual void commitFrame() {}
+
+  virtual bool isHovered(std::string_view /*id*/) const { return false; }
+
+  virtual void requestScroll(const NativeScrollRequest & /*request*/) {}
 
   virtual void beginFrame() = 0;
   virtual void present(Clay_RenderCommandArray commands) = 0;

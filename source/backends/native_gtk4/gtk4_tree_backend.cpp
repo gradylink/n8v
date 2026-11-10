@@ -1,0 +1,1369 @@
+#include "gtk4_tree_backend.hpp"
+
+#include "gtk4_markup.hpp"
+
+#include "core/icon_loader.hpp"
+#include "core/icon_registry.hpp"
+#include "core/image_loader.hpp"
+#include "core/open_url.hpp"
+#include "core/style.hpp"
+#include "core/tree/dispatch.hpp"
+#include "core/tree/persistent.hpp"
+#include "core/tree/props.hpp"
+#include "core/tree/reconcile.hpp"
+
+#include <gtk/gtk.h>
+
+// fix conflict with function of same name
+#undef g_object_ref_sink
+#undef g_object_ref
+
+#ifdef N8V_HAVE_ADWAITA
+#include <adwaita.h>
+#endif
+
+#include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <unordered_set>
+#include <variant>
+#include <vector>
+
+extern "C" {
+gulong g_signal_connect_data(gpointer instance, const gchar *detailed_signal, GCallback c_handler, gpointer data, GClosureNotify destroy_data, GConnectFlags connect_flags);
+gpointer g_object_ref_sink(gpointer object);
+gpointer g_object_ref(gpointer object);
+void g_object_unref(gpointer object);
+}
+
+namespace n8v::detail {
+namespace {
+
+using tree::OwnedProps;
+using tree::PNode;
+namespace dispatch = tree::dispatch;
+namespace markup = gtk_markup;
+
+template <typename... Ts> struct Overloaded : Ts... {
+  using Ts::operator()...;
+};
+template <typename... Ts> Overloaded(Ts...) -> Overloaded<Ts...>;
+
+template <typename T> const T *propsOf(const PNode &node) { return std::get_if<T>(&node.current.props); }
+
+constexpr double kStickyBottomEpsilonPx = 24.0;
+constexpr int kDefaultIconSize = 16;
+
+void warnOnce(bool &flag, const char *message) {
+  if (flag) return;
+  flag = true;
+  std::fprintf(stderr, "[n8v] gtk: %s\n", message);
+}
+
+GtkAlign toGtkAlign(n8v_align a) {
+  switch (a) {
+  case N8V_ALIGN_CENTER:
+    return GTK_ALIGN_CENTER;
+  case N8V_ALIGN_END:
+    return GTK_ALIGN_END;
+  case N8V_ALIGN_START:
+    break;
+  }
+  return GTK_ALIGN_START;
+}
+
+struct ChildContext {
+  GtkOrientation orientation = GTK_ORIENTATION_VERTICAL;
+  n8v_align hAlign = N8V_ALIGN_START;
+  n8v_align vAlign = N8V_ALIGN_START;
+};
+
+enum class NativeKind { Root, Flex, Panel, Floating, Sidebar, Page, Button, Text, Checkbox, Toggle, Radio, Entry, Dropdown, Slider, Image, Icon, Document };
+
+struct NativeNode {
+  NativeKind kind() const { return node ? (NativeKind)node->current.props.index() : NativeKind::Root; }
+
+  PNode *node = nullptr;
+  GtkWidget *outer = nullptr;
+  GtkWidget *content = nullptr;
+  GtkWidget *scrolled = nullptr;
+  GtkWidget *overlay = nullptr;
+  GtkWidget *widget = nullptr;
+  GtkWidget *label = nullptr;
+  GtkWidget *image = nullptr;
+  GtkWidget *startSpacer = nullptr;
+  GtkWidget *endSpacer = nullptr;
+
+  // sidebar
+  GtkWidget *panelRoot = nullptr;
+  GtkWidget *listBox = nullptr;
+  GtkWidget *titleLabel = nullptr;
+  GtkWidget *contentArea = nullptr;
+  GtkWidget *rowLabel = nullptr;
+  bool adwRow = false;
+
+  bool floating = false;
+  bool hasIconBox = false;
+  bool iconTrailing = false;
+  bool hoverWatched = false;
+  bool stickyAtBottom = true;
+  int imageWidth = 0;
+  int imageHeight = 0;
+  bool stickyBottom = false;
+  double stickyLastUpper = 0.0;
+  std::string lastItemsKey;
+  size_t dropdownCount = 0;
+  const void *textureSource = nullptr;
+  std::string registeredId;
+
+  std::vector<NativeNode *> kids;
+  ChildContext ctx;
+  std::vector<GtkWidget *> owned;
+};
+
+struct PendingScroll {
+  NativeScrollRequest request;
+  std::chrono::steady_clock::time_point requestedAt = std::chrono::steady_clock::now();
+};
+
+constexpr std::chrono::milliseconds kScrollSettleTime{50};
+constexpr std::chrono::milliseconds kScrollRequestTimeout{2000};
+
+class Gtk4TreeBackend final : public Backend, public tree::TreeOps {
+public:
+  ~Gtk4TreeBackend() override { shutdown(); }
+
+  bool initialize(int width, int height, std::string_view title) override {
+    gtk_init();
+#ifdef N8V_HAVE_ADWAITA
+    adw_init();
+#endif
+    self_ = this;
+
+    window_ = gtk_window_new();
+    gtk_window_set_title(GTK_WINDOW(window_), std::string(title).c_str());
+    gtk_window_set_default_size(GTK_WINDOW(window_), width, height);
+    g_signal_connect_data(window_, "close-request", G_CALLBACK(&Gtk4TreeBackend::onCloseRequest), this, nullptr, (GConnectFlags)0);
+
+    rootBox_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_hexpand(rootBox_, TRUE);
+    gtk_widget_set_vexpand(rootBox_, TRUE);
+    gtk_window_set_child(GTK_WINDOW(window_), rootBox_);
+
+    root_.outer = rootBox_;
+    root_.content = rootBox_;
+
+    cardCss_ = gtk_css_provider_new();
+    gtk_css_provider_load_from_string(cardCss_, ".n8v-card { border: 1px solid alpha(currentColor, 0.2); border-radius: 6px; }\n");
+    gtk_style_context_add_provider_for_display(gtk_widget_get_display(window_), GTK_STYLE_PROVIDER(cardCss_), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+    gtk_window_present(GTK_WINDOW(window_));
+    return true;
+  }
+
+  bool pumpEvents() override {
+    GMainContext *context = g_main_context_default();
+    while (g_main_context_pending(context)) g_main_context_iteration(context, FALSE);
+    return !closeRequested_;
+  }
+
+  bool pointerDown() const override { return false; }
+  Clay_Dimensions windowSize() const override { return {(float)gtk_widget_get_width(window_), (float)gtk_widget_get_height(window_)}; }
+  Clay_Dimensions measureText(std::string_view, FontFamily, uint16_t, bool, bool) const override { return {0, 0}; }
+
+  bool rendersFromClay() const override { return false; }
+  bool rendersNativeChrome() const override { return true; }
+  tree::TreeOps *treeOps() override { return this; }
+  void beginFrame() override {}
+  void present(Clay_RenderCommandArray) override {}
+  void setCursor(CursorKind) override {}
+
+  void commitFrame() override {
+    applyStickyBottom();
+    resolvePendingScrolls();
+    if (++frames_ == 30 && std::getenv("N8V_GTK_DUMP")) dumpWidget(window_, 0);
+  }
+
+  bool isHovered(std::string_view id) const override { return hovered_.count(std::string(id)) != 0; }
+
+  void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back(PendingScroll{request, std::chrono::steady_clock::now()}); }
+
+  void shutdown() override {
+    if (!window_) return;
+    gtk_window_destroy(GTK_WINDOW(window_));
+    window_ = nullptr;
+    rootBox_ = nullptr;
+    self_ = nullptr;
+  }
+
+  void create(PNode &node) override {
+    auto *nn = new NativeNode;
+    nn->node = &node;
+    node.handle = nn;
+    live_.insert(&node);
+    build(*nn);
+    g_object_ref_sink(nn->outer);
+    nn->owned.push_back(nn->outer);
+    if (nn->kind() == Kind::Page) {
+      g_object_ref_sink(nn->content);
+      nn->owned.push_back(nn->content);
+    }
+    g_object_set_data(G_OBJECT(nn->outer), "n8v-node", nn);
+    apply(*nn);
+    registerId(*nn);
+  }
+
+  void update(PNode &node, const OwnedProps &, unsigned) override {
+    NativeNode &nn = *native(node);
+    apply(nn);
+    registerId(nn);
+    if (nn.node->parent && nn.kind() != Kind::Page) layoutChild(nn);
+    if (!nn.kids.empty() || nn.kind() == Kind::Flex || nn.kind() == Kind::Panel) {
+      for (NativeNode *kid : nn.kids) refreshChild(nn, *kid);
+      updateSpacers(nn);
+    }
+    if (nn.kind() == Kind::Sidebar) {
+      for (NativeNode *kid : nn.kids)
+        if (kid->kind() == Kind::Page) apply(*kid);
+      syncSidebarSelection(nn);
+    }
+  }
+
+  void insert(PNode &parent, PNode &child, size_t index) override {
+    NativeNode &p = nativeOrRoot(parent);
+    NativeNode &c = *native(child);
+    p.kids.insert(p.kids.begin() + (ptrdiff_t)index, &c);
+    attach(p, c, index);
+    refreshChild(p, c);
+    updateSpacers(p);
+    afterKidsChanged(p);
+  }
+
+  void move(PNode &parent, PNode &child, size_t index) override {
+    NativeNode &p = nativeOrRoot(parent);
+    NativeNode &c = *native(child);
+    p.kids.erase(std::find(p.kids.begin(), p.kids.end(), &c));
+    p.kids.insert(p.kids.begin() + (ptrdiff_t)index, &c);
+    if (p.kind() == Kind::Sidebar && c.kind() == Kind::Page) {
+      g_object_ref(c.outer);
+      gtk_list_box_remove(GTK_LIST_BOX(p.listBox), c.outer);
+      gtk_list_box_insert(GTK_LIST_BOX(p.listBox), c.outer, (int)pageIndex(p, c));
+      g_object_unref(c.outer);
+    } else if (!c.floating) {
+      gtk_box_reorder_child_after(GTK_BOX(p.content), c.outer, siblingBefore(p, index));
+    }
+    updateSpacers(p);
+    afterKidsChanged(p);
+  }
+
+  void remove(PNode &parent, PNode &child) override {
+    NativeNode &p = nativeOrRoot(parent);
+    NativeNode &c = *native(child);
+    detach(p, c);
+    p.kids.erase(std::find(p.kids.begin(), p.kids.end(), &c));
+    updateSpacers(p);
+    afterKidsChanged(p);
+  }
+
+  void destroy(PNode &node) override {
+    NativeNode *nn = native(node);
+    if (!nn) return;
+    unregisterId(*nn);
+    live_.erase(&node);
+    if (nn->kind() == Kind::Radio && nn->widget) gtk_check_button_set_group(GTK_CHECK_BUTTON(nn->widget), nullptr);
+    for (GtkWidget *w : nn->owned) g_object_unref(w);
+    delete nn;
+    node.handle = nullptr;
+  }
+
+private:
+  using Kind = NativeKind;
+
+  NativeNode *native(PNode &node) const { return static_cast<NativeNode *>(node.handle); }
+  NativeNode &nativeOrRoot(PNode &node) { return node.parent ? *native(node) : root_; }
+
+  static PNode *liveNode(gpointer userData) {
+    auto *node = static_cast<PNode *>(userData);
+    return self_ && self_->live_.count(node) ? node : nullptr;
+  }
+
+  template <typename Fn> void connect(gpointer instance, const char *signal, Fn handler, PNode &node) {
+    g_signal_connect_data(instance, signal, G_CALLBACK(handler), &node, nullptr, (GConnectFlags)0);
+  }
+
+  void build(NativeNode &nn);
+  void apply(NativeNode &nn);
+
+  void attach(NativeNode &parent, NativeNode &child, size_t index);
+  void detach(NativeNode &parent, NativeNode &child);
+  GtkWidget *siblingBefore(NativeNode &parent, size_t index);
+  size_t pageIndex(NativeNode &sidebar, NativeNode &page);
+  void refreshChild(NativeNode &parent, NativeNode &child);
+  void layoutChild(NativeNode &child);
+  void updateSpacers(NativeNode &container);
+  void afterKidsChanged(NativeNode &container);
+  void syncSidebarSelection(NativeNode &sidebar);
+  void ensureOverlay(NativeNode &host);
+  void swapOuter(NativeNode &nn, GtkWidget *replacement);
+  void setScrolled(NativeNode &nn, bool wantScrolled, bool horizontal, bool vertical);
+  void registerId(NativeNode &nn);
+  void unregisterId(NativeNode &nn);
+  void watchHover(NativeNode &nn);
+  void resolvePendingScrolls();
+  void applyStickyBottom();
+  void setIconImage(NativeNode &nn, GtkWidget *image, const char *name, int pixelSize);
+  void setLabelFromText(GtkWidget *label, const n8v_text_options &o, std::string_view text);
+
+  void applyFlex(NativeNode &nn, const n8v_flex_options &o);
+  void applyPanel(NativeNode &nn, const n8v_panel_options &o);
+  void applyButton(NativeNode &nn, const n8v_button_options &o);
+  void applySidebar(NativeNode &nn, const n8v_sidebar_options &o);
+  void applyPage(NativeNode &nn, const n8v_page_options &o);
+
+  static gboolean onCloseRequest(GtkWindow *, gpointer userData) {
+    static_cast<Gtk4TreeBackend *>(userData)->closeRequested_ = true;
+    return TRUE;
+  }
+
+  static void onButtonClicked(GtkButton *, gpointer userData) {
+    if (PNode *node = liveNode(userData)) dispatch::activate(*node);
+  }
+  static gboolean onLinkActivated(GtkLabel *, const char *, gpointer userData) {
+    if (PNode *node = liveNode(userData)) dispatch::activate(*node);
+    return TRUE;
+  }
+  static gboolean onDocumentLinkActivated(GtkLabel *, const char *uri, gpointer) {
+    if (uri) openUrl(uri);
+    return TRUE;
+  }
+  static void onCheckToggled(GtkCheckButton *button, gpointer userData) {
+    PNode *node = liveNode(userData);
+    if (!node || self_->updating_) return;
+    if (std::holds_alternative<n8v_radio_options>(node->current.props)) {
+      if (gtk_check_button_get_active(button)) dispatch::select(*node, 0);
+    } else {
+      dispatch::setChecked(*node, gtk_check_button_get_active(button));
+    }
+  }
+  static void onSwitchActive(GObject *object, GParamSpec *, gpointer userData) {
+    PNode *node = liveNode(userData);
+    if (node && !self_->updating_) dispatch::setChecked(*node, gtk_switch_get_active(GTK_SWITCH(object)));
+  }
+  static void onEntryChanged(GtkEditable *editable, gpointer userData) {
+    PNode *node = liveNode(userData);
+    if (node && !self_->updating_) dispatch::setText(*node, gtk_editable_get_text(editable));
+  }
+  static void onEntryActivate(GtkEntry *, gpointer userData) {
+    if (PNode *node = liveNode(userData)) dispatch::submit(*node);
+  }
+  static void onDropdownSelected(GObject *object, GParamSpec *, gpointer userData) {
+    PNode *node = liveNode(userData);
+    if (!node || self_->updating_) return;
+    guint selected = gtk_drop_down_get_selected(GTK_DROP_DOWN(object));
+    const auto *o = propsOf<n8v_dropdown_options>(*node);
+    const guint offset = o && o->placeholder && *o->placeholder ? 1 : 0;
+    if (selected != GTK_INVALID_LIST_POSITION && selected >= offset) dispatch::select(*node, (int)(selected - offset));
+  }
+  static void onSliderChanged(GtkRange *range, gpointer userData) {
+    PNode *node = liveNode(userData);
+    if (node && !self_->updating_) dispatch::setSlider(*node, (float)gtk_range_get_value(range));
+  }
+  static void onRowActivated(GtkListBox *, GtkListBoxRow *row, gpointer) {
+    auto *nn = static_cast<NativeNode *>(g_object_get_data(G_OBJECT(row), "n8v-node"));
+    if (nn && self_ && self_->live_.count(nn->node)) dispatch::selectPage(*nn->node);
+  }
+  static void onMotionEnter(GtkEventControllerMotion *, gdouble, gdouble, gpointer userData) { self_->setHover(static_cast<PNode *>(userData), true); }
+  static void onMotionLeave(GtkEventControllerMotion *, gpointer userData) { self_->setHover(static_cast<PNode *>(userData), false); }
+  static gboolean onOverlayChildPosition(GtkOverlay *overlay, GtkWidget *child, GdkRectangle *allocation, gpointer);
+
+  static void dumpWidget(GtkWidget *w, int depth) {
+    graphene_rect_t bounds = GRAPHENE_RECT_INIT(0, 0, 0, 0);
+    GtkWidget *root = GTK_WIDGET(gtk_widget_get_root(w));
+    if (root) gtk_widget_compute_bounds(w, root, &bounds);
+    std::fprintf(
+      stderr,
+      "%*s%s @%.0f,%.0f %dx%d%s%s\n",
+      depth * 2,
+      "",
+      gtk_widget_get_css_name(w),
+      bounds.origin.x,
+      bounds.origin.y,
+      gtk_widget_get_width(w),
+      gtk_widget_get_height(w),
+      gtk_widget_compute_expand(w, GTK_ORIENTATION_HORIZONTAL) ? " hexpand" : "",
+      gtk_widget_compute_expand(w, GTK_ORIENTATION_VERTICAL) ? " vexpand" : ""
+    );
+    int reqW = 0, reqH = 0;
+    gtk_widget_get_size_request(w, &reqW, &reqH);
+    if (gtk_widget_get_vexpand_set(w) || reqH >= 0 || gtk_widget_get_valign(w) != GTK_ALIGN_FILL)
+      std::fprintf(stderr, "%*s  [vexpand=%d valign=%d reqH=%d]\n", depth * 2, "", gtk_widget_get_vexpand(w), (int)gtk_widget_get_valign(w), reqH);
+    for (GtkWidget *child = gtk_widget_get_first_child(w); child; child = gtk_widget_get_next_sibling(child)) dumpWidget(child, depth + 1);
+  }
+
+  void setHover(PNode *raw, bool hovered) {
+    PNode *node = liveNode(raw);
+    if (!node) return;
+    if (const char *id = tree::idOf(node->current.props)) {
+      if (hovered) hovered_.insert(id);
+      else hovered_.erase(id);
+    }
+    dispatch::hover(*node, hovered);
+  }
+
+  GtkWidget *window_ = nullptr;
+  GtkWidget *rootBox_ = nullptr;
+  GtkCssProvider *cardCss_ = nullptr;
+  NativeNode root_;
+  std::unordered_set<PNode *> live_;
+  std::unordered_map<std::string, NativeNode *> byId_;
+  std::unordered_set<std::string> hovered_;
+  std::vector<PendingScroll> pendingScrolls_;
+  bool closeRequested_ = false;
+  bool updating_ = false;
+  int frames_ = 0;
+
+  bool warnedPercent_ = false;
+  bool warnedMax_ = false;
+
+  static inline Gtk4TreeBackend *self_ = nullptr;
+
+  struct Guard {
+    bool previous;
+    Guard() : previous(self_->updating_) { self_->updating_ = true; }
+    ~Guard() { self_->updating_ = previous; }
+  };
+};
+
+n8v_sizing fitSizing() { return n8v_sizing_fit(0.0f, 0.0f); }
+n8v_sizing growSizing() { return n8v_sizing_grow(0.0f, 0.0f); }
+
+n8v_sizing sizingFor(const NativeNode &nn, bool horizontal) {
+  return std::visit(
+    Overloaded{
+      [&](const n8v_flex_options &o) { return horizontal ? o.width : o.height; },
+      [&](const n8v_panel_options &o) { return horizontal ? o.width : o.height; },
+      [&](const n8v_floating_options &o) { return horizontal ? o.width : o.height; },
+      [&](const n8v_document_options &o) { return horizontal ? o.width : o.height; },
+      [&](const n8v_icon_options &o) { return horizontal ? o.width : o.height; },
+      [&](const n8v_image_options &o) {
+        n8v_sizing s = horizontal ? o.width : o.height;
+        if (s.mode == N8V_SIZING_FIT && s.min <= 0.0f && s.max <= 0.0f) return n8v_sizing_fixed((float)(horizontal ? nn.imageWidth : nn.imageHeight));
+        return s;
+      },
+      [&](const n8v_sidebar_options &) { return growSizing(); },
+      [&](const n8v_entry_options &) { return horizontal ? growSizing() : fitSizing(); },
+      [&](const n8v_dropdown_options &) { return horizontal ? growSizing() : fitSizing(); },
+      [&](const n8v_slider_options &) { return horizontal ? growSizing() : fitSizing(); },
+      [&](const auto &) { return fitSizing(); },
+    },
+    nn.node->current.props
+  );
+}
+
+struct Axis {
+  GtkAlign align = GTK_ALIGN_START;
+  bool expand = false;
+  int request = -1;
+};
+
+Axis axisFor(const n8v_sizing &s, bool mainAxis, n8v_align alignment, int paddingSum, bool &warnedPercent, bool &warnedMax) {
+  Axis a;
+  a.align = mainAxis ? GTK_ALIGN_START : toGtkAlign(alignment);
+  switch (s.mode) {
+  case N8V_SIZING_FIT:
+    if (s.min > 0.0f) a.request = (int)s.min;
+    break;
+  case N8V_SIZING_GROW:
+    a.expand = true;
+    a.align = GTK_ALIGN_FILL;
+    if (s.min > 0.0f) a.request = (int)s.min;
+    break;
+  case N8V_SIZING_FIXED:
+    a.request = std::max(0, (int)s.value - paddingSum);
+    break;
+  case N8V_SIZING_PERCENT:
+    warnOnce(warnedPercent, "Sizing::percent is not supported by the GTK tree backend yet; treating it as grow");
+    a.expand = true;
+    a.align = GTK_ALIGN_FILL;
+    break;
+  }
+  if (s.max > 0.0f) warnOnce(warnedMax, "Sizing max is not supported by the GTK tree backend yet; ignoring it");
+  return a;
+}
+
+ChildContext contextFor(const NativeNode &parent) {
+  ChildContext c;
+  if (!parent.node) return c;
+  std::visit(
+    Overloaded{
+      [&](const n8v_flex_options &o) {
+        c.orientation = o.direction == N8V_DIRECTION_HORIZONTAL ? GTK_ORIENTATION_HORIZONTAL : GTK_ORIENTATION_VERTICAL;
+        c.hAlign = o.h_align;
+        c.vAlign = o.v_align;
+      },
+      [&](const n8v_panel_options &o) {
+        c.orientation = o.direction == N8V_DIRECTION_HORIZONTAL ? GTK_ORIENTATION_HORIZONTAL : GTK_ORIENTATION_VERTICAL;
+        c.hAlign = o.h_align;
+        c.vAlign = o.v_align;
+      },
+      [](const auto &) {},
+    },
+    parent.node->current.props
+  );
+  return c;
+}
+
+void attachFraction(n8v_attach_point p, double &fx, double &fy) {
+  switch (p) {
+  case N8V_ATTACH_POINT_LEFT_TOP:
+    fx = 0.0, fy = 0.0;
+    break;
+  case N8V_ATTACH_POINT_LEFT_CENTER:
+    fx = 0.0, fy = 0.5;
+    break;
+  case N8V_ATTACH_POINT_LEFT_BOTTOM:
+    fx = 0.0, fy = 1.0;
+    break;
+  case N8V_ATTACH_POINT_CENTER_TOP:
+    fx = 0.5, fy = 0.0;
+    break;
+  case N8V_ATTACH_POINT_CENTER_CENTER:
+    fx = 0.5, fy = 0.5;
+    break;
+  case N8V_ATTACH_POINT_CENTER_BOTTOM:
+    fx = 0.5, fy = 1.0;
+    break;
+  case N8V_ATTACH_POINT_RIGHT_TOP:
+    fx = 1.0, fy = 0.0;
+    break;
+  case N8V_ATTACH_POINT_RIGHT_CENTER:
+    fx = 1.0, fy = 0.5;
+    break;
+  case N8V_ATTACH_POINT_RIGHT_BOTTOM:
+    fx = 1.0, fy = 1.0;
+    break;
+  }
+}
+
+GdkTexture *makeTexture(const DecodedImage *image) {
+  gsize size = (gsize)image->width * (gsize)image->height * 4;
+  GBytes *bytes = g_bytes_new(image->rgba, size);
+  GdkTexture *texture = gdk_memory_texture_new(image->width, image->height, GDK_MEMORY_R8G8B8A8, bytes, (gsize)image->width * 4);
+  g_bytes_unref(bytes);
+  return texture;
+}
+
+void replaceInParent(GtkWidget *old, GtkWidget *replacement) {
+  GtkWidget *parent = gtk_widget_get_parent(old);
+  if (!parent) return;
+  g_object_ref(old);
+  if (GTK_IS_BOX(parent)) {
+    GtkWidget *previous = gtk_widget_get_prev_sibling(old);
+    gtk_box_remove(GTK_BOX(parent), old);
+    gtk_box_insert_child_after(GTK_BOX(parent), replacement, previous);
+  } else if (GTK_IS_WINDOW(parent)) {
+    gtk_window_set_child(GTK_WINDOW(parent), replacement);
+  } else if (GTK_IS_OVERLAY(parent)) {
+    if (gtk_overlay_get_child(GTK_OVERLAY(parent)) == old) {
+      gtk_overlay_set_child(GTK_OVERLAY(parent), replacement);
+    } else {
+      gtk_overlay_remove_overlay(GTK_OVERLAY(parent), old);
+      gtk_overlay_add_overlay(GTK_OVERLAY(parent), replacement);
+    }
+  }
+  g_object_unref(old);
+}
+
+void Gtk4TreeBackend::swapOuter(NativeNode &nn, GtkWidget *replacement) {
+  GtkWidget *old = nn.outer;
+  g_object_ref(old);
+  replaceInParent(old, replacement);
+  nn.outer = replacement;
+  g_object_ref_sink(replacement);
+  nn.owned.push_back(replacement);
+  g_object_set_data(G_OBJECT(replacement), "n8v-node", &nn);
+  g_object_unref(old);
+}
+
+void Gtk4TreeBackend::ensureOverlay(NativeNode &host) {
+  if (host.overlay) return;
+  GtkWidget *inner = host.outer;
+  GtkWidget *overlay = gtk_overlay_new();
+  swapOuter(host, overlay);
+  gtk_overlay_set_child(GTK_OVERLAY(overlay), inner);
+  gtk_widget_set_hexpand(inner, TRUE);
+  gtk_widget_set_vexpand(inner, TRUE);
+  gtk_widget_set_halign(inner, GTK_ALIGN_FILL);
+  gtk_widget_set_valign(inner, GTK_ALIGN_FILL);
+  gtk_widget_set_size_request(inner, -1, -1);
+  host.overlay = overlay;
+  g_signal_connect_data(overlay, "get-child-position", G_CALLBACK(&Gtk4TreeBackend::onOverlayChildPosition), nullptr, nullptr, (GConnectFlags)0);
+  if (host.node) layoutChild(host);
+  else {
+    gtk_widget_set_hexpand(overlay, TRUE);
+    gtk_widget_set_vexpand(overlay, TRUE);
+  }
+}
+
+gboolean Gtk4TreeBackend::onOverlayChildPosition(GtkOverlay *overlay, GtkWidget *child, GdkRectangle *allocation, gpointer) {
+  auto *nn = static_cast<NativeNode *>(g_object_get_data(G_OBJECT(child), "n8v-node"));
+  if (!nn || !nn->floating) return FALSE;
+  const auto *o = propsOf<n8v_floating_options>(*nn->node);
+  if (!o) return FALSE;
+
+  const int parentW = gtk_widget_get_width(GTK_WIDGET(overlay));
+  const int parentH = gtk_widget_get_height(GTK_WIDGET(overlay));
+
+  int minW = 0, natW = 0;
+  gtk_widget_measure(child, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
+  int w = o->width.mode == N8V_SIZING_FIXED ? (int)o->width.value : o->width.mode == N8V_SIZING_GROW ? parentW : natW;
+  int minH = 0, natH = 0;
+  gtk_widget_measure(child, GTK_ORIENTATION_VERTICAL, w, &minH, &natH, nullptr, nullptr);
+  int h = o->height.mode == N8V_SIZING_FIXED ? (int)o->height.value : o->height.mode == N8V_SIZING_GROW ? parentH : natH;
+
+  double pfx = 0, pfy = 0, efx = 0, efy = 0;
+  attachFraction(o->parent_attach_point, pfx, pfy);
+  attachFraction(o->element_attach_point, efx, efy);
+  allocation->x = (int)(pfx * parentW - efx * w + o->offset_x);
+  allocation->y = (int)(pfy * parentH - efy * h + o->offset_y);
+  allocation->width = w;
+  allocation->height = h;
+  return TRUE;
+}
+
+GtkWidget *Gtk4TreeBackend::siblingBefore(NativeNode &parent, size_t index) {
+  for (size_t i = index; i-- > 0;) {
+    if (!parent.kids[i]->floating) return parent.kids[i]->outer;
+  }
+  return parent.startSpacer;
+}
+
+size_t Gtk4TreeBackend::pageIndex(NativeNode &sidebar, NativeNode &page) {
+  size_t index = 0;
+  for (NativeNode *kid : sidebar.kids) {
+    if (kid == &page) break;
+    if (kid->kind() == Kind::Page) ++index;
+  }
+  return index;
+}
+
+void Gtk4TreeBackend::attach(NativeNode &parent, NativeNode &child, size_t index) {
+  if (parent.kind() == Kind::Sidebar && child.kind() == Kind::Page) {
+    gtk_list_box_insert(GTK_LIST_BOX(parent.listBox), child.outer, (int)pageIndex(parent, child));
+    gtk_box_append(GTK_BOX(parent.contentArea), child.content);
+    return;
+  }
+  if (child.floating && parent.kind() != Kind::Page) {
+    ensureOverlay(parent);
+    gtk_overlay_add_overlay(GTK_OVERLAY(parent.overlay), child.outer);
+    return;
+  }
+  GtkWidget *container = parent.kind() == Kind::Sidebar ? parent.contentArea : parent.content;
+  gtk_box_insert_child_after(GTK_BOX(container), child.outer, siblingBefore(parent, index));
+}
+
+void Gtk4TreeBackend::detach(NativeNode &parent, NativeNode &child) {
+  if (parent.kind() == Kind::Sidebar && child.kind() == Kind::Page) {
+    gtk_list_box_remove(GTK_LIST_BOX(parent.listBox), child.outer);
+    gtk_box_remove(GTK_BOX(parent.contentArea), child.content);
+    return;
+  }
+  if (child.floating && parent.overlay) {
+    gtk_overlay_remove_overlay(GTK_OVERLAY(parent.overlay), child.outer);
+    return;
+  }
+  GtkWidget *container = parent.kind() == Kind::Sidebar ? parent.contentArea : parent.content;
+  gtk_box_remove(GTK_BOX(container), child.outer);
+}
+
+void Gtk4TreeBackend::refreshChild(NativeNode &parent, NativeNode &child) {
+  child.ctx = contextFor(parent);
+  if (child.kind() != Kind::Page) layoutChild(child);
+}
+
+void Gtk4TreeBackend::layoutChild(NativeNode &c) {
+  if (!c.node || !c.outer) return;
+  const bool horizontalMain = c.ctx.orientation == GTK_ORIENTATION_HORIZONTAL;
+  int padW = 0, padH = 0;
+  if (const auto *flex = propsOf<n8v_flex_options>(*c.node)) {
+    if (!c.scrolled && !c.overlay) padW = flex->padding.left + flex->padding.right, padH = flex->padding.top + flex->padding.bottom;
+  }
+  const Axis ax = axisFor(sizingFor(c, true), horizontalMain, c.ctx.hAlign, padW, warnedPercent_, warnedMax_);
+  const Axis ay = axisFor(sizingFor(c, false), !horizontalMain, c.ctx.vAlign, padH, warnedPercent_, warnedMax_);
+
+  GtkWidget *w = c.outer;
+  gtk_widget_set_hexpand(w, ax.expand);
+  gtk_widget_set_halign(w, ax.align);
+  gtk_widget_set_vexpand(w, ay.expand);
+  gtk_widget_set_valign(w, ay.align);
+  gtk_widget_set_size_request(w, ax.request, ay.request);
+
+  if (c.scrolled) {
+    gtk_scrolled_window_set_propagate_natural_width(GTK_SCROLLED_WINDOW(c.scrolled), sizingFor(c, true).mode == N8V_SIZING_FIT);
+    gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(c.scrolled), sizingFor(c, false).mode == N8V_SIZING_FIT);
+  }
+}
+
+void Gtk4TreeBackend::updateSpacers(NativeNode &container) {
+  const Kind kind = container.kind();
+  if (kind != Kind::Flex && kind != Kind::Panel) return;
+  const ChildContext cc = contextFor(container);
+  const bool horizontal = cc.orientation == GTK_ORIENTATION_HORIZONTAL;
+  const n8v_align mainAlign = horizontal ? cc.hAlign : cc.vAlign;
+
+  bool anyGrow = false;
+  for (NativeNode *kid : container.kids) {
+    if (kid->floating) continue;
+    const n8v_sizing s = sizingFor(*kid, horizontal);
+    if (s.mode == N8V_SIZING_GROW || s.mode == N8V_SIZING_PERCENT) anyGrow = true;
+  }
+  const bool wantStart = !anyGrow && (mainAlign == N8V_ALIGN_CENTER || mainAlign == N8V_ALIGN_END);
+  const bool wantEnd = !anyGrow && mainAlign == N8V_ALIGN_CENTER;
+
+  GtkBox *box = GTK_BOX(container.content);
+  auto makeSpacer = [&] {
+    GtkWidget *spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    if (horizontal) gtk_widget_set_hexpand(spacer, TRUE);
+    else gtk_widget_set_vexpand(spacer, TRUE);
+    return spacer;
+  };
+  if (wantStart && !container.startSpacer) {
+    container.startSpacer = makeSpacer();
+    gtk_box_insert_child_after(box, container.startSpacer, nullptr);
+  } else if (!wantStart && container.startSpacer) {
+    gtk_box_remove(box, container.startSpacer);
+    container.startSpacer = nullptr;
+  }
+  if (wantEnd && !container.endSpacer) {
+    container.endSpacer = makeSpacer();
+    gtk_box_append(box, container.endSpacer);
+  } else if (!wantEnd && container.endSpacer) {
+    gtk_box_remove(box, container.endSpacer);
+    container.endSpacer = nullptr;
+  }
+  if (container.endSpacer) {
+    GtkWidget *last = container.startSpacer;
+    for (NativeNode *kid : container.kids)
+      if (!kid->floating) last = kid->outer;
+    gtk_box_reorder_child_after(box, container.endSpacer, last);
+  }
+}
+
+void Gtk4TreeBackend::afterKidsChanged(NativeNode &container) {
+  if (container.kind() == Kind::Sidebar) {
+    for (NativeNode *kid : container.kids)
+      if (kid->kind() == Kind::Page) gtk_widget_set_visible(kid->content, !kid->kids.empty());
+    syncSidebarSelection(container);
+  } else if (container.kind() == Kind::Page) {
+    gtk_widget_set_visible(container.content, !container.kids.empty());
+  }
+}
+
+void Gtk4TreeBackend::syncSidebarSelection(NativeNode &sidebar) {
+  if (!sidebar.listBox) return;
+  int selected = 0;
+  if (const int *bound = std::get_if<int>(&sidebar.node->bound)) selected = *bound;
+  GtkListBoxRow *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(sidebar.listBox), selected);
+  if (row) gtk_list_box_select_row(GTK_LIST_BOX(sidebar.listBox), row);
+  for (NativeNode *kid : sidebar.kids)
+    if (kid->kind() == Kind::Page) gtk_widget_set_visible(kid->content, !kid->kids.empty());
+}
+
+void Gtk4TreeBackend::setScrolled(NativeNode &nn, bool want, bool horizontal, bool vertical) {
+  if (want && !nn.scrolled) {
+    GtkWidget *scrolled = gtk_scrolled_window_new();
+    GtkWidget *inner = nn.outer;
+    g_object_ref(inner);
+    swapOuter(nn, scrolled);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), inner);
+    g_object_unref(inner);
+    gtk_widget_set_hexpand(inner, FALSE);
+    gtk_widget_set_vexpand(inner, FALSE);
+    gtk_widget_set_halign(inner, GTK_ALIGN_FILL);
+    gtk_widget_set_valign(inner, GTK_ALIGN_FILL);
+    gtk_widget_set_size_request(inner, -1, -1);
+    nn.scrolled = scrolled;
+  } else if (!want && nn.scrolled) {
+    GtkWidget *scrolled = nn.scrolled;
+    GtkWidget *inner = nn.content;
+    g_object_ref(inner);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), nullptr);
+    swapOuter(nn, inner);
+    g_object_unref(inner);
+    nn.scrolled = nullptr;
+  }
+  if (nn.scrolled) {
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(nn.scrolled), horizontal ? GTK_POLICY_AUTOMATIC : GTK_POLICY_NEVER, vertical ? GTK_POLICY_AUTOMATIC : GTK_POLICY_NEVER);
+  }
+}
+
+void Gtk4TreeBackend::unregisterId(NativeNode &nn) {
+  if (nn.registeredId.empty()) return;
+  auto it = byId_.find(nn.registeredId);
+  if (it != byId_.end() && it->second == &nn) byId_.erase(it);
+  hovered_.erase(nn.registeredId);
+  nn.registeredId.clear();
+}
+
+void Gtk4TreeBackend::registerId(NativeNode &nn) {
+  const char *id = tree::idOf(nn.node->current.props);
+  const std::string wanted = id ? id : "";
+  if (wanted != nn.registeredId) {
+    unregisterId(nn);
+    if (!wanted.empty()) {
+      byId_[wanted] = &nn;
+      nn.registeredId = wanted;
+    }
+  }
+  const auto *flex = propsOf<n8v_flex_options>(*nn.node);
+  if ((!wanted.empty() || (flex && flex->on_hover)) && !nn.hoverWatched) watchHover(nn);
+}
+
+void Gtk4TreeBackend::watchHover(NativeNode &nn) {
+  nn.hoverWatched = true;
+  GtkEventController *motion = gtk_event_controller_motion_new();
+  g_signal_connect_data(motion, "enter", G_CALLBACK(&Gtk4TreeBackend::onMotionEnter), nn.node, nullptr, (GConnectFlags)0);
+  g_signal_connect_data(motion, "leave", G_CALLBACK(&Gtk4TreeBackend::onMotionLeave), nn.node, nullptr, (GConnectFlags)0);
+  gtk_widget_add_controller(nn.outer, motion);
+}
+
+void Gtk4TreeBackend::applyStickyBottom() {
+  for (auto &[id, nn] : byId_) {
+    if (!nn->stickyBottom || !nn->scrolled) continue;
+    GtkAdjustment *adj = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(nn->scrolled));
+    const double upper = gtk_adjustment_get_upper(adj), page = gtk_adjustment_get_page_size(adj);
+    if (upper != nn->stickyLastUpper) {
+      if (nn->stickyAtBottom) gtk_adjustment_set_value(adj, std::max(upper - page, 0.0));
+      nn->stickyLastUpper = upper;
+    }
+    nn->stickyAtBottom = gtk_adjustment_get_value(adj) + page >= upper - kStickyBottomEpsilonPx;
+  }
+}
+
+void Gtk4TreeBackend::resolvePendingScrolls() {
+  const auto now = std::chrono::steady_clock::now();
+  for (auto it = pendingScrolls_.begin(); it != pendingScrolls_.end();) {
+    const NativeScrollRequest &req = it->request;
+    if (now - it->requestedAt < kScrollSettleTime) {
+      ++it;
+      continue;
+    }
+    bool resolved = false;
+    auto container = byId_.find(req.containerId);
+    if (container != byId_.end() && container->second->scrolled) {
+      NativeNode &c = *container->second;
+      GtkAdjustment *hadj = gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(c.scrolled));
+      GtkAdjustment *vadj = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(c.scrolled));
+      const double maxX = std::max(gtk_adjustment_get_upper(hadj) - gtk_adjustment_get_page_size(hadj), 0.0);
+      const double maxY = std::max(gtk_adjustment_get_upper(vadj) - gtk_adjustment_get_page_size(vadj), 0.0);
+      const bool laidOut = gtk_adjustment_get_page_size(vadj) > 0.0;
+      if (laidOut) {
+        resolved = true;
+        switch (req.kind) {
+        case NativeScrollRequest::Kind::Bottom:
+          gtk_adjustment_set_value(vadj, maxY);
+          break;
+        case NativeScrollRequest::Kind::Top:
+          gtk_adjustment_set_value(vadj, 0.0);
+          break;
+        case NativeScrollRequest::Kind::Left:
+          gtk_adjustment_set_value(hadj, 0.0);
+          break;
+        case NativeScrollRequest::Kind::Right:
+          gtk_adjustment_set_value(hadj, maxX);
+          break;
+        case NativeScrollRequest::Kind::Offset:
+          gtk_adjustment_set_value(hadj, std::clamp((double)req.x, 0.0, maxX));
+          gtk_adjustment_set_value(vadj, std::clamp((double)req.y, 0.0, maxY));
+          break;
+        case NativeScrollRequest::Kind::Element: {
+          auto element = byId_.find(req.elementId);
+          graphene_point_t origin = GRAPHENE_POINT_INIT(0, 0), inContent;
+          if (element == byId_.end() || !gtk_widget_compute_point(element->second->outer, c.content, &origin, &inContent)) {
+            resolved = false;
+            break;
+          }
+          gtk_adjustment_set_value(vadj, std::clamp((double)inContent.y - req.paddingTop, 0.0, maxY));
+          gtk_adjustment_set_value(hadj, std::clamp((double)inContent.x - req.paddingLeft, 0.0, maxX));
+          break;
+        }
+        }
+      }
+    }
+    if (resolved) {
+      it = pendingScrolls_.erase(it);
+    } else if (now - it->requestedAt > kScrollRequestTimeout) {
+      std::fprintf(stderr, "[n8v] scroll request for container '%s' timed out (container or target element id not found)\n", req.containerId.c_str());
+      it = pendingScrolls_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+void Gtk4TreeBackend::setIconImage(NativeNode &nn, GtkWidget *image, const char *name, int pixelSize) {
+  if (!name || !*name) return;
+  gtk_image_set_pixel_size(GTK_IMAGE(image), pixelSize);
+  const char *freedesktopName = resolveFreedesktopIconName(name);
+  GtkIconTheme *theme = gtk_icon_theme_get_for_display(gtk_widget_get_display(window_));
+  if (freedesktopName && gtk_icon_theme_has_icon(theme, freedesktopName)) {
+    gtk_image_set_from_icon_name(GTK_IMAGE(image), freedesktopName);
+    nn.textureSource = nullptr;
+    return;
+  }
+  GdkRGBA fg;
+  gtk_widget_get_color(window_, &fg);
+  const DecodedImage *icon = getOrDecodeIcon(name, (uint16_t)pixelSize, n8v::Color{fg.red * 255.0f, fg.green * 255.0f, fg.blue * 255.0f, 255.0f});
+  if (!icon || nn.textureSource == icon) return;
+  GdkTexture *texture = makeTexture(icon);
+  gtk_image_set_from_paintable(GTK_IMAGE(image), GDK_PAINTABLE(texture));
+  g_object_unref(texture);
+  nn.textureSource = icon;
+}
+
+void Gtk4TreeBackend::setLabelFromText(GtkWidget *label, const n8v_text_options &o, std::string_view text) {
+  std::string m = markup::escapeMarkup(text);
+  if (o.strikethrough) m = "<s>" + m + "</s>";
+  if (o.italic) m = "<i>" + m + "</i>";
+  if (o.bold) m = "<b>" + m + "</b>";
+  const bool isDefaultColor = o.color.a <= 0.0f || (o.color.r == 0.0f && o.color.g == 0.0f && o.color.b == 0.0f && o.color.a == 255.0f);
+  if (!isDefaultColor) {
+    char open[128];
+    std::snprintf(open, sizeof open, "<span foreground=\"#%02x%02x%02x\" alpha=\"%d%%\">", (int)o.color.r, (int)o.color.g, (int)o.color.b, (int)(o.color.a / 255.0f * 100.0f));
+    m = open + m + "</span>";
+  }
+  const bool link = (o.url && *o.url) || o.on_click;
+  if (link) m = "<a href=\"" + markup::escapeMarkup(o.url && *o.url ? o.url : "about:blank") + "\">" + m + "</a>";
+  gtk_label_set_markup(GTK_LABEL(label), m.c_str());
+}
+
+void Gtk4TreeBackend::build(NativeNode &nn) {
+  PNode &pn = *nn.node;
+  switch (nn.kind()) {
+  case Kind::Flex: {
+    nn.outer = nn.content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    break;
+  }
+  case Kind::Floating: {
+    nn.outer = nn.content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    nn.floating = true;
+    break;
+  }
+  case Kind::Panel: {
+    nn.outer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    nn.content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_hexpand(nn.content, TRUE);
+    gtk_widget_set_vexpand(nn.content, TRUE);
+    gtk_box_append(GTK_BOX(nn.outer), nn.content);
+    break;
+  }
+  case Kind::Text: {
+    nn.outer = nn.widget = gtk_label_new("");
+    gtk_label_set_use_markup(GTK_LABEL(nn.widget), TRUE);
+    gtk_label_set_wrap(GTK_LABEL(nn.widget), TRUE);
+    gtk_label_set_wrap_mode(GTK_LABEL(nn.widget), PANGO_WRAP_WORD_CHAR);
+    gtk_label_set_xalign(GTK_LABEL(nn.widget), 0.0f);
+    connect(nn.widget, "activate-link", &Gtk4TreeBackend::onLinkActivated, pn);
+    break;
+  }
+  case Kind::Button: {
+    nn.outer = nn.widget = gtk_button_new();
+    connect(nn.widget, "clicked", &Gtk4TreeBackend::onButtonClicked, pn);
+    break;
+  }
+  case Kind::Checkbox: {
+    nn.outer = nn.widget = gtk_check_button_new();
+    connect(nn.widget, "toggled", &Gtk4TreeBackend::onCheckToggled, pn);
+    break;
+  }
+  case Kind::Radio: {
+    nn.outer = nn.widget = gtk_check_button_new();
+    const auto *mine = propsOf<n8v_radio_options>(pn);
+    for (PNode *other : live_) {
+      if (other == &pn || !other->handle) continue;
+      const auto *theirs = propsOf<n8v_radio_options>(*other);
+      if (theirs && mine && theirs->selected == mine->selected && native(*other)->widget) {
+        gtk_check_button_set_group(GTK_CHECK_BUTTON(nn.widget), GTK_CHECK_BUTTON(native(*other)->widget));
+        break;
+      }
+    }
+    connect(nn.widget, "toggled", &Gtk4TreeBackend::onCheckToggled, pn);
+    break;
+  }
+  case Kind::Toggle: {
+    nn.outer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    nn.widget = gtk_switch_new();
+    nn.label = gtk_label_new("");
+    gtk_widget_set_valign(nn.widget, GTK_ALIGN_CENTER);
+    gtk_box_append(GTK_BOX(nn.outer), nn.widget);
+    gtk_box_append(GTK_BOX(nn.outer), nn.label);
+    connect(nn.widget, "notify::active", &Gtk4TreeBackend::onSwitchActive, pn);
+    break;
+  }
+  case Kind::Entry: {
+    nn.outer = nn.widget = gtk_entry_new();
+    connect(nn.widget, "changed", &Gtk4TreeBackend::onEntryChanged, pn);
+    connect(nn.widget, "activate", &Gtk4TreeBackend::onEntryActivate, pn);
+    break;
+  }
+  case Kind::Dropdown: {
+    const char *const none[] = {nullptr};
+    nn.outer = nn.widget = gtk_drop_down_new_from_strings(none);
+    connect(nn.widget, "notify::selected", &Gtk4TreeBackend::onDropdownSelected, pn);
+    break;
+  }
+  case Kind::Slider: {
+    nn.outer = nn.widget = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0.0, 1.0, 0.001);
+    gtk_scale_set_draw_value(GTK_SCALE(nn.widget), FALSE);
+    connect(nn.widget, "value-changed", &Gtk4TreeBackend::onSliderChanged, pn);
+    break;
+  }
+  case Kind::Image: {
+    nn.outer = nn.widget = gtk_image_new();
+    break;
+  }
+  case Kind::Icon: {
+    nn.outer = nn.widget = gtk_image_new();
+    break;
+  }
+  case Kind::Document: {
+    nn.outer = nn.widget = gtk_label_new("");
+    gtk_label_set_use_markup(GTK_LABEL(nn.widget), TRUE);
+    gtk_label_set_wrap(GTK_LABEL(nn.widget), TRUE);
+    gtk_label_set_wrap_mode(GTK_LABEL(nn.widget), PANGO_WRAP_WORD_CHAR);
+    gtk_label_set_xalign(GTK_LABEL(nn.widget), 0.0f);
+    gtk_label_set_yalign(GTK_LABEL(nn.widget), 0.0f);
+    g_signal_connect_data(nn.widget, "activate-link", G_CALLBACK(&Gtk4TreeBackend::onDocumentLinkActivated), nullptr, nullptr, (GConnectFlags)0);
+    break;
+  }
+  case Kind::Sidebar: {
+    nn.titleLabel = gtk_label_new("");
+    gtk_widget_add_css_class(nn.titleLabel, "heading");
+    gtk_widget_set_margin_top(nn.titleLabel, 12);
+    gtk_widget_set_margin_bottom(nn.titleLabel, 12);
+
+    nn.listBox = gtk_list_box_new();
+    gtk_widget_add_css_class(nn.listBox, "navigation-sidebar");
+    gtk_list_box_set_selection_mode(GTK_LIST_BOX(nn.listBox), GTK_SELECTION_SINGLE);
+    g_signal_connect_data(nn.listBox, "row-activated", G_CALLBACK(&Gtk4TreeBackend::onRowActivated), nullptr, nullptr, (GConnectFlags)0);
+
+    GtkWidget *scroll = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), nn.listBox);
+    gtk_widget_set_vexpand(scroll, TRUE);
+
+    nn.panelRoot = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_box_append(GTK_BOX(nn.panelRoot), nn.titleLabel);
+    gtk_box_append(GTK_BOX(nn.panelRoot), scroll);
+
+    nn.contentArea = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_hexpand(nn.contentArea, TRUE);
+    gtk_widget_set_vexpand(nn.contentArea, TRUE);
+
+#ifdef N8V_HAVE_ADWAITA
+    if (!pn.parent->parent) {
+      nn.outer = adw_navigation_split_view_new();
+      AdwNavigationPage *sidebarPage = adw_navigation_page_new(nn.panelRoot, "Sidebar");
+      AdwNavigationPage *contentPage = adw_navigation_page_new(nn.contentArea, "Content");
+      adw_navigation_split_view_set_sidebar(ADW_NAVIGATION_SPLIT_VIEW(nn.outer), sidebarPage);
+      adw_navigation_split_view_set_content(ADW_NAVIGATION_SPLIT_VIEW(nn.outer), contentPage);
+      break;
+    }
+#endif
+    nn.outer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_widget_add_css_class(nn.panelRoot, "sidebar");
+    gtk_box_append(GTK_BOX(nn.outer), nn.panelRoot);
+    gtk_box_append(GTK_BOX(nn.outer), nn.contentArea);
+    break;
+  }
+  case Kind::Page: {
+    nn.content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_hexpand(nn.content, TRUE);
+    gtk_widget_set_vexpand(nn.content, TRUE);
+    gtk_widget_set_visible(nn.content, FALSE);
+    nn.outer = gtk_list_box_row_new();
+    break;
+  }
+  case Kind::Root:
+    break;
+  }
+}
+
+void Gtk4TreeBackend::applyFlex(NativeNode &nn, const n8v_flex_options &o) {
+  gtk_orientable_set_orientation(GTK_ORIENTABLE(nn.content), o.direction == N8V_DIRECTION_HORIZONTAL ? GTK_ORIENTATION_HORIZONTAL : GTK_ORIENTATION_VERTICAL);
+  gtk_box_set_spacing(GTK_BOX(nn.content), o.gap);
+  gtk_widget_set_margin_start(nn.content, o.padding.left);
+  gtk_widget_set_margin_end(nn.content, o.padding.right);
+  gtk_widget_set_margin_top(nn.content, o.padding.top);
+  gtk_widget_set_margin_bottom(nn.content, o.padding.bottom);
+  setScrolled(nn, o.clip_horizontal || o.clip_vertical, o.clip_horizontal, o.clip_vertical);
+
+  nn.stickyBottom = o.stick_to_bottom && o.clip_vertical;
+}
+
+void Gtk4TreeBackend::applyPanel(NativeNode &nn, const n8v_panel_options &o) {
+  gtk_orientable_set_orientation(GTK_ORIENTABLE(nn.content), o.direction == N8V_DIRECTION_HORIZONTAL ? GTK_ORIENTATION_HORIZONTAL : GTK_ORIENTATION_VERTICAL);
+  gtk_box_set_spacing(GTK_BOX(nn.content), o.gap);
+  const bool card = o.role == N8V_PANEL_ROLE_CARD;
+  const int vpad = card ? 10 : 6, hpad = card ? 12 : 10;
+  gtk_widget_set_margin_start(nn.content, hpad);
+  gtk_widget_set_margin_end(nn.content, hpad);
+  gtk_widget_set_margin_top(nn.content, vpad);
+  gtk_widget_set_margin_bottom(nn.content, vpad);
+#ifdef N8V_HAVE_ADWAITA
+  if (card) gtk_widget_add_css_class(nn.outer, "card");
+  else gtk_widget_remove_css_class(nn.outer, "card");
+#else
+  if (card) gtk_widget_add_css_class(nn.outer, "n8v-card");
+  else gtk_widget_remove_css_class(nn.outer, "n8v-card");
+#endif
+}
+
+void Gtk4TreeBackend::applyButton(NativeNode &nn, const n8v_button_options &o) {
+  GtkButton *button = GTK_BUTTON(nn.widget);
+  const std::string &label = nn.node->current.label;
+  const bool hasIcon = o.icon && *o.icon;
+  const bool trailing = o.icon_position == N8V_ICON_POSITION_TRAILING;
+  if (hasIcon) {
+    if (!nn.hasIconBox || nn.iconTrailing != trailing) {
+      GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+      gtk_widget_set_halign(box, GTK_ALIGN_CENTER);
+      nn.image = gtk_image_new();
+      nn.label = gtk_label_new("");
+      if (trailing) {
+        gtk_box_append(GTK_BOX(box), nn.label);
+        gtk_box_append(GTK_BOX(box), nn.image);
+      } else {
+        gtk_box_append(GTK_BOX(box), nn.image);
+        gtk_box_append(GTK_BOX(box), nn.label);
+      }
+      gtk_button_set_child(button, box);
+      nn.hasIconBox = true;
+      nn.iconTrailing = trailing;
+      nn.textureSource = nullptr;
+    }
+    gtk_label_set_text(GTK_LABEL(nn.label), label.c_str());
+    gtk_widget_set_visible(nn.label, !label.empty());
+    setIconImage(nn, nn.image, o.icon, kDefaultIconSize);
+  } else {
+    if (nn.hasIconBox) {
+      gtk_button_set_child(button, nullptr);
+      nn.hasIconBox = false;
+    }
+    gtk_button_set_label(button, label.c_str());
+  }
+  const bool flat = o.style == N8V_BUTTON_STYLE_GHOST;
+  if (flat) gtk_widget_add_css_class(nn.widget, "flat");
+  else gtk_widget_remove_css_class(nn.widget, "flat");
+  if (o.style == N8V_BUTTON_STYLE_PRIMARY) gtk_widget_add_css_class(nn.widget, "suggested-action");
+  else gtk_widget_remove_css_class(nn.widget, "suggested-action");
+}
+
+void Gtk4TreeBackend::applySidebar(NativeNode &nn, const n8v_sidebar_options &o) {
+  const std::string title = o.title ? o.title : "";
+  gtk_label_set_text(GTK_LABEL(nn.titleLabel), title.c_str());
+  gtk_widget_set_visible(nn.titleLabel, !title.empty());
+  const float width = o.width.mode == N8V_SIZING_FIXED ? o.width.value : 0.0f;
+#ifdef N8V_HAVE_ADWAITA
+  if (ADW_IS_NAVIGATION_SPLIT_VIEW(nn.outer)) {
+    if (width > 0.0f) {
+      adw_navigation_split_view_set_min_sidebar_width(ADW_NAVIGATION_SPLIT_VIEW(nn.outer), width);
+      adw_navigation_split_view_set_max_sidebar_width(ADW_NAVIGATION_SPLIT_VIEW(nn.outer), width);
+    }
+    return;
+  }
+#endif
+  gtk_widget_set_size_request(nn.panelRoot, width > 0.0f ? (int)width : -1, -1);
+}
+
+void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
+  NativeNode &sidebar = *native(*nn.node->parent);
+  const auto *sidebarProps = propsOf<n8v_sidebar_options>(*sidebar.node);
+  const bool compact = sidebarProps && sidebarProps->compact;
+#ifdef N8V_HAVE_ADWAITA
+  const bool wantAdw = !compact;
+#else
+  const bool wantAdw = false;
+#endif
+
+  const bool needsBuild = !nn.widget || nn.adwRow != wantAdw;
+  if (needsBuild) {
+    GtkWidget *oldRow = nn.outer;
+    const bool attached = gtk_widget_get_parent(oldRow) != nullptr;
+    const int position = attached ? gtk_list_box_row_get_index(GTK_LIST_BOX_ROW(oldRow)) : -1;
+    if (attached) gtk_list_box_remove(GTK_LIST_BOX(sidebar.listBox), oldRow);
+
+    GtkWidget *row = nullptr;
+    nn.image = nullptr;
+    nn.rowLabel = nullptr;
+#ifdef N8V_HAVE_ADWAITA
+    if (wantAdw) {
+      row = adw_action_row_new();
+      nn.image = gtk_image_new();
+      adw_action_row_add_prefix(ADW_ACTION_ROW(row), nn.image);
+    } else
+#endif
+    {
+      row = gtk_list_box_row_new();
+      GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+      const int vmargin = compact ? 2 : 8;
+      gtk_widget_set_margin_start(hbox, 12);
+      gtk_widget_set_margin_end(hbox, 12);
+      gtk_widget_set_margin_top(hbox, vmargin);
+      gtk_widget_set_margin_bottom(hbox, vmargin);
+      nn.image = gtk_image_new();
+      nn.rowLabel = gtk_label_new("");
+      gtk_widget_set_halign(nn.rowLabel, GTK_ALIGN_START);
+      gtk_box_append(GTK_BOX(hbox), nn.image);
+      gtk_box_append(GTK_BOX(hbox), nn.rowLabel);
+      gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), hbox);
+    }
+    gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(row), TRUE);
+    g_object_set_data(G_OBJECT(row), "n8v-node", &nn);
+    g_object_ref_sink(row);
+    nn.owned.push_back(row);
+    nn.outer = row;
+    nn.widget = row;
+    nn.adwRow = wantAdw;
+    nn.textureSource = nullptr;
+    if (attached) gtk_list_box_insert(GTK_LIST_BOX(sidebar.listBox), row, position);
+    g_object_unref(oldRow);
+    nn.owned.erase(std::remove(nn.owned.begin(), nn.owned.end(), oldRow), nn.owned.end());
+  }
+
+  const std::string name = o.name ? o.name : "";
+#ifdef N8V_HAVE_ADWAITA
+  if (nn.adwRow) adw_preferences_row_set_title(ADW_PREFERENCES_ROW(nn.outer), name.c_str());
+#endif
+  if (nn.rowLabel) gtk_label_set_text(GTK_LABEL(nn.rowLabel), name.c_str());
+
+  const bool hasIcon = o.icon && *o.icon;
+  gtk_widget_set_visible(nn.image, hasIcon);
+  if (hasIcon) setIconImage(nn, nn.image, o.icon, kDefaultIconSize);
+}
+
+void Gtk4TreeBackend::apply(NativeNode &nn) {
+  Guard guard;
+  PNode &pn = *nn.node;
+  const std::string &label = pn.current.label;
+  std::visit(
+    Overloaded{
+      [&](const std::monostate &) {},
+      [&](const n8v_flex_options &o) { applyFlex(nn, o); },
+      [&](const n8v_panel_options &o) { applyPanel(nn, o); },
+      [&](const n8v_floating_options &) {},
+      [&](const n8v_sidebar_options &o) { applySidebar(nn, o); },
+      [&](const n8v_page_options &o) { applyPage(nn, o); },
+      [&](const n8v_button_options &o) { applyButton(nn, o); },
+      [&](const n8v_text_options &o) { setLabelFromText(nn.widget, o, label); },
+      [&](const n8v_checkbox_options &) {
+        gtk_check_button_set_label(GTK_CHECK_BUTTON(nn.widget), label.c_str());
+        if (const bool *checked = std::get_if<bool>(&pn.bound)) gtk_check_button_set_active(GTK_CHECK_BUTTON(nn.widget), *checked);
+      },
+      [&](const n8v_toggle_options &) {
+        gtk_label_set_text(GTK_LABEL(nn.label), label.c_str());
+        if (const bool *checked = std::get_if<bool>(&pn.bound)) gtk_switch_set_active(GTK_SWITCH(nn.widget), *checked);
+      },
+      [&](const n8v_radio_options &o) {
+        gtk_check_button_set_label(GTK_CHECK_BUTTON(nn.widget), label.c_str());
+        if (const int *selected = std::get_if<int>(&pn.bound)) gtk_check_button_set_active(GTK_CHECK_BUTTON(nn.widget), *selected == o.value);
+      },
+      [&](const n8v_entry_options &o) {
+        gtk_entry_set_placeholder_text(GTK_ENTRY(nn.widget), o.placeholder ? o.placeholder : "");
+        gtk_entry_set_visibility(GTK_ENTRY(nn.widget), !o.password);
+        if (const std::string *text = std::get_if<std::string>(&pn.bound)) {
+          if (*text != gtk_editable_get_text(GTK_EDITABLE(nn.widget))) gtk_editable_set_text(GTK_EDITABLE(nn.widget), text->c_str());
+        }
+      },
+      [&](const n8v_dropdown_options &o) {
+        const bool hasPlaceholder = o.placeholder && *o.placeholder;
+        std::vector<const char *> items;
+        std::string key;
+        if (hasPlaceholder) {
+          items.push_back(o.placeholder);
+          key += std::string(o.placeholder) + '\n';
+        }
+        for (size_t i = 0; i < o.item_count; ++i) {
+          items.push_back(o.items[i] ? o.items[i] : "");
+          key += std::string(items.back()) + '\n';
+        }
+        if (key != nn.lastItemsKey || (nn.lastItemsKey.empty() && !items.empty())) {
+          GListModel *model = gtk_drop_down_get_model(GTK_DROP_DOWN(nn.widget));
+          const size_t count = items.size();
+          items.push_back(nullptr);
+          gtk_string_list_splice(GTK_STRING_LIST(model), 0, (guint)nn.dropdownCount, items.data());
+          nn.dropdownCount = count;
+          nn.lastItemsKey = key;
+        }
+        const int *selected = std::get_if<int>(&pn.bound);
+        const bool inRange = selected && *selected >= 0 && (size_t)*selected < o.item_count;
+        guint want = inRange ? (guint)*selected + (hasPlaceholder ? 1 : 0) : (hasPlaceholder ? 0 : GTK_INVALID_LIST_POSITION);
+        if (gtk_drop_down_get_selected(GTK_DROP_DOWN(nn.widget)) != want) gtk_drop_down_set_selected(GTK_DROP_DOWN(nn.widget), want);
+      },
+      [&](const n8v_slider_options &o) {
+        gtk_range_set_range(GTK_RANGE(nn.widget), o.min, o.max);
+        gtk_range_set_increments(GTK_RANGE(nn.widget), (o.max - o.min) / 100.0, (o.max - o.min) / 10.0);
+        if (const float *value = std::get_if<float>(&pn.bound)) {
+          if (gtk_range_get_value(GTK_RANGE(nn.widget)) != *value) gtk_range_set_value(GTK_RANGE(nn.widget), *value);
+        }
+      },
+      [&](const n8v_image_options &o) {
+        const DecodedImage *decoded = getOrDecodeImage(o);
+        if (!decoded) {
+          gtk_image_clear(GTK_IMAGE(nn.widget));
+          nn.textureSource = nullptr;
+          nn.imageWidth = nn.imageHeight = 0;
+          return;
+        }
+        nn.imageWidth = decoded->width;
+        nn.imageHeight = decoded->height;
+        CornerRadius radius;
+        switch (o.rounding.mode) {
+        case N8V_ROUNDING_STYLE_DEFAULT:
+          radius = activePaint().image().cornerRadius;
+          break;
+        case N8V_ROUNDING_NONE:
+          radius = {};
+          break;
+        case N8V_ROUNDING_FIXED:
+          radius = {o.rounding.radius.top_left, o.rounding.radius.top_right, o.rounding.radius.bottom_left, o.rounding.radius.bottom_right};
+          break;
+        }
+        const int targetW = o.width.mode == N8V_SIZING_FIXED ? std::max(1, (int)o.width.value) : decoded->width;
+        const int targetH = o.height.mode == N8V_SIZING_FIXED ? std::max(1, (int)o.height.value) : decoded->height;
+        const DecodedImage *baked = getOrBakeRoundedImage(decoded, targetW, targetH, radius.topLeft, radius.topRight, radius.bottomLeft, radius.bottomRight);
+        if (nn.textureSource != baked) {
+          GdkTexture *texture = makeTexture(baked);
+          gtk_image_set_from_paintable(GTK_IMAGE(nn.widget), GDK_PAINTABLE(texture));
+          gtk_image_set_pixel_size(GTK_IMAGE(nn.widget), std::max(targetW, targetH));
+          g_object_unref(texture);
+          nn.textureSource = baked;
+        }
+      },
+      [&](const n8v_icon_options &o) {
+        const int size = o.width.mode == N8V_SIZING_FIXED ? (int)o.width.value : kDefaultIconSize;
+        setIconImage(nn, nn.widget, o.name, size);
+      },
+      [&](const n8v_document_options &o) {
+        const markdown::Document doc = markdown::parse(o.markdown ? o.markdown : "");
+        const std::string markupText = markup::documentToPangoMarkup(doc);
+        if (markupText != nn.lastItemsKey) {
+          gtk_label_set_markup(GTK_LABEL(nn.widget), markupText.c_str());
+          nn.lastItemsKey = markupText;
+        }
+        gtk_widget_set_can_target(nn.widget, markup::documentHasLinks(doc) ? TRUE : FALSE);
+      },
+    },
+    pn.current.props
+  );
+}
+
+} // namespace
+
+std::unique_ptr<Backend> makeGtk4TreeBackend() { return std::make_unique<Gtk4TreeBackend>(); }
+
+} // namespace n8v::detail

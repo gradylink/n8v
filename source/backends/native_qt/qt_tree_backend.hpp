@@ -6,6 +6,6 @@
 
 namespace n8v::detail {
 
-std::unique_ptr<Backend> makeHtmlBackend();
+std::unique_ptr<Backend> makeQtTreeBackend();
 
 } // namespace n8v::detail

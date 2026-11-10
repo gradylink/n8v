@@ -4,6 +4,7 @@
 #include "core/icon_loader.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/style.hpp"
+#include "core/tree/emit.hpp"
 #include "core/ui_core_internal.hpp"
 
 #include <clay.h>
@@ -14,9 +15,9 @@ using namespace n8v::detail::ui_internal;
 
 } // namespace
 
-extern "C" {
+namespace n8v::detail::emit {
 
-void n8v_icon(n8v_icon_options options) {
+void icon(const n8v_icon_options &options, int ordinal) {
   if (!options.name) return;
 
   const n8v::IconPaint iconPaint = n8v::activePaint().icon();
@@ -35,7 +36,6 @@ void n8v_icon(n8v_icon_options options) {
 
   Clay__OpenElement();
 
-  const int ordinal = widgetOrdinal++;
 
   Clay_ElementDeclaration decl = {};
   decl.image.imageData = const_cast<n8v::detail::DecodedImage *>(decoded);
@@ -56,4 +56,4 @@ void n8v_icon(n8v_icon_options options) {
   Clay__CloseElement();
 }
 
-} // extern "C"
+} // namespace n8v::detail::emit

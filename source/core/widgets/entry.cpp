@@ -6,6 +6,7 @@
 #include "core/clay_convert.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
+#include "core/tree/emit.hpp"
 #include "core/ui_core_internal.hpp"
 
 #include <clay.h>
@@ -33,12 +34,11 @@ void resetEntryFrameState() { placeholderStorage.clear(); }
 
 } // namespace n8v::detail::ui_internal
 
-extern "C" {
+namespace n8v::detail::emit {
 
-void n8v_entry(n8v_entry_options options) {
+void entry(const n8v_entry_options &options, int ordinal) {
   Clay__OpenElement();
 
-  const int ordinal = widgetOrdinal++;
   if (Clay_Hovered()) pendingCursor = n8v::CursorKind::Text;
 
   std::string *shadow = nullptr;
@@ -170,4 +170,4 @@ void n8v_entry(n8v_entry_options options) {
   Clay__CloseElement();
 }
 
-} // extern "C"
+} // namespace n8v::detail::emit

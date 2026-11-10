@@ -8,6 +8,7 @@
 #include "core/native_widget_meta.hpp"
 #include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
+#include "core/tree/emit.hpp"
 #include "core/ui_core_internal.hpp"
 
 #include <clay.h>
@@ -19,9 +20,6 @@
 namespace {
 
 using namespace n8v::detail::ui_internal;
-
-n8v_button_options pendingButtonOpts;
-n8v_text_options pendingTextOpts;
 
 std::deque<std::string> urlStorage;
 
@@ -49,19 +47,14 @@ void resetLeafFrameState() { urlStorage.clear(); }
 
 } // namespace n8v::detail::ui_internal
 
-extern "C" {
+namespace n8v::detail::emit {
 
-void _n8v_set_button_opts(n8v_button_options opts) { pendingButtonOpts = opts; }
-
-void _n8v_button_commit(const char *label) {
-  n8v_button_options opts = pendingButtonOpts;
-  std::string_view labelView = toView(label);
+void button(const n8v_button_options &opts, std::string_view labelView, int ordinal) {
   std::string_view iconView = toView(opts.icon);
   bool hasIcon = !iconView.empty();
 
   Clay__OpenElement();
 
-  const int ordinal = widgetOrdinal++;
   const bool hovered = Clay_Hovered();
   const bool pressed = hovered && n8v::activeBackend().pointerDown();
   const n8v::ButtonPaint paint = n8v::activePaint().button(toButtonStyle(opts.style), hovered, pressed);
@@ -129,7 +122,7 @@ void _n8v_button_commit(const char *label) {
     widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
     n8v::detail::NativeWidgetMeta &iconMeta = widgetMetaStorage.back();
     iconMeta.kind = n8v::NativeWidgetKind::Icon;
-    iconMeta.ordinal = widgetOrdinal++;
+    iconMeta.ordinal = ordinal + 1;
     iconMeta.image = iconImage;
     iconMeta.iconName = hasIcon ? internCString(iconView) : nullptr;
     iconMeta.iconTint = paint.textColor;
@@ -156,17 +149,12 @@ void _n8v_button_commit(const char *label) {
   Clay__CloseElement();
 }
 
-void _n8v_set_text_opts(n8v_text_options opts) { pendingTextOpts = opts; }
-
-void _n8v_text_commit(const char *label) {
-  n8v_text_options opts = pendingTextOpts;
-  std::string_view labelView = toView(label);
+void text(const n8v_text_options &opts, std::string_view labelView, int ordinal) {
   std::string_view urlView = toView(opts.url);
 
   if (!urlView.empty() || opts.on_click) {
     Clay__OpenElement();
 
-    const int ordinal = widgetOrdinal++;
     if (Clay_Hovered()) pendingCursor = n8v::CursorKind::Pointer;
 
     widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
@@ -216,7 +204,6 @@ void _n8v_text_commit(const char *label) {
 
     Clay__CloseElement();
   } else {
-    const int ordinal = widgetOrdinal++;
     n8v::TextOptions textOptions{};
     textOptions.bold = opts.bold;
     textOptions.italic = opts.italic;
@@ -233,4 +220,4 @@ void _n8v_text_commit(const char *label) {
   }
 }
 
-} // extern "C"
+} // namespace n8v::detail::emit

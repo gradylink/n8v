@@ -4,6 +4,9 @@
 
 #include "core/clay_convert.hpp"
 #include "core/text_style_flags.hpp"
+#include "core/tree/emit.hpp"
+#include "core/tree/node.hpp"
+#include "core/tree/reconcile.hpp"
 #include "core/ui_core_internal.hpp"
 
 #include <clay.h>
@@ -154,9 +157,26 @@ void resolvePendingScrollRequests() {
   }
 }
 
+bool forwardScrollToNative(n8v::NativeScrollRequest::Kind kind, const char *containerId, std::string_view elementId, float x, float y, float paddingLeft, float paddingTop) {
+  n8v::Backend &backend = n8v::activeBackend();
+  if (backend.rendersFromClay()) return false;
+  n8v::NativeScrollRequest request;
+  request.kind = kind;
+  request.containerId = containerId;
+  request.elementId = std::string(elementId);
+  request.x = x;
+  request.y = y;
+  request.paddingLeft = paddingLeft;
+  request.paddingTop = paddingTop;
+  backend.requestScroll(request);
+  return true;
+}
+
 void ensureInitialized() {
   if (initialized) return;
   initialized = true;
+
+  n8v::detail::tree::setNodeDestroyedHook([](const n8v::detail::tree::PNode &node) { n8v::detail::emit::releaseNode(node.ordinal); });
 
   uint32_t minMemorySize = Clay_MinMemorySize();
   clayMemory.resize(minMemorySize);
@@ -194,7 +214,6 @@ extern "C" {
 void n8v_begin_frame(void) {
   ensureInitialized();
   currentDelta = frameDelta();
-  widgetOrdinal = 0;
   pendingCursor = n8v::CursorKind::Default;
 
   n8v::Backend &backend = n8v::activeBackend();
@@ -213,14 +232,25 @@ void n8v_begin_frame(void) {
   resetImageFrameState();
   resetSidebarFrameState();
 
-  Clay_SetLayoutDimensions(backend.windowSize());
-  Clay_UpdateScrollContainers(false, backend.consumeScrollDelta(), currentDelta);
-  Clay_BeginLayout();
+  n8v::detail::tree::beginRecording();
 }
 
 void n8v_end_frame(void) {
-  Clay_RenderCommandArray commands = Clay_EndLayout(currentDelta);
   n8v::Backend &backend = n8v::activeBackend();
+
+  n8v::detail::tree::reconciler().reconcile(n8v::detail::tree::recordedRoot(), backend.treeOps());
+
+  if (!backend.rendersFromClay()) {
+    backend.commitFrame();
+    backend.setCursor(pendingCursor);
+    return;
+  }
+
+  Clay_SetLayoutDimensions(backend.windowSize());
+  Clay_UpdateScrollContainers(false, backend.consumeScrollDelta(), currentDelta);
+  Clay_BeginLayout();
+  n8v::detail::tree::emitTree();
+  Clay_RenderCommandArray commands = Clay_EndLayout(currentDelta);
   backend.present(commands);
   backend.setCursor(pendingCursor);
   resolvePendingScrollRequests();
@@ -239,7 +269,18 @@ uint16_t snapGapToGrid(uint16_t value, float unit) {
 }
 } // namespace
 
-void n8v_open_flex(n8v_flex_options options) {
+} // extern "C"
+
+namespace n8v::detail::emit {
+
+void releaseNode(int ordinal) {
+  forgetAnimations(ordinal);
+  ui_internal::releaseDropdownState(ordinal);
+  ui_internal::releaseSliderState(ordinal);
+  ui_internal::releaseSidebarState(ordinal);
+}
+
+void openFlex(const n8v_flex_options &options) {
   openElementMaybeWithId(options.id);
   if (options.clip_vertical && options.stick_to_bottom && options.id && *options.id) {
     stickyBottomContainerIds.emplace_back(options.id);
@@ -284,15 +325,24 @@ void n8v_open_flex(n8v_flex_options options) {
   }
 }
 
-void n8v_close_flex(void) { Clay__CloseElement(); }
+void closeFlex() { Clay__CloseElement(); }
+
+} // namespace n8v::detail::emit
+
+extern "C" {
 
 bool n8v_is_hovered(const char *id) {
   if (!id || !*id) return false;
+  if (!n8v::activeBackend().rendersFromClay()) return n8v::activeBackend().isHovered(id);
   Clay_ElementId elementId = Clay_GetElementId(Clay_String{false, (int32_t)std::strlen(id), id});
   return Clay_PointerOver(elementId);
 }
 
-void n8v_open_floating(n8v_floating_options options) {
+} // extern "C"
+
+namespace n8v::detail::emit {
+
+void openFloating(const n8v_floating_options &options) {
   openElementMaybeWithId(options.id);
 
   Clay_ElementDeclaration decl = {};
@@ -307,35 +357,45 @@ void n8v_open_floating(n8v_floating_options options) {
   Clay__ConfigureOpenElement(decl);
 }
 
-void n8v_close_floating(void) { Clay__CloseElement(); }
+void closeFloating() { Clay__CloseElement(); }
+
+} // namespace n8v::detail::emit
+
+extern "C" {
 
 void n8v_scroll_to_bottom(const char *container_id) {
   if (!container_id || !*container_id) return;
+  if (forwardScrollToNative(n8v::NativeScrollRequest::Kind::Bottom, container_id, {}, 0.0f, 0.0f, 0.0f, 0.0f)) return;
   pendingScrollTargets.push_back(PendingScrollTarget{container_id, PendingScrollTarget::Kind::Bottom, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0});
 }
 
 void n8v_scroll_to_top(const char *container_id) {
   if (!container_id || !*container_id) return;
+  if (forwardScrollToNative(n8v::NativeScrollRequest::Kind::Top, container_id, {}, 0.0f, 0.0f, 0.0f, 0.0f)) return;
   pendingScrollTargets.push_back(PendingScrollTarget{container_id, PendingScrollTarget::Kind::Top, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0});
 }
 
 void n8v_scroll_to_left(const char *container_id) {
   if (!container_id || !*container_id) return;
+  if (forwardScrollToNative(n8v::NativeScrollRequest::Kind::Left, container_id, {}, 0.0f, 0.0f, 0.0f, 0.0f)) return;
   pendingScrollTargets.push_back(PendingScrollTarget{container_id, PendingScrollTarget::Kind::Left, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0});
 }
 
 void n8v_scroll_to_right(const char *container_id) {
   if (!container_id || !*container_id) return;
+  if (forwardScrollToNative(n8v::NativeScrollRequest::Kind::Right, container_id, {}, 0.0f, 0.0f, 0.0f, 0.0f)) return;
   pendingScrollTargets.push_back(PendingScrollTarget{container_id, PendingScrollTarget::Kind::Right, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0});
 }
 
 void n8v_scroll_to_offset(const char *container_id, float x, float y) {
   if (!container_id || !*container_id) return;
+  if (forwardScrollToNative(n8v::NativeScrollRequest::Kind::Offset, container_id, {}, x, y, 0.0f, 0.0f)) return;
   pendingScrollTargets.push_back(PendingScrollTarget{container_id, PendingScrollTarget::Kind::Offset, {}, x, y, 0.0f, 0.0f, 0});
 }
 
 void n8v_scroll_to_element(const char *container_id, const char *element_id, float padding_left, float padding_top) {
   if (!container_id || !*container_id || !element_id || !*element_id) return;
+  if (forwardScrollToNative(n8v::NativeScrollRequest::Kind::Element, container_id, element_id, 0.0f, 0.0f, padding_left, padding_top)) return;
   pendingScrollTargets.push_back(PendingScrollTarget{container_id, PendingScrollTarget::Kind::Element, element_id, 0.0f, 0.0f, padding_left, padding_top, 0});
 }
 

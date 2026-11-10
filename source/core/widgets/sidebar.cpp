@@ -8,6 +8,7 @@
 #include "core/clay_convert.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
+#include "core/tree/emit.hpp"
 #include "core/ui_core_internal.hpp"
 
 #include <clay.h>
@@ -47,8 +48,6 @@ struct SidebarContext {
 
 std::vector<SidebarContext> sidebarStack;
 
-std::vector<int> sidebarDepthCounters;
-
 struct PageClickState {
   int *selectedPtr = nullptr;
   std::function<void(int)> onChange;
@@ -74,16 +73,17 @@ void dispatchRowHover(Clay_ElementId /*elementId*/, Clay_PointerData pointerData
 
 namespace n8v::detail::ui_internal {
 
+void releaseSidebarState(int ordinal) { pageClickStates.erase(ordinal); }
+
 void resetSidebarFrameState() {
   sidebarStack.clear();
-  sidebarDepthCounters.clear();
 }
 
 } // namespace n8v::detail::ui_internal
 
-extern "C" {
+namespace n8v::detail::emit {
 
-void n8v_open_sidebar(n8v_sidebar_options opts) {
+void openSidebar(const n8v_sidebar_options &opts, int ordinal) {
   Clay__OpenElement();
   Clay_ElementDeclaration shellDecl = {};
   shellDecl.layout.layoutDirection = CLAY_LEFT_TO_RIGHT;
@@ -91,9 +91,6 @@ void n8v_open_sidebar(n8v_sidebar_options opts) {
   shellDecl.layout.sizing.height = CLAY_SIZING_GROW(0);
   Clay__ConfigureOpenElement(shellDecl);
 
-  const int depth = (int)sidebarStack.size();
-  if ((int)sidebarDepthCounters.size() <= depth) sidebarDepthCounters.resize(depth + 1, 0);
-  const int ordinal = depth * 1000 + sidebarDepthCounters[depth]++;
   const n8v::SidebarPaint paint = n8v::activePaint().sidebar();
   const n8v::Sizing listWidthSizing = toSizing(opts.width);
   if (listWidthSizing.mode != n8v::SizingMode::Fixed) {
@@ -157,21 +154,20 @@ void n8v_open_sidebar(n8v_sidebar_options opts) {
   if (!titleView.empty()) {
     n8v_text_options textOpts = {};
     textOpts.bold = true;
-    _n8v_set_text_opts(textOpts);
-    _n8v_text_commit(opts.title);
+    text(textOpts, titleView, ordinal + 1);
   }
 
   sidebarStack.push_back(SidebarContext{opts.selected, n8v::detail::toStdFunction(opts.on_change, opts.on_change_userdata), 0, ordinal, opts.compact, contentWidth});
 }
 
-void n8v_close_sidebar(void) {
+void closeSidebar() {
   sidebarStack.pop_back();
 
   Clay__CloseElement(); // list region
   Clay__CloseElement(); // shell
 }
 
-bool n8v_open_page(n8v_page_options opts) {
+bool openPage(const n8v_page_options &opts, int rowOrdinal) {
   if (sidebarStack.empty()) {
     std::fprintf(stderr, "[n8v] page() called outside of sidebar()\n");
     return false;
@@ -192,7 +188,6 @@ bool n8v_open_page(n8v_page_options opts) {
 
   Clay__OpenElement();
 
-  const int rowOrdinal = 1000000000 + ctx.ordinal * 1000 + thisOrdinal;
   const bool hovered = Clay_Hovered();
   const bool pressed = hovered && n8v::activeBackend().pointerDown();
   const n8v::ButtonPaint paint = n8v::activePaint().button(selected ? n8v::ButtonStyle::Primary : n8v::ButtonStyle::Secondary, hovered, pressed);
@@ -281,7 +276,7 @@ bool n8v_open_page(n8v_page_options opts) {
     widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
     n8v::detail::NativeWidgetMeta &iconMeta = widgetMetaStorage.back();
     iconMeta.kind = n8v::NativeWidgetKind::Icon;
-    iconMeta.ordinal = widgetOrdinal++;
+    iconMeta.ordinal = rowOrdinal + 1;
     iconMeta.image = rowImage;
     iconMeta.imageCornerRadius = imageCornerRadius;
     iconMeta.iconName = hasIcon ? internCString(iconView) : nullptr;
@@ -317,6 +312,6 @@ bool n8v_open_page(n8v_page_options opts) {
   return true;
 }
 
-void n8v_close_page(void) { Clay__CloseElement(); }
+void closePage() { Clay__CloseElement(); }
 
-} // extern "C"
+} // namespace n8v::detail::emit
