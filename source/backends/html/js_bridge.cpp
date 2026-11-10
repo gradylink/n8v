@@ -59,6 +59,44 @@ EM_JS(void, n8vHtmlInstallListeners, (), {
     });
   });
 });
+
+EM_JS(void, n8vHtmlPickFiles, (int id, int multiple, int folder, const char *accept), {
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.multiple = !!multiple;
+  if (folder) input.webkitdirectory = true;
+  var acceptStr = UTF8ToString(accept);
+  if (acceptStr) input.accept = acceptStr;
+  input.style.display = 'none';
+  document.body.appendChild(input);
+
+  var finished = false;
+  function finish(paths) {
+    if (finished) return;
+    finished = true;
+    if (input.parentNode) input.parentNode.removeChild(input);
+    Module.ccall('n8v_html_file_dialog_done', null, ['number', 'string'], [id, paths.join('\n')]);
+  }
+
+  input.addEventListener('cancel', function() { finish([]); });
+  input.addEventListener('change', function() {
+    var files = Array.prototype.slice.call(input.files || []);
+    if (!files.length) { finish([]); return; }
+    var root = '/n8v-uploads/' + id;
+    var roots = {};
+    Promise.all(files.map(function(file) {
+      var rel = (folder && file.webkitRelativePath) ? file.webkitRelativePath : file.name;
+      var full = root + '/' + rel;
+      return file.arrayBuffer().then(function(buf) {
+        FS.mkdirTree(full.substring(0, full.lastIndexOf('/')));
+        FS.writeFile(full, new Uint8Array(buf));
+        roots[folder ? root + '/' + rel.split('/')[0] : full] = true;
+      });
+    })).then(function() { finish(Object.keys(roots)); }, function() { finish([]); });
+  });
+  input.click();
+});
 // clang-format on
 
 extern "C" void n8vHtmlInstallListenersBridge() { n8vHtmlInstallListeners(); }
+extern "C" void n8vHtmlPickFilesBridge(int id, int multiple, int folder, const char *accept) { n8vHtmlPickFiles(id, multiple, folder, accept); }

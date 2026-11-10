@@ -26,6 +26,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -191,6 +192,67 @@ public:
   bool isHovered(std::string_view id) const override { return hovered_.count(std::string(id)) != 0; }
 
   void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back(PendingScroll{request, std::chrono::steady_clock::now()}); }
+
+#if GTK_CHECK_VERSION(4, 10, 0)
+  bool showFileDialog(const FileDialogRequest &request, FileDialogDone done) override {
+    if (!window_) return false;
+    GtkFileDialog *dialog = gtk_file_dialog_new();
+    const char *defaultTitle = request.kind == N8V_FILE_DIALOG_SAVE_FILE ? "Save File" : request.kind == N8V_FILE_DIALOG_OPEN_FOLDER ? "Select Folder" : "Open File";
+    gtk_file_dialog_set_title(dialog, request.title.empty() ? defaultTitle : request.title.c_str());
+    gtk_file_dialog_set_modal(dialog, TRUE);
+
+    if (!request.filters.empty() && request.kind != N8V_FILE_DIALOG_OPEN_FOLDER) {
+      GListStore *filters = g_list_store_new(gtk_file_filter_get_type());
+      for (size_t i = 0; i < request.filters.size(); ++i) {
+        GtkFileFilter *filter = gtk_file_filter_new();
+        gtk_file_filter_set_name(filter, request.filters[i].name.c_str());
+        for (const std::string &glob : request.filters[i].patterns) {
+          const std::string ext = globExtension(glob);
+          if (!ext.empty()) {
+            gtk_file_filter_add_suffix(filter, ext.c_str());
+          } else {
+            gtk_file_filter_add_pattern(filter, glob.c_str());
+          }
+        }
+        g_list_store_append(filters, filter);
+        if (i == 0) gtk_file_dialog_set_default_filter(dialog, filter);
+        g_object_unref(filter);
+      }
+      gtk_file_dialog_set_filters(dialog, G_LIST_MODEL(filters));
+      g_object_unref(filters);
+    }
+    if (!request.initialDir.empty()) {
+      GFile *folder = g_file_new_for_path(request.initialDir.c_str());
+      gtk_file_dialog_set_initial_folder(dialog, folder);
+      g_object_unref(folder);
+    }
+    if (request.kind == N8V_FILE_DIALOG_SAVE_FILE && !request.defaultName.empty()) gtk_file_dialog_set_initial_name(dialog, request.defaultName.c_str());
+
+    auto *ctx = new FileDialogCtx{request.kind, request.multiple, std::move(done)};
+    GtkWindow *parent = GTK_WINDOW(window_);
+    switch (request.kind) {
+    case N8V_FILE_DIALOG_OPEN_FILE:
+      if (request.multiple) {
+        gtk_file_dialog_open_multiple(dialog, parent, nullptr, &Gtk4TreeBackend::onFileDialogDone, ctx);
+      } else {
+        gtk_file_dialog_open(dialog, parent, nullptr, &Gtk4TreeBackend::onFileDialogDone, ctx);
+      }
+      break;
+    case N8V_FILE_DIALOG_SAVE_FILE:
+      gtk_file_dialog_save(dialog, parent, nullptr, &Gtk4TreeBackend::onFileDialogDone, ctx);
+      break;
+    case N8V_FILE_DIALOG_OPEN_FOLDER:
+      if (request.multiple) {
+        gtk_file_dialog_select_multiple_folders(dialog, parent, nullptr, &Gtk4TreeBackend::onFileDialogDone, ctx);
+      } else {
+        gtk_file_dialog_select_folder(dialog, parent, nullptr, &Gtk4TreeBackend::onFileDialogDone, ctx);
+      }
+      break;
+    }
+    g_object_unref(dialog);
+    return true;
+  }
+#endif
 
   void shutdown() override {
     if (!window_) return;
@@ -413,6 +475,59 @@ private:
     }
     dispatch::hover(*node, hovered);
   }
+
+#if GTK_CHECK_VERSION(4, 10, 0)
+  struct FileDialogCtx {
+    n8v_file_dialog_kind kind;
+    bool multiple;
+    FileDialogDone done;
+  };
+
+  static void onFileDialogDone(GObject *source, GAsyncResult *res, gpointer data) {
+    std::unique_ptr<FileDialogCtx> ctx(static_cast<FileDialogCtx *>(data));
+    GtkFileDialog *dialog = GTK_FILE_DIALOG(source);
+    GError *error = nullptr;
+    FileDialogResult result;
+
+    auto addFile = [&](GFile *file) {
+      if (!file) return;
+      if (char *path = g_file_get_path(file)) {
+        result.paths.emplace_back(path);
+        g_free(path);
+      }
+    };
+    auto addAll = [&](GListModel *list) {
+      if (!list) return;
+      for (guint i = 0, n = g_list_model_get_n_items(list); i < n; ++i) {
+        GFile *file = G_FILE(g_list_model_get_item(list, i));
+        addFile(file);
+        if (file) g_object_unref(file);
+      }
+      g_object_unref(list);
+    };
+    auto single = [&](GFile *file) {
+      addFile(file);
+      if (file) g_object_unref(file);
+    };
+
+    switch (ctx->kind) {
+    case N8V_FILE_DIALOG_OPEN_FILE:
+      if (ctx->multiple) addAll(gtk_file_dialog_open_multiple_finish(dialog, res, &error));
+      else single(gtk_file_dialog_open_finish(dialog, res, &error));
+      break;
+    case N8V_FILE_DIALOG_SAVE_FILE:
+      single(gtk_file_dialog_save_finish(dialog, res, &error));
+      break;
+    case N8V_FILE_DIALOG_OPEN_FOLDER:
+      if (ctx->multiple) addAll(gtk_file_dialog_select_multiple_folders_finish(dialog, res, &error));
+      else single(gtk_file_dialog_select_folder_finish(dialog, res, &error));
+      break;
+    }
+    if (error) g_error_free(error);
+    result.status = result.paths.empty() ? FileDialogResult::Status::Cancelled : FileDialogResult::Status::Done;
+    ctx->done(std::move(result));
+  }
+#endif
 
   GtkWidget *window_ = nullptr;
   GtkWidget *rootBox_ = nullptr;

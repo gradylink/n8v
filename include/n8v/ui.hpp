@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -515,9 +517,6 @@ private:
   n8v_style_family family_;
 };
 
-// Trampolines bridging the C-linkage vtable n8v_set_custom_paint expects back to a user's
-// n8v::Paint subclass, passed through as `userdata`. Kept at internal linkage (no two TUs share
-// these symbols) since ui.hpp is a header included into every translation unit that uses it.
 extern "C" inline n8v_button_paint _n8v_custom_paint_button_trampoline(n8v_button_style style, bool hovered, bool pressed, void *userdata) {
   return toC(static_cast<const Paint *>(userdata)->button(fromC(style), hovered, pressed));
 }
@@ -874,6 +873,48 @@ inline void image(ImageOptions options) { detail::image(std::move(options)); }
 inline void icon(IconOptions options) { detail::icon(std::move(options)); }
 
 inline void document(DocumentOptions options) { detail::document(std::move(options)); }
+
+using FileDialogCallback = std::function<void(const std::vector<std::string> &paths)>;
+
+namespace detail {
+
+inline void showFileDialog(n8v_file_dialog_kind kind, const FileDialogOptions &options, FileDialogCallback onResult) {
+  std::string title = options.title, initialDir = options.initialDir, defaultName = options.defaultName;
+  std::vector<std::vector<const char *>> patternPtrs;
+  std::vector<n8v_file_filter> filters;
+  patternPtrs.reserve(options.filters.size());
+  for (const FileFilter &f : options.filters) {
+    patternPtrs.emplace_back();
+    for (const std::string &p : f.patterns) patternPtrs.back().push_back(p.c_str());
+    filters.push_back({f.name.c_str(), patternPtrs.back().data(), patternPtrs.back().size()});
+  }
+
+  n8v_file_dialog_options c_opts{};
+  c_opts.kind = kind;
+  c_opts.title = title.empty() ? nullptr : title.c_str();
+  c_opts.initial_dir = initialDir.empty() ? nullptr : initialDir.c_str();
+  c_opts.default_name = defaultName.empty() ? nullptr : defaultName.c_str();
+  c_opts.filters = filters.data();
+  c_opts.filter_count = filters.size();
+  c_opts.multiple = options.multiple;
+  if (onResult) {
+    auto *owned = new FileDialogCallback(std::move(onResult));
+    c_opts.on_result = [](const char *const *paths, size_t count, void *userdata) {
+      std::unique_ptr<FileDialogCallback> cb(static_cast<FileDialogCallback *>(userdata));
+      (*cb)(std::vector<std::string>(paths, paths + count));
+    };
+    c_opts.on_result_userdata = owned;
+  }
+  n8v_show_file_dialog(c_opts);
+}
+
+} // namespace detail
+
+inline void openFileDialog(const FileDialogOptions &options, FileDialogCallback onResult) { detail::showFileDialog(N8V_FILE_DIALOG_OPEN_FILE, options, std::move(onResult)); }
+inline void saveFileDialog(const FileDialogOptions &options, FileDialogCallback onResult) { detail::showFileDialog(N8V_FILE_DIALOG_SAVE_FILE, options, std::move(onResult)); }
+inline void openFolderDialog(const FileDialogOptions &options, FileDialogCallback onResult) {
+  detail::showFileDialog(N8V_FILE_DIALOG_OPEN_FOLDER, options, std::move(onResult));
+}
 
 inline void scrollToBottom(std::string_view containerId) {
   std::string storage(containerId);

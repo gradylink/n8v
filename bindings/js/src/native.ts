@@ -38,6 +38,10 @@ export interface NativeAddon {
   image(opts: object): void;
   icon(opts: object): void;
   document(opts: object): void;
+  showFileDialog(
+    opts: object,
+    onResult: (paths: string[]) => void,
+  ): void;
 
   openFloating(opts: object): void;
   closeFloating(): void;

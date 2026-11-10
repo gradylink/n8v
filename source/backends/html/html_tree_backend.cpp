@@ -29,6 +29,7 @@
 #include <vector>
 
 extern "C" void n8vHtmlInstallListenersBridge();
+extern "C" void n8vHtmlPickFilesBridge(int id, int multiple, int folder, const char *accept);
 
 namespace n8v::detail {
 namespace {
@@ -51,6 +52,18 @@ constexpr double kStickyBottomEpsilonPx = 24.0;
 constexpr int kDefaultIconSize = 16;
 
 class HtmlTreeBackend;
+
+std::string acceptAttribute(const std::vector<FileDialogFilter> &filters) {
+  std::string accept;
+  for (const FileDialogFilter &f : filters) {
+    for (const std::string &glob : f.patterns) {
+      const std::string ext = globExtension(glob);
+      if (ext.empty()) return {};
+      accept += (accept.empty() ? "." : ",.") + ext;
+    }
+  }
+  return accept;
+}
 HtmlTreeBackend *gInstance = nullptr;
 
 enum class NativeKind { Root, Flex, Panel, Floating, Sidebar, Page, Button, Text, Checkbox, Toggle, Radio, Entry, Dropdown, Slider, Image, Icon, Document };
@@ -261,6 +274,33 @@ public:
 
   void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back(PendingScroll{request, emscripten_get_now()}); }
 
+  // The browser can't hand out a writable path, so only open dialogs work: picked files are copied into the in-memory
+  // filesystem (/n8v-uploads/...) and those paths are returned. The picker has to open inside the click that asked for it.
+  bool showFileDialog(const FileDialogRequest &request, FileDialogDone done) override {
+    if (request.kind == N8V_FILE_DIALOG_SAVE_FILE) return false;
+    const std::string accept = request.kind == N8V_FILE_DIALOG_OPEN_FILE ? acceptAttribute(request.filters) : std::string();
+    const int id = ++nextFileDialogId_;
+    fileDialogs_[id] = std::move(done);
+    n8vHtmlPickFilesBridge(id, request.multiple, request.kind == N8V_FILE_DIALOG_OPEN_FOLDER, accept.c_str());
+    return true;
+  }
+
+  void onFileDialogDone(int id, std::string_view joinedPaths) {
+    auto it = fileDialogs_.find(id);
+    if (it == fileDialogs_.end()) return;
+    FileDialogDone done = std::move(it->second);
+    fileDialogs_.erase(it);
+    FileDialogResult result;
+    for (size_t pos = 0; pos <= joinedPaths.size() && !joinedPaths.empty();) {
+      size_t nl = joinedPaths.find('\n', pos);
+      if (nl == std::string_view::npos) nl = joinedPaths.size();
+      if (nl > pos) result.paths.emplace_back(joinedPaths.substr(pos, nl - pos));
+      pos = nl + 1;
+    }
+    result.status = result.paths.empty() ? FileDialogResult::Status::Cancelled : FileDialogResult::Status::Done;
+    done(std::move(result));
+  }
+
   void shutdown() override {
     if (!initialized_) return;
     initialized_ = false;
@@ -458,6 +498,8 @@ private:
   std::unordered_map<std::string, NativeNode *> byId_;
   std::unordered_set<std::string> hovered_;
   std::vector<PendingScroll> pendingScrolls_;
+  std::unordered_map<int, FileDialogDone> fileDialogs_;
+  int nextFileDialogId_ = 0;
   std::unordered_map<std::string, std::string> classes_;
   int nextClass_ = 0;
   uint64_t styleGeneration_ = 0;
@@ -994,6 +1036,10 @@ std::unique_ptr<Backend> makeHtmlTreeBackend() { return std::make_unique<HtmlTre
 } // namespace n8v::detail
 
 extern "C" {
+
+EMSCRIPTEN_KEEPALIVE void n8v_html_file_dialog_done(int id, const char *paths) {
+  if (n8v::detail::gInstance) n8v::detail::gInstance->onFileDialogDone(id, paths ? paths : "");
+}
 
 EMSCRIPTEN_KEEPALIVE void n8v_html_event(int ordinal, const char *type, const char *value) {
   if (n8v::detail::gInstance) n8v::detail::gInstance->onEvent(ordinal, type ? type : "", value ? value : "");

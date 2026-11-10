@@ -20,7 +20,14 @@ package n8v
 extern void n8vGoClick(void *userdata);
 extern void n8vGoBool(bool value, void *userdata);
 extern void n8vGoInt(int value, void *userdata);
+extern void n8vGoFileDialog(char **paths, size_t count, void *userdata);
 
+static void n8v_go_file_dialog_result(const char *const *paths, size_t count, void *userdata) { n8vGoFileDialog((char **)paths, count, userdata); }
+static void n8v_go_show_file_dialog(n8v_file_dialog_options o, uintptr_t h) {
+  o.on_result = n8v_go_file_dialog_result;
+  o.on_result_userdata = (void *)h;
+  n8v_show_file_dialog(o);
+}
 static void *n8v_go_handle(uintptr_t h) { return (void *)h; }
 static void n8v_go_button(n8v_button_options o, const char *label) { _n8v_set_button_opts(o); _n8v_button_commit(label); }
 static void n8v_go_text(n8v_text_options o, const char *label) { _n8v_set_text_opts(o); _n8v_text_commit(label); }
@@ -505,4 +512,84 @@ func ScrollToElement(containerID, elementID string, paddingLeft, paddingTop floa
 			C.n8v_scroll_to_element(c, e, C.float(paddingLeft), C.float(paddingTop))
 		})
 	})
+}
+
+// FileFilter is a named group of patterns in a file dialog's type dropdown. A pattern is a glob ("*.png"), a dotted
+// extension (".png") or a bare extension ("png"); matching is case-insensitive.
+type FileFilter struct {
+	Name     string
+	Patterns []string
+}
+
+// FileDialogOptions configures OpenFile, SaveFile and OpenFolder. The zero value is a plain dialog.
+type FileDialogOptions struct {
+	Title string
+	// InitialDir is the directory the dialog starts in.
+	InitialDir string
+	// DefaultName pre-fills the file name (SaveFile only).
+	DefaultName string
+	// Filters are shown in a type dropdown; the first is selected. Empty means all files.
+	Filters []FileFilter
+	// Multiple allows selecting several files or folders (not SaveFile).
+	Multiple bool
+}
+
+func showFileDialog(kind C.n8v_file_dialog_kind, opts FileDialogOptions, onResult func(paths []string)) {
+	// n8v copies every string, so all of this is freed as soon as the call returns.
+	var allocs []unsafe.Pointer
+	str := func(s string) *C.char {
+		if s == "" {
+			return nil
+		}
+		p := C.CString(s)
+		allocs = append(allocs, unsafe.Pointer(p))
+		return p
+	}
+	defer func() {
+		for _, p := range allocs {
+			C.free(p)
+		}
+	}()
+
+	o := C.n8v_file_dialog_options{
+		kind: kind, title: str(opts.Title), initial_dir: str(opts.InitialDir), default_name: str(opts.DefaultName),
+		multiple: C.bool(opts.Multiple),
+	}
+	if len(opts.Filters) > 0 {
+		filters := (*C.n8v_file_filter)(C.calloc(C.size_t(len(opts.Filters)), C.size_t(unsafe.Sizeof(C.n8v_file_filter{}))))
+		allocs = append(allocs, unsafe.Pointer(filters))
+		for i, f := range opts.Filters {
+			var patterns **C.char
+			if len(f.Patterns) > 0 {
+				patterns = (**C.char)(C.malloc(C.size_t(len(f.Patterns)) * C.size_t(unsafe.Sizeof(uintptr(0)))))
+				allocs = append(allocs, unsafe.Pointer(patterns))
+				for j, p := range f.Patterns {
+					unsafe.Slice(patterns, len(f.Patterns))[j] = str(p)
+				}
+			}
+			unsafe.Slice(filters, len(opts.Filters))[i] = C.n8v_file_filter{
+				name: str(f.Name), patterns: patterns, pattern_count: C.size_t(len(f.Patterns)),
+			}
+		}
+		o.filters, o.filter_count = filters, C.size_t(len(opts.Filters))
+	}
+
+	// The handle outlives the frame: it is released by n8vGoFileDialog when the result arrives.
+	C.n8v_go_show_file_dialog(o, C.uintptr_t(cgo.NewHandle(onResult)))
+}
+
+// OpenFile shows the system open dialog without blocking. onResult runs from a later Pump with the chosen paths, or none
+// if the user cancelled. The platform's own dialog is used where there is one (the XDG portal on Linux), else the toolkit's.
+func OpenFile(opts FileDialogOptions, onResult func(paths []string)) {
+	showFileDialog(C.N8V_FILE_DIALOG_OPEN_FILE, opts, onResult)
+}
+
+// SaveFile shows the system save dialog; the result is the single path to write to.
+func SaveFile(opts FileDialogOptions, onResult func(paths []string)) {
+	showFileDialog(C.N8V_FILE_DIALOG_SAVE_FILE, opts, onResult)
+}
+
+// OpenFolder shows the system folder chooser.
+func OpenFolder(opts FileDialogOptions, onResult func(paths []string)) {
+	showFileDialog(C.N8V_FILE_DIALOG_OPEN_FOLDER, opts, onResult)
 }

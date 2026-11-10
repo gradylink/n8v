@@ -2,6 +2,7 @@
 #include <n8v/n8v_ffi.h>
 #include <napi.h>
 
+#include <deque>
 #include <memory>
 #include <string>
 #include <vector>
@@ -455,6 +456,61 @@ Napi::Value ScrollToElement(const Napi::CallbackInfo &info) {
   return info.Env().Undefined();
 }
 
+void FileDialogTrampoline(const char *const *paths, size_t count, void *userdata) {
+  std::unique_ptr<Napi::FunctionReference> ref(static_cast<Napi::FunctionReference *>(userdata));
+  Napi::Env env = ref->Env();
+  Napi::HandleScope scope(env);
+  Napi::Array out = Napi::Array::New(env, count);
+  for (size_t i = 0; i < count; i++) out.Set((uint32_t)i, Napi::String::New(env, paths[i]));
+  ref->Call({out});
+}
+
+Napi::Value ShowFileDialog(const Napi::CallbackInfo &info) {
+  Napi::Object o = info[0].As<Napi::Object>();
+  n8v_file_dialog_options d{};
+  d.kind = (n8v_file_dialog_kind)EnumOr(o, "kind", N8V_FILE_DIALOG_OPEN_FILE);
+  std::string titleStorage, dirStorage, nameStorage;
+  StrOr(o, "title", d.title, titleStorage);
+  StrOr(o, "initialDir", d.initial_dir, dirStorage);
+  StrOr(o, "defaultName", d.default_name, nameStorage);
+  d.multiple = BoolOr(o, "multiple", false);
+
+  std::deque<std::string> strings;
+  std::deque<std::vector<const char *>> patternLists;
+  std::vector<n8v_file_filter> filters;
+  Napi::Value filtersValue = o.Get("filters");
+  if (filtersValue.IsArray()) {
+    Napi::Array arr = filtersValue.As<Napi::Array>();
+    uint32_t n = arr.Length();
+    filters.reserve(n);
+    for (uint32_t i = 0; i < n; i++) {
+      Napi::Object f = arr.Get(i).As<Napi::Object>();
+      strings.push_back(f.Get("name").IsString() ? f.Get("name").As<Napi::String>().Utf8Value() : std::string());
+      const char *name = strings.back().c_str();
+      patternLists.emplace_back();
+      Napi::Value patterns = f.Get("patterns");
+      if (patterns.IsArray()) {
+        Napi::Array p = patterns.As<Napi::Array>();
+        for (uint32_t j = 0; j < p.Length(); j++) {
+          strings.push_back(p.Get(j).ToString().Utf8Value());
+          patternLists.back().push_back(strings.back().c_str());
+        }
+      }
+      filters.push_back({name, patternLists.back().data(), patternLists.back().size()});
+    }
+    d.filters = filters.data();
+    d.filter_count = filters.size();
+  }
+
+  Napi::Value cb = info[1];
+  if (cb.IsFunction()) {
+    d.on_result = FileDialogTrampoline;
+    d.on_result_userdata = new Napi::FunctionReference(Napi::Persistent(cb.As<Napi::Function>()));
+  }
+  n8v_show_file_dialog(d);
+  return info.Env().Undefined();
+}
+
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("BoolRef", BoolRef::GetClass(env));
   exports.Set("IntRef", IntRef::GetClass(env));
@@ -489,6 +545,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("image", Napi::Function::New(env, Image));
   exports.Set("icon", Napi::Function::New(env, Icon));
   exports.Set("document", Napi::Function::New(env, Document));
+
+  exports.Set("showFileDialog", Napi::Function::New(env, ShowFileDialog));
 
   exports.Set("openFloating", Napi::Function::New(env, OpenFloating));
   exports.Set("closeFloating", Napi::Function::New(env, CloseFloating));

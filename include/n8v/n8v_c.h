@@ -646,6 +646,37 @@ N8V_API void n8v_set_image_bundle_lookup(n8v_image_bundle_lookup_fn fn, void *us
 N8V_API void n8v_icon(n8v_icon_options options);
 N8V_API void n8v_document(n8v_document_options options);
 
+typedef enum n8v_file_dialog_kind {
+  N8V_FILE_DIALOG_OPEN_FILE,
+  N8V_FILE_DIALOG_SAVE_FILE,
+  N8V_FILE_DIALOG_OPEN_FOLDER,
+} n8v_file_dialog_kind;
+
+typedef struct n8v_file_filter {
+  const char *name;
+  const char *const *patterns;
+  size_t pattern_count;
+} n8v_file_filter;
+
+typedef void (*n8v_file_dialog_fn)(const char *const *paths, size_t path_count, void *userdata);
+
+typedef struct n8v_file_dialog_options {
+  n8v_file_dialog_kind kind;
+  const char *title;
+  /** Directory the dialog starts in. */
+  const char *initial_dir;
+  /** Pre-filled file name (save dialogs only). */
+  const char *default_name;
+  const n8v_file_filter *filters;
+  size_t filter_count;
+  /** Allow selecting several files/folders (open dialogs only). */
+  bool multiple;
+  n8v_file_dialog_fn on_result;
+  void *on_result_userdata;
+} n8v_file_dialog_options;
+
+N8V_API void n8v_show_file_dialog(n8v_file_dialog_options options);
+
 #ifdef __cplusplus
 }
 

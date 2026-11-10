@@ -119,3 +119,15 @@ checked.value; // reflects the user's last click
 A plain `number` is ambiguous - selection indices (radio/dropdown/sidebar) are
 `int`, slider values are `float` - so `ref()` picks float. Use `Ref.int()`
 explicitly for a selection index.
+
+## File dialogs
+
+`openFile`, `saveFile` and `openFolder` show the system dialog without blocking; the callback receives the chosen
+absolute paths (an empty array if the user cancelled) from a later `pumpEvents()`:
+
+```ts
+n8v.openFile(
+  { title: "Open image", filters: [{ name: "Images", patterns: ["png", "jpg"] }], multiple: true },
+  (paths) => console.log(paths),
+);
+```

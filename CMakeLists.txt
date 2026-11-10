@@ -325,7 +325,10 @@ if(N8V_SANITIZE)
   add_link_options(-fsanitize=address,undefined)
 endif()
 
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/dialogs.cmake")
+
 set(N8V_SOURCES
+  ${N8V_DIALOG_SOURCES}
   source/core/clay_impl.cpp
   source/core/open_url.cpp
   source/core/ui_core.cpp
@@ -427,16 +430,26 @@ foreach(_n8v_target ${_n8v_targets})
     target_link_options(${_n8v_target} INTERFACE
       "SHELL:-sASYNCIFY=1"
       "SHELL:-sALLOW_MEMORY_GROWTH=1"
+      "SHELL:-sFORCE_FILESYSTEM=1"
       "SHELL:-sEXPORTED_RUNTIME_METHODS=[\"ccall\"]"
       "--bind"
       "SHELL:--shell-file ${CMAKE_CURRENT_SOURCE_DIR}/source/backends/html/shell_minimal.html"
     )
   endif()
 
+  if(N8V_HAVE_DBUS)
+    target_link_libraries(${_n8v_target} PUBLIC dbus_lazy)
+  endif()
+  if(WIN32)
+    target_link_libraries(${_n8v_target} PRIVATE ole32 shell32 uuid)
+  elseif(APPLE)
+    target_link_libraries(${_n8v_target} PRIVATE "-framework AppKit" "-framework Foundation")
+  endif()
+
   if(N8V_HAVE_GTK4)
     target_sources(${_n8v_target} PRIVATE source/backends/native_gtk4/gtk4_tree_backend.cpp)
     target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_GTK4_BACKEND)
-    target_link_libraries(${_n8v_target} PUBLIC gtk4_lazy gobject_lazy glib_lazy)
+    target_link_libraries(${_n8v_target} PUBLIC gtk4_lazy gobject_lazy glib_lazy gio_lazy)
     if(N8V_HAVE_ADWAITA)
       target_link_libraries(${_n8v_target} PUBLIC adwaita_lazy)
       target_compile_definitions(${_n8v_target} PRIVATE N8V_HAVE_ADWAITA)
@@ -487,8 +500,11 @@ if(N8V_INSTALL AND NOT EMSCRIPTEN)
   endif()
 
   set(_n8v_lazy_export_targets sdl2_lazy)
+  if(N8V_HAVE_DBUS)
+    list(APPEND _n8v_lazy_export_targets dbus_lazy)
+  endif()
   if(N8V_HAVE_GTK4)
-    list(APPEND _n8v_lazy_export_targets gtk4_lazy gobject_lazy glib_lazy)
+    list(APPEND _n8v_lazy_export_targets gtk4_lazy gobject_lazy glib_lazy gio_lazy)
     if(N8V_HAVE_ADWAITA)
       list(APPEND _n8v_lazy_export_targets adwaita_lazy)
     endif()
@@ -558,6 +574,7 @@ if(N8V_EXAMPLES)
   add_subdirectory(examples/basic)
   add_subdirectory(examples/basic_c)
   add_subdirectory(examples/custom_style)
+  add_subdirectory(examples/file_dialog)
 endif()
 
 option(N8V_BUILD_JS_BINDING "Build the n8v.node N-API addon for the JS/TS bindings (bindings/js)." OFF)

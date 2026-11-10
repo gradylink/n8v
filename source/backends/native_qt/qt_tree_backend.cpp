@@ -22,8 +22,10 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCursor>
+#include <QDir>
 #include <QEvent>
 #include <QEventLoop>
+#include <QFileDialog>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QIcon>
@@ -388,6 +390,39 @@ public:
   bool isHovered(std::string_view id) const override { return hovered_.count(std::string(id)) != 0; }
 
   void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back(PendingScroll{request, std::chrono::steady_clock::now()}); }
+
+  bool showFileDialog(const FileDialogRequest &request, FileDialogDone done) override {
+    if (!window_) return false;
+    const QString title = request.title.empty() ? QString() : qstr(request.title);
+    const QString filter = request.filters.empty() ? QString() : qstr(joinFilters(request.filters));
+    QString dir = qstr(request.initialDir);
+    FileDialogResult result;
+
+    switch (request.kind) {
+    case N8V_FILE_DIALOG_OPEN_FILE:
+      if (request.multiple) {
+        for (const QString &p : QFileDialog::getOpenFileNames(window_, title, dir, filter)) result.paths.push_back(p.toStdString());
+      } else {
+        const QString p = QFileDialog::getOpenFileName(window_, title, dir, filter);
+        if (!p.isEmpty()) result.paths.push_back(p.toStdString());
+      }
+      break;
+    case N8V_FILE_DIALOG_SAVE_FILE: {
+      if (!request.defaultName.empty()) dir = dir.isEmpty() ? qstr(request.defaultName) : QDir(dir).filePath(qstr(request.defaultName));
+      const QString p = QFileDialog::getSaveFileName(window_, title, dir, filter);
+      if (!p.isEmpty()) result.paths.push_back(p.toStdString());
+      break;
+    }
+    case N8V_FILE_DIALOG_OPEN_FOLDER: {
+      const QString p = QFileDialog::getExistingDirectory(window_, title, dir);
+      if (!p.isEmpty()) result.paths.push_back(p.toStdString());
+      break;
+    }
+    }
+    result.status = result.paths.empty() ? FileDialogResult::Status::Cancelled : FileDialogResult::Status::Done;
+    done(std::move(result));
+    return true;
+  }
 
   void shutdown() override {
     if (window_) {

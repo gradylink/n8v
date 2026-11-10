@@ -1,0 +1,37 @@
+set(N8V_HAVE_DBUS FALSE)
+set(N8V_DIALOG_SOURCES source/core/dialogs/file_dialog.cpp)
+
+if(WIN32)
+  list(APPEND N8V_DIALOG_SOURCES source/core/dialogs/dialog_win32.cpp)
+elseif(APPLE)
+  enable_language(OBJCXX)
+  list(APPEND N8V_DIALOG_SOURCES source/core/dialogs/dialog_cocoa.mm)
+elseif(EMSCRIPTEN)
+  list(APPEND N8V_DIALOG_SOURCES source/core/dialogs/dialog_none.cpp)
+else()
+  option(N8V_DIALOG_PORTAL "Build the XDG desktop portal file dialog provider, if libdbus is found." ON)
+  if(N8V_DIALOG_PORTAL)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+      pkg_check_modules(_N8V_DBUS QUIET dbus-1)
+    endif()
+    find_library(_N8V_DBUS_SO NAMES dbus-1)
+    if(_N8V_DBUS_FOUND AND _N8V_DBUS_SO)
+      set(N8V_HAVE_DBUS TRUE)
+      lzy_add_wrapper(dbus_lazy
+        LIBRARY_NAMES
+          "libdbus-1.so.3"
+          "libdbus-1.so"
+        LIBRARY "${_N8V_DBUS_SO}"
+      )
+      target_include_directories(dbus_lazy PUBLIC ${_N8V_DBUS_INCLUDE_DIRS})
+    else()
+      message(STATUS "[n8v] libdbus-1 not found - the XDG portal file dialog is disabled (toolkit dialogs only)")
+    endif()
+  endif()
+  if(N8V_HAVE_DBUS)
+    list(APPEND N8V_DIALOG_SOURCES source/core/dialogs/dialog_portal.cpp)
+  else()
+    list(APPEND N8V_DIALOG_SOURCES source/core/dialogs/dialog_none.cpp)
+  endif()
+endif()

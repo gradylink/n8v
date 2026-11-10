@@ -1,6 +1,7 @@
 #include <n8v/n8v_c.h>
 
 #include "core/backend.hpp"
+#include "core/dialogs/file_dialog.hpp"
 #include "core/style.hpp"
 
 #include "core/ui_core_internal.hpp"
@@ -9,6 +10,8 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <string>
+#include <vector>
 
 namespace {
 
@@ -51,7 +54,42 @@ const char *n8v_string_buf_cstr(const n8v_string_buf *buf) { return (buf && buf-
 
 bool n8v_initialize(int width, int height, const char *title) { return n8v::activeBackend().initialize(width, height, n8v::detail::ui_internal::toView(title)); }
 
-bool n8v_pump_events(void) { return n8v::activeBackend().pumpEvents(); }
+bool n8v_pump_events(void) {
+  const bool keepOpen = n8v::activeBackend().pumpEvents();
+  n8v::detail::pumpFileDialogs();
+  return keepOpen;
+}
+
+void n8v_show_file_dialog(n8v_file_dialog_options options) {
+  using namespace n8v::detail;
+  FileDialogRequest request;
+  request.kind = options.kind;
+  if (options.title) request.title = options.title;
+  if (options.initial_dir) request.initialDir = options.initial_dir;
+  if (options.default_name) request.defaultName = options.default_name;
+  request.multiple = options.multiple && options.kind != N8V_FILE_DIALOG_SAVE_FILE;
+  for (size_t i = 0; options.filters && i < options.filter_count; ++i) {
+    FileDialogFilter filter;
+    filter.name = options.filters[i].name ? options.filters[i].name : "";
+    for (size_t j = 0; options.filters[i].patterns && j < options.filters[i].pattern_count; ++j) {
+      if (options.filters[i].patterns[j]) filter.patterns.push_back(normalizeFileGlob(options.filters[i].patterns[j]));
+    }
+    if (filter.patterns.empty()) filter.patterns.push_back("*");
+    if (filter.name.empty()) {
+      for (const std::string &p : filter.patterns) filter.name += (filter.name.empty() ? "" : ", ") + p;
+    }
+    request.filters.push_back(std::move(filter));
+  }
+
+  n8v_file_dialog_fn onResult = options.on_result;
+  void *userdata = options.on_result_userdata;
+  showFileDialog(std::move(request), [onResult, userdata](FileDialogResult result) {
+    if (!onResult) return;
+    std::vector<const char *> paths;
+    for (const std::string &p : result.paths) paths.push_back(p.c_str());
+    onResult(paths.data(), paths.size(), userdata);
+  });
+}
 
 void n8v_shutdown(void) { n8v::activeBackend().shutdown(); }
 

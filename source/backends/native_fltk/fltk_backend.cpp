@@ -26,6 +26,7 @@
 #include <FL/Fl_Help_View.H>
 #include <FL/Fl_Hor_Slider.H>
 #include <FL/Fl_Input.H>
+#include <FL/Fl_Native_File_Chooser.H>
 #include <FL/Fl_RGB_Image.H>
 #include <FL/Fl_Round_Button.H>
 #include <FL/Fl_Scroll.H>
@@ -93,6 +94,51 @@ public:
       prevW = window_->w();
       prevH = window_->h();
     }
+    return true;
+  }
+
+  bool showFileDialog(const FileDialogRequest &request, FileDialogDone done) override {
+    Fl_Native_File_Chooser chooser;
+    switch (request.kind) {
+    case N8V_FILE_DIALOG_OPEN_FILE:
+      chooser.type(request.multiple ? Fl_Native_File_Chooser::BROWSE_MULTI_FILE : Fl_Native_File_Chooser::BROWSE_FILE);
+      break;
+    case N8V_FILE_DIALOG_SAVE_FILE:
+      chooser.type(Fl_Native_File_Chooser::BROWSE_SAVE_FILE);
+      chooser.options(Fl_Native_File_Chooser::SAVEAS_CONFIRM);
+      break;
+    case N8V_FILE_DIALOG_OPEN_FOLDER:
+      chooser.type(request.multiple ? Fl_Native_File_Chooser::BROWSE_MULTI_DIRECTORY : Fl_Native_File_Chooser::BROWSE_DIRECTORY);
+      break;
+    }
+    if (!request.title.empty()) chooser.title(request.title.c_str());
+    if (!request.initialDir.empty()) chooser.directory(request.initialDir.c_str());
+    if (request.kind == N8V_FILE_DIALOG_SAVE_FILE && !request.defaultName.empty()) chooser.preset_file(request.defaultName.c_str());
+    if (request.kind != N8V_FILE_DIALOG_OPEN_FOLDER && !request.filters.empty()) {
+      std::string spec;
+      for (const FileDialogFilter &f : request.filters) {
+        std::string globs, exts;
+        bool allExtensions = true;
+        for (const std::string &p : f.patterns) {
+          globs += (globs.empty() ? "" : " ") + p;
+          const std::string ext = globExtension(p);
+          if (ext.empty()) allExtensions = false;
+          exts += (exts.empty() ? "" : ",") + ext;
+        }
+        if (allExtensions) globs = f.patterns.size() == 1 ? "*." + exts : "*.{" + exts + "}";
+        spec += f.name + "\t" + globs + "\n";
+      }
+      chooser.filter(spec.c_str());
+    }
+
+    FileDialogResult result;
+    if (chooser.show() == 0) {
+      for (int i = 0; i < chooser.count(); ++i) {
+        if (const char *p = chooser.filename(i)) result.paths.emplace_back(p);
+      }
+    }
+    result.status = result.paths.empty() ? FileDialogResult::Status::Cancelled : FileDialogResult::Status::Done;
+    done(std::move(result));
     return true;
   }
 

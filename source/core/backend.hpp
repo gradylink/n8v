@@ -2,6 +2,8 @@
 
 #include <n8v/types.hpp>
 
+#include "core/dialogs/file_dialog.hpp"
+
 #include <clay.h>
 
 #include <cstdint>
@@ -84,6 +86,8 @@ struct Backend {
   virtual bool isHovered(std::string_view /*id*/) const { return false; }
 
   virtual void requestScroll(const NativeScrollRequest & /*request*/) {}
+
+  virtual bool showFileDialog(const detail::FileDialogRequest & /*request*/, detail::FileDialogDone /*done*/) { return false; }
 
   virtual void beginFrame() = 0;
   virtual void present(Clay_RenderCommandArray commands) = 0;

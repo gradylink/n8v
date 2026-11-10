@@ -2,6 +2,7 @@ package n8v
 
 /*
 #include <stdbool.h>
+#include <stddef.h>
 */
 import "C"
 
@@ -23,4 +24,18 @@ func n8vGoBool(value C.bool, userdata unsafe.Pointer) {
 //export n8vGoInt
 func n8vGoInt(value C.int, userdata unsafe.Pointer) {
 	cgo.Handle(uintptr(userdata)).Value().(func(int))(int(value))
+}
+
+//export n8vGoFileDialog
+func n8vGoFileDialog(paths **C.char, count C.size_t, userdata unsafe.Pointer) {
+	h := cgo.Handle(uintptr(userdata))
+	fn := h.Value().(func([]string))
+	h.Delete()
+	out := make([]string, 0, int(count))
+	if count > 0 {
+		for _, p := range unsafe.Slice(paths, int(count)) {
+			out = append(out, C.GoString(p))
+		}
+	}
+	fn(out)
 }

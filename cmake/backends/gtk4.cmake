@@ -6,11 +6,12 @@ if(N8V_BACKEND_GTK4)
   find_library(_N8V_GTK4_SO NAMES gtk-4)
   find_library(_N8V_GOBJECT_SO NAMES gobject-2.0)
   find_library(_N8V_GLIB_SO NAMES glib-2.0)
-  if(_N8V_GTK4_SO AND _N8V_GOBJECT_SO AND _N8V_GLIB_SO)
+  find_library(_N8V_GIO_SO NAMES gio-2.0)
+  if(_N8V_GTK4_SO AND _N8V_GOBJECT_SO AND _N8V_GLIB_SO AND _N8V_GIO_SO)
     cl_add_dep(GTK4)
   endif()
 
-  if(TARGET deps::GTK4 AND _N8V_GTK4_SO AND _N8V_GOBJECT_SO AND _N8V_GLIB_SO)
+  if(TARGET deps::GTK4 AND _N8V_GTK4_SO AND _N8V_GOBJECT_SO AND _N8V_GLIB_SO AND _N8V_GIO_SO)
     set(N8V_HAVE_GTK4 TRUE)
 
     get_target_property(_N8V_GTK4_INCLUDE_DIRS deps::GTK4 INTERFACE_INCLUDE_DIRECTORIES)
@@ -62,10 +63,28 @@ if(N8V_BACKEND_GTK4)
         g_markup_escape_text
         g_free
         g_free_sized
+        g_error_free
         g_bytes_new
         g_bytes_unref
     )
     target_include_directories(glib_lazy PUBLIC ${_N8V_GTK4_INCLUDE_DIRS})
+
+    lzy_add_wrapper(gio_lazy
+      LIBRARY_NAMES
+        "libgio-2.0.so.0"
+        "libgio-2.0.so"
+        "libgio-2.0.0.dylib"
+        "libgio-2.0.dylib"
+        "gio-2.0-0.dll"
+      SYMBOLS
+        g_list_store_new
+        g_list_store_append
+        g_list_model_get_n_items
+        g_list_model_get_item
+        g_file_new_for_path
+        g_file_get_path
+    )
+    target_include_directories(gio_lazy PUBLIC ${_N8V_GTK4_INCLUDE_DIRS})
 
     set(N8V_HAVE_ADWAITA FALSE)
     find_library(_N8V_ADWAITA_SO NAMES adwaita-1)

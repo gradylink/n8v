@@ -182,4 +182,21 @@ struct IconOptions {
   Color tint = {0, 0, 0, 0};
 };
 
+struct FileFilter {
+  std::string name;
+  std::vector<std::string> patterns;
+};
+
+struct FileDialogOptions {
+  std::string title = {};
+  /** Directory the dialog starts in. */
+  std::string initialDir = {};
+  /** Pre-filled file name (save dialogs only). */
+  std::string defaultName = {};
+  /** The first filter is selected initially. Empty means all files. */
+  std::vector<FileFilter> filters = {};
+  /** Allow selecting several files/folders (open dialogs only). */
+  bool multiple = false;
+};
+
 } // namespace n8v

@@ -459,3 +459,56 @@ export function scrollToElement(
 ): void {
   n().scrollToElement(containerId, elementId, paddingLeft, paddingTop);
 }
+
+export interface FileFilter {
+  name: string;
+  patterns: string[];
+}
+
+export interface FileDialogOptions {
+  title?: string;
+  /** Directory the dialog starts in. */
+  initialDir?: string;
+  /** Pre-filled file name (`saveFile` only). */
+  defaultName?: string;
+  /** Shown in a type dropdown; the first is selected. Omit for all files. */
+  filters?: FileFilter[];
+  /** Allow selecting several files/folders (not `saveFile`). */
+  multiple?: boolean;
+}
+
+export type FileDialogCallback = (paths: string[]) => void;
+
+const FILE_DIALOG_KIND = { openFile: 0, saveFile: 1, openFolder: 2 } as const;
+
+function showFileDialog(
+  kind: number,
+  opts: FileDialogOptions,
+  onResult: FileDialogCallback,
+): void {
+  n().showFileDialog({ ...opts, kind }, onResult);
+}
+
+/** Shows the system open dialog without blocking; `onResult` runs from a later `pumpEvents()`. */
+export function openFile(
+  opts: FileDialogOptions,
+  onResult: FileDialogCallback,
+): void {
+  showFileDialog(FILE_DIALOG_KIND.openFile, opts, onResult);
+}
+
+/** Shows the system save dialog; the result is the single path to write to. */
+export function saveFile(
+  opts: FileDialogOptions,
+  onResult: FileDialogCallback,
+): void {
+  showFileDialog(FILE_DIALOG_KIND.saveFile, opts, onResult);
+}
+
+/** Shows the system folder chooser. */
+export function openFolder(
+  opts: FileDialogOptions,
+  onResult: FileDialogCallback,
+): void {
+  showFileDialog(FILE_DIALOG_KIND.openFolder, opts, onResult);
+}
