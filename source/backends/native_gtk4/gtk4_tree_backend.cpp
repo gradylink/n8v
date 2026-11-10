@@ -122,6 +122,7 @@ struct NativeNode {
   int imageHeight = 0;
   bool stickyBottom = false;
   double stickyLastUpper = 0.0;
+  double stickyLastPage = 0.0;
   std::string lastItemsKey;
   size_t dropdownCount = 0;
   const void *textureSource = nullptr;
@@ -997,9 +998,10 @@ void Gtk4TreeBackend::applyStickyBottom() {
     if (!nn->stickyBottom || !nn->scrolled) continue;
     GtkAdjustment *adj = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(nn->scrolled));
     const double upper = gtk_adjustment_get_upper(adj), page = gtk_adjustment_get_page_size(adj);
-    if (upper != nn->stickyLastUpper) {
+    if (upper != nn->stickyLastUpper || page != nn->stickyLastPage) {
       if (nn->stickyAtBottom) gtk_adjustment_set_value(adj, std::max(upper - page, 0.0));
       nn->stickyLastUpper = upper;
+      nn->stickyLastPage = page;
     }
     nn->stickyAtBottom = gtk_adjustment_get_value(adj) + page >= upper - kStickyBottomEpsilonPx;
   }
