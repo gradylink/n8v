@@ -8,9 +8,11 @@ export type { NativeAddon } from "./src/native.ts";
 export {
   Button,
   Checkbox,
+  Document,
   Dropdown,
   Entry,
   Flex,
+  Floating,
   Icon,
   Image,
   Page,

@@ -177,7 +177,13 @@ Napi::Value EndFrame(const Napi::CallbackInfo &info) {
 }
 
 Napi::Value OpenFlex(const Napi::CallbackInfo &info) {
-  n8v_open_flex(ReadFlexOptions(info[0].As<Napi::Object>()));
+  Napi::Object o = info[0].As<Napi::Object>();
+  n8v_flex_options f = ReadFlexOptions(o);
+  std::string idStorage;
+  StrOr(o, "id", f.id, idStorage);
+  f.stick_to_bottom = BoolOr(o, "stickToBottom", false);
+  WireCallback(o, "onHover", BoolChangeTrampoline, f.on_hover, f.on_hover_userdata);
+  n8v_open_flex(f);
   return info.Env().Undefined();
 }
 Napi::Value CloseFlex(const Napi::CallbackInfo &info) {
@@ -186,7 +192,11 @@ Napi::Value CloseFlex(const Napi::CallbackInfo &info) {
 }
 
 Napi::Value OpenPanel(const Napi::CallbackInfo &info) {
-  n8v_open_panel(ReadPanelOptions(info[0].As<Napi::Object>()));
+  Napi::Object o = info[0].As<Napi::Object>();
+  n8v_panel_options p = ReadPanelOptions(o);
+  std::string idStorage;
+  StrOr(o, "id", p.id, idStorage);
+  n8v_open_panel(p);
   return info.Env().Undefined();
 }
 Napi::Value ClosePanel(const Napi::CallbackInfo &info) {
@@ -222,6 +232,7 @@ Napi::Value OpenPage(const Napi::CallbackInfo &info) {
   StrOr(o, "icon", p.icon, iconStorage);
   std::string imageStorage;
   StrOr(o, "image", p.image, imageStorage);
+  p.image_rounding = ReadRounding(o.Get("imageRounding"));
   return Napi::Boolean::New(info.Env(), n8v_open_page(p));
 }
 Napi::Value ClosePage(const Napi::CallbackInfo &info) {
@@ -234,6 +245,7 @@ Napi::Value Text(const Napi::CallbackInfo &info) {
   std::string label = info[1].As<Napi::String>().Utf8Value();
   std::string urlStorage;
   n8v_text_options t = ReadTextOptions(o, urlStorage);
+  WireCallback(o, "onClick", ClickTrampoline, t.on_click, t.on_click_userdata);
   _n8v_set_text_opts(t);
   _n8v_text_commit(label.c_str());
   return info.Env().Undefined();
@@ -249,6 +261,8 @@ Napi::Value Button(const Napi::CallbackInfo &info) {
   b.icon_variant = (n8v_icon_variant)EnumOr(o, "iconVariant", N8V_ICON_VARIANT_OUTLINE);
   b.icon_position = (n8v_icon_position)EnumOr(o, "iconPosition", N8V_ICON_POSITION_LEADING);
   WireCallback(o, "onClick", ClickTrampoline, b.on_click, b.on_click_userdata);
+  std::string idStorage;
+  StrOr(o, "id", b.id, idStorage);
   _n8v_set_button_opts(b);
   _n8v_button_commit(label.c_str());
   return info.Env().Undefined();
@@ -260,6 +274,8 @@ Napi::Value Checkbox(const Napi::CallbackInfo &info) {
   n8v_checkbox_options c{};
   c.checked = UnwrapRef<BoolRef>(o.Get("checked"), "BoolRef")->Pointer();
   WireCallback(o, "onChange", BoolChangeTrampoline, c.on_change, c.on_change_userdata);
+  std::string idStorage;
+  StrOr(o, "id", c.id, idStorage);
   _n8v_set_checkbox_opts(c);
   _n8v_checkbox_commit(label.c_str());
   return info.Env().Undefined();
@@ -271,6 +287,8 @@ Napi::Value Toggle(const Napi::CallbackInfo &info) {
   n8v_toggle_options t{};
   t.checked = UnwrapRef<BoolRef>(o.Get("checked"), "BoolRef")->Pointer();
   WireCallback(o, "onChange", BoolChangeTrampoline, t.on_change, t.on_change_userdata);
+  std::string idStorage;
+  StrOr(o, "id", t.id, idStorage);
   _n8v_set_toggle_opts(t);
   _n8v_toggle_commit(label.c_str());
   return info.Env().Undefined();
@@ -283,6 +301,8 @@ Napi::Value Radio(const Napi::CallbackInfo &info) {
   r.selected = UnwrapRef<IntRef>(o.Get("selected"), "IntRef")->Pointer();
   r.value = (int)EnumOr(o, "value", 0);
   WireCallback(o, "onChange", IntChangeTrampoline, r.on_change, r.on_change_userdata);
+  std::string idStorage;
+  StrOr(o, "id", r.id, idStorage);
   _n8v_set_radio_opts(r);
   _n8v_radio_commit(label.c_str());
   return info.Env().Undefined();
@@ -297,6 +317,8 @@ Napi::Value Entry(const Napi::CallbackInfo &info) {
   e.password = BoolOr(o, "password", false);
   WireCallback(o, "onChange", TextChangeTrampoline, e.on_change, e.on_change_userdata);
   WireCallback(o, "onSubmit", ClickTrampoline, e.on_submit, e.on_submit_userdata);
+  std::string idStorage;
+  StrOr(o, "id", e.id, idStorage);
   n8v_entry(e);
   return info.Env().Undefined();
 }
@@ -319,6 +341,8 @@ Napi::Value Dropdown(const Napi::CallbackInfo &info) {
   std::string placeholderStorage;
   StrOr(o, "placeholder", d.placeholder, placeholderStorage);
   WireCallback(o, "onChange", IntChangeTrampoline, d.on_change, d.on_change_userdata);
+  std::string idStorage;
+  StrOr(o, "id", d.id, idStorage);
   n8v_dropdown(d);
   return info.Env().Undefined();
 }
@@ -330,6 +354,8 @@ Napi::Value Slider(const Napi::CallbackInfo &info) {
   s.min = NumberOr(o, "min", 0.0f);
   s.max = NumberOr(o, "max", 1.0f);
   WireCallback(o, "onChange", FloatChangeTrampoline, s.on_change, s.on_change_userdata);
+  std::string idStorage;
+  StrOr(o, "id", s.id, idStorage);
   n8v_slider(s);
   return info.Env().Undefined();
 }
@@ -373,6 +399,62 @@ Napi::Value Icon(const Napi::CallbackInfo &info) {
   return info.Env().Undefined();
 }
 
+Napi::Value Document(const Napi::CallbackInfo &info) {
+  Napi::Object o = info[0].As<Napi::Object>();
+  n8v_document_options d{};
+  std::string markdownStorage;
+  StrOr(o, "markdown", d.markdown, markdownStorage);
+  d.width = ReadSizing(o.Get("width"));
+  d.height = ReadSizing(o.Get("height"));
+  std::string idStorage;
+  StrOr(o, "id", d.id, idStorage);
+  n8v_document(d);
+  return info.Env().Undefined();
+}
+
+Napi::Value OpenFloating(const Napi::CallbackInfo &info) {
+  Napi::Object o = info[0].As<Napi::Object>();
+  n8v_floating_options f{};
+  f.width = ReadSizing(o.Get("width"));
+  f.height = ReadSizing(o.Get("height"));
+  f.element_attach_point = (n8v_attach_point)EnumOr(o, "elementAttachPoint", N8V_ATTACH_POINT_RIGHT_TOP);
+  f.parent_attach_point = (n8v_attach_point)EnumOr(o, "parentAttachPoint", N8V_ATTACH_POINT_RIGHT_TOP);
+  f.offset_x = NumberOr(o, "offsetX", 0.0f);
+  f.offset_y = NumberOr(o, "offsetY", 0.0f);
+  std::string idStorage;
+  StrOr(o, "id", f.id, idStorage);
+  n8v_open_floating(f);
+  return info.Env().Undefined();
+}
+Napi::Value CloseFloating(const Napi::CallbackInfo &info) {
+  n8v_close_floating();
+  return info.Env().Undefined();
+}
+
+Napi::Value IsHovered(const Napi::CallbackInfo &info) {
+  std::string id = info[0].As<Napi::String>().Utf8Value();
+  return Napi::Boolean::New(info.Env(), n8v_is_hovered(id.c_str()));
+}
+
+template <void (*Fn)(const char *)> Napi::Value ScrollSimple(const Napi::CallbackInfo &info) {
+  std::string id = info[0].As<Napi::String>().Utf8Value();
+  Fn(id.c_str());
+  return info.Env().Undefined();
+}
+
+Napi::Value ScrollToOffset(const Napi::CallbackInfo &info) {
+  std::string id = info[0].As<Napi::String>().Utf8Value();
+  n8v_scroll_to_offset(id.c_str(), info[1].As<Napi::Number>().FloatValue(), info[2].As<Napi::Number>().FloatValue());
+  return info.Env().Undefined();
+}
+
+Napi::Value ScrollToElement(const Napi::CallbackInfo &info) {
+  std::string container = info[0].As<Napi::String>().Utf8Value();
+  std::string element = info[1].As<Napi::String>().Utf8Value();
+  n8v_scroll_to_element(container.c_str(), element.c_str(), info[2].As<Napi::Number>().FloatValue(), info[3].As<Napi::Number>().FloatValue());
+  return info.Env().Undefined();
+}
+
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("BoolRef", BoolRef::GetClass(env));
   exports.Set("IntRef", IntRef::GetClass(env));
@@ -406,6 +488,18 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("slider", Napi::Function::New(env, Slider));
   exports.Set("image", Napi::Function::New(env, Image));
   exports.Set("icon", Napi::Function::New(env, Icon));
+  exports.Set("document", Napi::Function::New(env, Document));
+
+  exports.Set("openFloating", Napi::Function::New(env, OpenFloating));
+  exports.Set("closeFloating", Napi::Function::New(env, CloseFloating));
+
+  exports.Set("isHovered", Napi::Function::New(env, IsHovered));
+  exports.Set("scrollToBottom", Napi::Function::New(env, ScrollSimple<n8v_scroll_to_bottom>));
+  exports.Set("scrollToTop", Napi::Function::New(env, ScrollSimple<n8v_scroll_to_top>));
+  exports.Set("scrollToLeft", Napi::Function::New(env, ScrollSimple<n8v_scroll_to_left>));
+  exports.Set("scrollToRight", Napi::Function::New(env, ScrollSimple<n8v_scroll_to_right>));
+  exports.Set("scrollToOffset", Napi::Function::New(env, ScrollToOffset));
+  exports.Set("scrollToElement", Napi::Function::New(env, ScrollToElement));
 
   return exports;
 }

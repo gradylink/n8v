@@ -4,6 +4,16 @@ export type ButtonStyle = "primary" | "secondary" | "ghost";
 export type PanelRole = "card" | "listItem";
 export type IconVariant = "outline" | "filled";
 export type IconPosition = "leading" | "trailing";
+export type AttachPoint =
+  | "leftTop"
+  | "leftCenter"
+  | "leftBottom"
+  | "centerTop"
+  | "centerCenter"
+  | "centerBottom"
+  | "rightTop"
+  | "rightCenter"
+  | "rightBottom";
 export type StyleFamily =
   | "plain"
   | "material"
@@ -29,6 +39,17 @@ export const ICON_VARIANT: Record<IconVariant, number> = {
 export const ICON_POSITION: Record<IconPosition, number> = {
   leading: 0,
   trailing: 1,
+};
+export const ATTACH_POINT: Record<AttachPoint, number> = {
+  leftTop: 0,
+  leftCenter: 1,
+  leftBottom: 2,
+  centerTop: 3,
+  centerCenter: 4,
+  centerBottom: 5,
+  rightTop: 6,
+  rightCenter: 7,
+  rightBottom: 8,
 };
 export const STYLE_FAMILY: Record<StyleFamily, number> = {
   plain: 0,

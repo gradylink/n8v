@@ -1,9 +1,11 @@
 import type {
   ButtonOptions,
   CheckedOptions,
+  DocumentOptions,
   DropdownOptions,
   EntryOptions,
   FlexOptions,
+  FloatingOptions,
   IconOptions,
   ImageOptions,
   PageOptions,
@@ -62,4 +64,9 @@ export const Dropdown: IntrinsicComponent<DropdownOptions> = intrinsic(
 );
 export const Slider: IntrinsicComponent<SliderOptions> = intrinsic("slider");
 export const Image: IntrinsicComponent<ImageOptions> = intrinsic("image");
+export const Document: IntrinsicComponent<DocumentOptions> = intrinsic(
+  "document",
+);
+export const Floating: IntrinsicComponent<FloatingOptions & WithChildren> =
+  intrinsic("floating");
 export const Icon: IntrinsicComponent<IconOptions> = intrinsic("icon");

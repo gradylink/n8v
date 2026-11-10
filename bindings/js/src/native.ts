@@ -37,6 +37,23 @@ export interface NativeAddon {
   slider(opts: object): void;
   image(opts: object): void;
   icon(opts: object): void;
+  document(opts: object): void;
+
+  openFloating(opts: object): void;
+  closeFloating(): void;
+
+  isHovered(id: string): boolean;
+  scrollToBottom(containerId: string): void;
+  scrollToTop(containerId: string): void;
+  scrollToLeft(containerId: string): void;
+  scrollToRight(containerId: string): void;
+  scrollToOffset(containerId: string, x: number, y: number): void;
+  scrollToElement(
+    containerId: string,
+    elementId: string,
+    paddingLeft: number,
+    paddingTop: number,
+  ): void;
 }
 
 let cached: NativeAddon | null = null;

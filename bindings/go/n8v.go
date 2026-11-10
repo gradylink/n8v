@@ -18,6 +18,8 @@ package n8v
 #include <n8v/n8v_c.h>
 
 extern void n8vGoClick(void *userdata);
+extern void n8vGoBool(bool value, void *userdata);
+extern void n8vGoInt(int value, void *userdata);
 
 static void *n8v_go_handle(uintptr_t h) { return (void *)h; }
 static void n8v_go_button(n8v_button_options o, const char *label) { _n8v_set_button_opts(o); _n8v_button_commit(label); }
@@ -78,6 +80,16 @@ type config struct {
 	password               bool
 	onSubmit               func()
 	rounding               C.n8v_rounding
+	id, image              string
+	stickToBottom          bool
+	onHover                func(bool)
+	onChange               func(int)
+	minWidth, maxWidth     float64
+	compact                bool
+	onClick                func()
+	attachElement          C.n8v_attach_point
+	attachParent           C.n8v_attach_point
+	offsetX, offsetY       float64
 }
 
 func Vertical() Option             { return func(c *config) { c.vertical = true } }
@@ -101,7 +113,58 @@ func Ghost() Option                  { return func(c *config) { c.buttonStyle = 
 func Placeholder(text string) Option { return func(c *config) { c.placeholder = text } }
 func Password(on bool) Option        { return func(c *config) { c.password = on } }
 func OnSubmit(fn func()) Option      { return func(c *config) { c.onSubmit = fn } }
-func NoRounding() Option             { return func(c *config) { c.rounding = C.n8v_rounding_none() } }
+
+// ID names a widget so scroll helpers, IsHovered and OnHover can refer to it.
+func ID(id string) Option { return func(c *config) { c.id = id } }
+
+// StickToBottom keeps a scrolling Flex pinned to its end as content grows.
+func StickToBottom() Option { return func(c *config) { c.stickToBottom = true } }
+
+// OnHover fires on both hover enter and leave. Requires ID.
+func OnHover(fn func(bool)) Option { return func(c *config) { c.onHover = fn } }
+
+// OnChange is called with the new selection when a Sidebar's selected page changes.
+func OnChange(fn func(int)) Option { return func(c *config) { c.onChange = fn } }
+
+// MinWidth and MaxWidth bound a Sidebar's width in pixels (0 means unbounded).
+func MinWidth(px float64) Option { return func(c *config) { c.minWidth = px } }
+func MaxWidth(px float64) Option { return func(c *config) { c.maxWidth = px } }
+
+// Compact makes a Sidebar use its condensed layout.
+func Compact() Option { return func(c *config) { c.compact = true } }
+
+// OnClick paints Text as a link and calls fn on click instead of opening the Link URL.
+func OnClick(fn func()) Option { return func(c *config) { c.onClick = fn } }
+
+// PageImage sets the image shown for a Page (mutually exclusive with Icon).
+func PageImage(path string) Option { return func(c *config) { c.image = path } }
+
+// AttachPoint is where a Floating element or its parent is anchored.
+type AttachPoint int
+
+const (
+	LeftTop AttachPoint = iota
+	LeftCenter
+	LeftBottom
+	CenterTop
+	CenterCenter
+	CenterBottom
+	RightTop
+	RightCenter
+	RightBottom
+)
+
+// Attach sets which point of the floating element sits on which point of its parent.
+func Attach(element, parent AttachPoint) Option {
+	return func(c *config) {
+		c.attachElement, c.attachParent = C.n8v_attach_point(element), C.n8v_attach_point(parent)
+	}
+}
+
+// Offset shifts a Floating element in pixels after attaching.
+func Offset(x, y float64) Option { return func(c *config) { c.offsetX, c.offsetY = x, y } }
+
+func NoRounding() Option { return func(c *config) { c.rounding = C.n8v_rounding_none() } }
 
 func Padding(left, right, top, bottom int) Option {
 	return func(c *config) {
@@ -121,7 +184,10 @@ func Rounded(topLeft, topRight, bottomLeft, bottomRight float64) Option {
 }
 
 func apply(opts []Option) config {
-	c := config{rounding: C.n8v_rounding_style_default()}
+	c := config{
+		rounding:      C.n8v_rounding_style_default(),
+		attachElement: C.N8V_ATTACH_POINT_RIGHT_TOP, attachParent: C.N8V_ATTACH_POINT_RIGHT_TOP,
+	}
 	for _, o := range opts {
 		o(&c)
 	}
@@ -149,6 +215,24 @@ func cstr(s string) *C.char {
 	p := C.CString(s)
 	frameAllocs = append(frameAllocs, unsafe.Pointer(p))
 	return p
+}
+
+func boolCallback(fn func(bool)) (C.n8v_bool_change_fn, unsafe.Pointer) {
+	if fn == nil {
+		return nil, nil
+	}
+	h := cgo.NewHandle(fn)
+	frameHandles = append(frameHandles, h)
+	return C.n8v_bool_change_fn(C.n8vGoBool), C.n8v_go_handle(C.uintptr_t(h))
+}
+
+func intCallback(fn func(int)) (C.n8v_int_change_fn, unsafe.Pointer) {
+	if fn == nil {
+		return nil, nil
+	}
+	h := cgo.NewHandle(fn)
+	frameHandles = append(frameHandles, h)
+	return C.n8v_int_change_fn(C.n8vGoInt), C.n8v_go_handle(C.uintptr_t(h))
 }
 
 func callback(fn func()) (C.n8v_click_fn, unsafe.Pointer) {
@@ -200,11 +284,14 @@ func Run(width, height int, title string, body func()) bool {
 
 func Flex(body func(), opts ...Option) {
 	c := apply(opts)
+	hover, hoverData := boolCallback(c.onHover)
 	C.n8v_open_flex(C.n8v_flex_options{
 		direction: c.direction(), gap: C.uint16_t(c.gap), padding: c.padding,
 		h_align: C.n8v_align(c.hAlign), v_align: C.n8v_align(c.vAlign),
 		width: c.width.s, height: c.height.s,
 		clip_horizontal: C.bool(c.clipH), clip_vertical: C.bool(c.clipV),
+		id: cstr(c.id), stick_to_bottom: C.bool(c.stickToBottom),
+		on_hover: hover, on_hover_userdata: hoverData,
 	})
 	body()
 	C.n8v_close_flex()
@@ -221,6 +308,7 @@ func Panel(body func(), opts ...Option) {
 		h_align: C.n8v_align(c.hAlign), v_align: C.n8v_align(c.vAlign),
 		width: c.width.s, height: c.height.s,
 		clip_horizontal: C.bool(c.clipH), clip_vertical: C.bool(c.clipV),
+		id: cstr(c.id),
 	})
 	body()
 	C.n8v_close_panel()
@@ -229,7 +317,11 @@ func Panel(body func(), opts ...Option) {
 // Sidebar holds Page calls. selected tracks the open page.
 func Sidebar(title string, selected *Int, body func(), opts ...Option) {
 	c := apply(opts)
-	C.n8v_open_sidebar(C.n8v_sidebar_options{title: cstr(title), selected: selected.p, width: c.width.s})
+	fn, ud := intCallback(c.onChange)
+	C.n8v_open_sidebar(C.n8v_sidebar_options{
+		title: cstr(title), selected: selected.p, on_change: fn, on_change_userdata: ud,
+		width: c.width.s, min_width: C.float(c.minWidth), max_width: C.float(c.maxWidth), compact: C.bool(c.compact),
+	})
 	body()
 	C.n8v_close_sidebar()
 }
@@ -237,7 +329,7 @@ func Sidebar(title string, selected *Int, body func(), opts ...Option) {
 // Page adds a sidebar entry and runs body when it is the selected page.
 func Page(name string, body func(), opts ...Option) {
 	c := apply(opts)
-	if C.n8v_open_page(C.n8v_page_options{name: cstr(name), icon: cstr(c.icon)}) {
+	if C.n8v_open_page(C.n8v_page_options{name: cstr(name), icon: cstr(c.icon), image: cstr(c.image), image_rounding: c.rounding}) {
 		body()
 		C.n8v_close_page()
 	}
@@ -245,9 +337,10 @@ func Page(name string, body func(), opts ...Option) {
 
 func Text(label string, opts ...Option) {
 	c := apply(opts)
+	fn, ud := callback(c.onClick)
 	C.n8v_go_text(C.n8v_text_options{
 		bold: C.bool(c.bold), italic: C.bool(c.italic), strikethrough: C.bool(c.strike),
-		url: cstr(c.url), color: c.color,
+		url: cstr(c.url), color: c.color, on_click: fn, on_click_userdata: ud,
 	}, cstr(label))
 }
 
@@ -267,21 +360,24 @@ func Button(label string, onClick func(), opts ...Option) {
 	}
 	C.n8v_go_button(C.n8v_button_options{
 		style: c.buttonStyle, on_click: fn, on_click_userdata: ud,
-		icon: cstr(c.icon), icon_variant: c.iconVariant(), icon_position: pos,
+		icon: cstr(c.icon), icon_variant: c.iconVariant(), icon_position: pos, id: cstr(c.id),
 	}, cstr(label))
 }
 
-func Checkbox(label string, checked *Bool) {
-	C.n8v_go_checkbox(C.n8v_checkbox_options{checked: checked.p}, cstr(label))
+func Checkbox(label string, checked *Bool, opts ...Option) {
+	c := apply(opts)
+	C.n8v_go_checkbox(C.n8v_checkbox_options{checked: checked.p, id: cstr(c.id)}, cstr(label))
 }
 
-func Toggle(label string, checked *Bool) {
-	C.n8v_go_toggle(C.n8v_toggle_options{checked: checked.p}, cstr(label))
+func Toggle(label string, checked *Bool, opts ...Option) {
+	c := apply(opts)
+	C.n8v_go_toggle(C.n8v_toggle_options{checked: checked.p, id: cstr(c.id)}, cstr(label))
 }
 
 // Radio selects value in selected when clicked.
-func Radio(label string, selected *Int, value int) {
-	C.n8v_go_radio(C.n8v_radio_options{selected: selected.p, value: C.int(value)}, cstr(label))
+func Radio(label string, selected *Int, value int, opts ...Option) {
+	c := apply(opts)
+	C.n8v_go_radio(C.n8v_radio_options{selected: selected.p, value: C.int(value), id: cstr(c.id)}, cstr(label))
 }
 
 func Entry(value *String, opts ...Option) {
@@ -289,7 +385,7 @@ func Entry(value *String, opts ...Option) {
 	fn, ud := callback(c.onSubmit)
 	C.n8v_entry(C.n8v_entry_options{
 		value: value.p, placeholder: cstr(c.placeholder), password: C.bool(c.password),
-		on_submit: fn, on_submit_userdata: ud,
+		on_submit: fn, on_submit_userdata: ud, id: cstr(c.id),
 	})
 }
 
@@ -305,12 +401,13 @@ func Dropdown(items []string, selected *Int, opts ...Option) {
 		}
 	}
 	C.n8v_dropdown(C.n8v_dropdown_options{
-		items: list, item_count: C.size_t(len(items)), selected: selected.p, placeholder: cstr(c.placeholder),
+		items: list, item_count: C.size_t(len(items)), selected: selected.p, placeholder: cstr(c.placeholder), id: cstr(c.id),
 	})
 }
 
-func Slider(value *Float, min, max float64) {
-	C.n8v_slider(C.n8v_slider_options{value: value.p, min: C.float(min), max: C.float(max)})
+func Slider(value *Float, min, max float64, opts ...Option) {
+	c := apply(opts)
+	C.n8v_slider(C.n8v_slider_options{value: value.p, min: C.float(min), max: C.float(max), id: cstr(c.id)})
 }
 
 // Image draws a PNG, JPEG or SVG file.
@@ -341,5 +438,70 @@ func IconImage(name string, opts ...Option) {
 	c := apply(opts)
 	C.n8v_icon(C.n8v_icon_options{
 		name: cstr(name), variant: c.iconVariant(), width: c.width.s, height: c.height.s, tint: c.color,
+	})
+}
+
+// Document renders markdown. Defaults to Grow in both axes.
+func Document(markdown string, opts ...Option) {
+	c := apply(opts)
+	w, h := c.width, c.height
+	if w.s == (C.n8v_sizing{}) {
+		w = Grow(0, 0)
+	}
+	if h.s == (C.n8v_sizing{}) {
+		h = Grow(0, 0)
+	}
+	C.n8v_document(C.n8v_document_options{markdown: cstr(markdown), width: w.s, height: h.s, id: cstr(c.id)})
+}
+
+// Floating layers body over the enclosing element without affecting its layout. Use Attach and Offset to place it.
+func Floating(body func(), opts ...Option) {
+	c := apply(opts)
+	C.n8v_open_floating(C.n8v_floating_options{
+		width: c.width.s, height: c.height.s,
+		element_attach_point: c.attachElement, parent_attach_point: c.attachParent,
+		offset_x: C.float(c.offsetX), offset_y: C.float(c.offsetY), id: cstr(c.id),
+	})
+	body()
+	C.n8v_close_floating()
+}
+
+// IsHovered reports whether the pointer was over the element with this ID as of the last completed frame.
+func IsHovered(id string) bool {
+	s := C.CString(id)
+	defer C.free(unsafe.Pointer(s))
+	return bool(C.n8v_is_hovered(s))
+}
+
+func withCStr(s string, fn func(*C.char)) {
+	p := C.CString(s)
+	defer C.free(unsafe.Pointer(p))
+	fn(p)
+}
+
+func ScrollToBottom(containerID string) {
+	withCStr(containerID, func(p *C.char) { C.n8v_scroll_to_bottom(p) })
+}
+func ScrollToTop(containerID string) {
+	withCStr(containerID, func(p *C.char) { C.n8v_scroll_to_top(p) })
+}
+func ScrollToLeft(containerID string) {
+	withCStr(containerID, func(p *C.char) { C.n8v_scroll_to_left(p) })
+}
+func ScrollToRight(containerID string) {
+	withCStr(containerID, func(p *C.char) { C.n8v_scroll_to_right(p) })
+}
+
+// ScrollToOffset scrolls to an absolute pixel offset from the content's top-left.
+func ScrollToOffset(containerID string, x, y float64) {
+	withCStr(containerID, func(p *C.char) { C.n8v_scroll_to_offset(p, C.float(x), C.float(y)) })
+}
+
+// ScrollToElement scrolls so the element tagged elementID sits at the container's top-left, offset by the padding.
+func ScrollToElement(containerID, elementID string, paddingLeft, paddingTop float64) {
+	withCStr(containerID, func(c *C.char) {
+		withCStr(elementID, func(e *C.char) {
+			C.n8v_scroll_to_element(c, e, C.float(paddingLeft), C.float(paddingTop))
+		})
 	})
 }

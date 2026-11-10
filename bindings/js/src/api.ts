@@ -2,6 +2,8 @@ import { loadNative, type NativeAddon, type NativeRef } from "./native.ts";
 import {
   ALIGN,
   type Align,
+  ATTACH_POINT,
+  type AttachPoint,
   BUTTON_STYLE,
   type ButtonStyle,
   type Color,
@@ -132,6 +134,9 @@ export interface FlexOptions {
   height?: NativeSizing;
   clipHorizontal?: boolean;
   clipVertical?: boolean;
+  id?: string;
+  stickToBottom?: boolean;
+  onHover?: (hovered: boolean) => void;
 }
 
 function flexNative(o: FlexOptions = {}) {
@@ -145,6 +150,9 @@ function flexNative(o: FlexOptions = {}) {
     height: o.height ?? Sizing.fit(),
     clipHorizontal: o.clipHorizontal ?? false,
     clipVertical: o.clipVertical ?? false,
+    id: o.id,
+    stickToBottom: o.stickToBottom ?? false,
+    onHover: o.onHover,
   };
 }
 
@@ -164,6 +172,7 @@ export interface PanelOptions {
   height?: NativeSizing;
   clipHorizontal?: boolean;
   clipVertical?: boolean;
+  id?: string;
 }
 
 export function panel(opts: PanelOptions, body: () => void): void {
@@ -178,6 +187,7 @@ export function panel(opts: PanelOptions, body: () => void): void {
     height: o.height ?? Sizing.fit(),
     clipHorizontal: o.clipHorizontal ?? false,
     clipVertical: o.clipVertical ?? false,
+    id: o.id,
   });
   body();
   n().closePanel();
@@ -211,12 +221,11 @@ export interface PageOptions {
   name?: string;
   icon?: string;
   image?: string;
+  imageRounding?: NativeRounding;
 }
 
-/** Returns true (and only then runs + closes `body`) if this is the selected page - mirrors
- * n8v_open_page/the `page()` macro exactly, including "don't declare children unless shown". */
 export function page(opts: PageOptions, body: () => void): boolean {
-  const selected = n().openPage(opts);
+  const selected = n().openPage({ ...opts, imageRounding: opts.imageRounding });
   if (selected) {
     body();
     n().closePage();
@@ -229,6 +238,7 @@ export interface TextOptions {
   italic?: boolean;
   strikethrough?: boolean;
   url?: string;
+  onClick?: () => void;
   color?: Color;
 }
 
@@ -242,6 +252,7 @@ export interface ButtonOptions {
   iconVariant?: IconVariant;
   iconPosition?: IconPosition;
   onClick?: () => void;
+  id?: string;
 }
 
 export function button(label: string, opts: ButtonOptions = {}): void {
@@ -252,6 +263,7 @@ export function button(label: string, opts: ButtonOptions = {}): void {
       iconVariant: ICON_VARIANT[opts.iconVariant ?? "outline"],
       iconPosition: ICON_POSITION[opts.iconPosition ?? "leading"],
       onClick: opts.onClick,
+      id: opts.id,
     },
     label,
   );
@@ -260,6 +272,7 @@ export function button(label: string, opts: ButtonOptions = {}): void {
 export interface CheckedOptions {
   checked: Ref<boolean>;
   onChange?: (value: boolean) => void;
+  id?: string;
 }
 
 export function checkbox(label: string, opts: CheckedOptions): void {
@@ -274,6 +287,7 @@ export interface RadioOptions {
   selected: Ref<number>;
   value: number;
   onChange?: (value: number) => void;
+  id?: string;
 }
 
 export function radio(label: string, opts: RadioOptions): void {
@@ -286,6 +300,7 @@ export interface EntryOptions {
   password?: boolean;
   onChange?: (text: string) => void;
   onSubmit?: () => void;
+  id?: string;
 }
 
 export function entry(opts: EntryOptions): void {
@@ -297,6 +312,7 @@ export interface DropdownOptions {
   selected: Ref<number>;
   placeholder?: string;
   onChange?: (value: number) => void;
+  id?: string;
 }
 
 export function dropdown(opts: DropdownOptions): void {
@@ -308,6 +324,7 @@ export interface SliderOptions {
   min?: number;
   max?: number;
   onChange?: (value: number) => void;
+  id?: string;
 }
 
 export function slider(opts: SliderOptions): void {
@@ -361,4 +378,84 @@ export function icon(opts: IconOptions): void {
     height: opts.height ?? Sizing.fit(),
     tint: opts.tint,
   });
+}
+
+export interface DocumentOptions {
+  markdown: string;
+  width?: NativeSizing;
+  height?: NativeSizing;
+  id?: string;
+}
+
+export function document(opts: DocumentOptions): void {
+  n().document({
+    markdown: opts.markdown,
+    width: opts.width ?? Sizing.grow(),
+    height: opts.height ?? Sizing.grow(),
+    id: opts.id,
+  });
+}
+
+export interface FloatingOptions {
+  width?: NativeSizing;
+  height?: NativeSizing;
+  elementAttachPoint?: AttachPoint;
+  parentAttachPoint?: AttachPoint;
+  offsetX?: number;
+  offsetY?: number;
+  id?: string;
+}
+
+export function floating(opts: FloatingOptions, body: () => void): void {
+  n().openFloating({
+    width: opts.width ?? Sizing.fit(),
+    height: opts.height ?? Sizing.fit(),
+    elementAttachPoint: ATTACH_POINT[opts.elementAttachPoint ?? "rightTop"],
+    parentAttachPoint: ATTACH_POINT[opts.parentAttachPoint ?? "rightTop"],
+    offsetX: opts.offsetX ?? 0,
+    offsetY: opts.offsetY ?? 0,
+    id: opts.id,
+  });
+  body();
+  n().closeFloating();
+}
+
+export function isHovered(id: string): boolean {
+  return n().isHovered(id);
+}
+
+/** Scrolls the container to the bottom of its content (vertical axis only). */
+export function scrollToBottom(containerId: string): void {
+  n().scrollToBottom(containerId);
+}
+
+export function scrollToTop(containerId: string): void {
+  n().scrollToTop(containerId);
+}
+
+export function scrollToLeft(containerId: string): void {
+  n().scrollToLeft(containerId);
+}
+
+export function scrollToRight(containerId: string): void {
+  n().scrollToRight(containerId);
+}
+
+/** Scrolls to an absolute pixel offset from the content's top-left, each axis clamped independently. */
+export function setScrollOffset(
+  containerId: string,
+  x: number,
+  y: number,
+): void {
+  n().scrollToOffset(containerId, x, y);
+}
+
+/** Scrolls so the element tagged `elementId` is at the container's top-left, offset by the padding. */
+export function scrollToElement(
+  containerId: string,
+  elementId: string,
+  paddingLeft = 0,
+  paddingTop = 0,
+): void {
+  n().scrollToElement(containerId, elementId, paddingLeft, paddingTop);
 }

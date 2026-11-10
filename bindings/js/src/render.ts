@@ -105,6 +105,12 @@ function renderNode(node: VNode): void {
     case "image":
       api.image(props as api.ImageOptions);
       return;
+    case "document":
+      api.document(props as unknown as api.DocumentOptions);
+      return;
+    case "floating":
+      api.floating(props as api.FloatingOptions, body);
+      return;
     case "icon":
       api.icon(props as unknown as api.IconOptions);
       return;
