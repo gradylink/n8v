@@ -7,13 +7,13 @@
 #include "core/icon_loader.hpp"
 #include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
-#include "core/widgets/page_badge.hpp"
 #include "core/open_url.hpp"
 #include "core/style.hpp"
 #include "core/tree/dispatch.hpp"
 #include "core/tree/persistent.hpp"
 #include "core/tree/props.hpp"
 #include "core/tree/reconcile.hpp"
+#include "core/widgets/page_badge.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -34,10 +34,10 @@
 #include <QImage>
 #include <QKeyEvent>
 #include <QLabel>
-#include <QMessageBox>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPixmap>
 #include <QPlainTextEdit>
@@ -425,7 +425,8 @@ public:
                                                                           : QMessageBox::Information;
     QMessageBox box(icon, qstr(request.title), qstr(request.message), QMessageBox::NoButton, window_);
     std::vector<QPushButton *> buttons;
-    for (const MessageDialogButton &b : request.buttons) buttons.push_back(box.addButton(qstr(b.label), b.destructive ? QMessageBox::DestructiveRole : QMessageBox::ActionRole));
+    for (const MessageDialogButton &b : request.buttons)
+      buttons.push_back(box.addButton(qstr(b.label), b.destructive ? QMessageBox::DestructiveRole : QMessageBox::ActionRole));
     box.setDefaultButton(buttons.front());
     box.exec();
     int pressed = -1;
@@ -1260,6 +1261,11 @@ void QtTreeBackend::applyButton(NativeNode &nn, const n8v_button_options &o) {
   }
   button->setLayoutDirection(o.icon_position == N8V_ICON_POSITION_TRAILING ? Qt::RightToLeft : Qt::LeftToRight);
   button->setFlat(o.style == N8V_BUTTON_STYLE_GHOST);
+  button->setCheckable(o.checked != nullptr);
+  if (o.checked && button->isChecked() != *o.checked) {
+    const QSignalBlocker blocker(button);
+    button->setChecked(*o.checked);
+  }
   QFont font = button->font();
   font.setBold(o.style == N8V_BUTTON_STYLE_PRIMARY);
   button->setFont(font);

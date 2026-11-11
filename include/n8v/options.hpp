@@ -70,6 +70,18 @@ struct CheckboxOptions {
   std::string_view id = {};
 };
 
+/** A button that stays pressed while `*checked` is true. Draw it with toggleButton(). */
+struct ToggleButtonOptions {
+  /** Flipped on every click. Required. */
+  bool *checked = nullptr;
+  std::function<void(bool)> onChange = nullptr;
+  ButtonStyle style = ButtonStyle::Secondary;
+  std::string icon;
+  IconVariant iconVariant = IconVariant::Outline;
+  IconPosition iconPosition = IconPosition::Leading;
+  std::string_view id = {};
+};
+
 struct ToggleOptions {
   bool *checked = nullptr;
   std::function<void(bool)> onChange = nullptr;

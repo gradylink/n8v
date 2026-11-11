@@ -445,7 +445,7 @@ private:
     if (it != widgets_.end()) {
       ClickAction &action = actions_[effectiveKey(meta)];
       if (meta.kind == NativeWidgetKind::Button) {
-        action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
+        action.callback = buttonAction(meta);
         MwSetInteger(it->second, MwNflat, meta.buttonFlat ? 1 : 0);
       } else if ((meta.kind == NativeWidgetKind::Checkbox || meta.kind == NativeWidgetKind::Switch) && meta.checked) {
         action.checked = meta.checked;
@@ -537,7 +537,7 @@ private:
       }
       MwAddUserHandler(widget, MwNdocumentActivateHandler, onDocumentActivate, nullptr);
     } else {
-      action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
+      action.callback = meta.kind == NativeWidgetKind::Button ? buttonAction(meta) : toStdFunction(meta.onClick, meta.onClickUserdata);
 
       widget = MwCreateWidget(MwButtonClass, "n8v-widget", currentParent(), 0, 0, 1, 1);
       if (meta.kind == NativeWidgetKind::Link) {

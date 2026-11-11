@@ -83,7 +83,7 @@ BoundValue readBound(const Node::Props &props) {
   return std::visit(
     [](const auto &o) -> BoundValue {
       using T = std::decay_t<decltype(o)>;
-      if constexpr (std::is_same_v<T, n8v_checkbox_options> || std::is_same_v<T, n8v_toggle_options>) {
+      if constexpr (std::is_same_v<T, n8v_checkbox_options> || std::is_same_v<T, n8v_toggle_options> || std::is_same_v<T, n8v_button_options>) {
         return o.checked ? BoundValue(*o.checked) : BoundValue();
       } else if constexpr (std::is_same_v<T, n8v_radio_options> || std::is_same_v<T, n8v_dropdown_options> || std::is_same_v<T, n8v_sidebar_options>) {
         return o.selected ? BoundValue(*o.selected) : BoundValue();

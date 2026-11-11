@@ -590,8 +590,9 @@ private:
     if (it != widgets_.end()) {
       WidgetAction &action = actions_[effectiveKey(meta)];
       if (meta.kind == NativeWidgetKind::Button) {
-        action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
+        action.callback = buttonAction(meta);
         auto *button = static_cast<Fl_Button *>(it->second);
+        if (meta.checked && (button->value() != 0) != *meta.checked) button->value(*meta.checked);
         button->box(meta.buttonFlat ? FL_FLAT_BOX : FL_UP_BOX);
         button->down_box(meta.buttonFlat ? FL_FLAT_BOX : FL_DOWN_BOX);
       } else if (meta.kind == NativeWidgetKind::Link) {
@@ -643,8 +644,9 @@ private:
     Fl_Widget *widget = nullptr;
     WidgetAction &action = actions_[effectiveKey(meta)];
     if (meta.kind == NativeWidgetKind::Button) {
-      auto *button = new Fl_Button(0, 0, 1, 1);
-      action.callback = toStdFunction(meta.onClick, meta.onClickUserdata);
+      Fl_Button *button = meta.checked ? new Fl_Toggle_Button(0, 0, 1, 1) : new Fl_Button(0, 0, 1, 1);
+      action.callback = buttonAction(meta);
+      if (meta.checked) button->value(*meta.checked);
       button->callback(&FltkBackend::onButtonClicked, &action);
       if (meta.buttonFlat) {
         button->box(FL_FLAT_BOX);

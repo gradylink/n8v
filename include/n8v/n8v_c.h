@@ -232,6 +232,11 @@ typedef struct n8v_button_options {
   n8v_icon_variant icon_variant;
   n8v_icon_position icon_position;
   const char *id;
+  /** If non-NULL the button is a toggle button: a click flips *checked (the caller's variable) and it is drawn
+      pressed while true. `on_click` still fires on every click. */
+  bool *checked;
+  n8v_bool_change_fn on_change;
+  void *on_change_userdata;
 } n8v_button_options;
 
 typedef struct n8v_checkbox_options {

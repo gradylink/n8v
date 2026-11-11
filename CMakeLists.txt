@@ -190,7 +190,7 @@ set(_N8V_PLAIN_ICONS
   "add:plus" "remove:minus" "delete:trash" "edit:pencil" "copy:copy"
   "download:download" "upload:upload" "refresh:refresh-cw" "share:share-2"
   "star:star" "heart:heart" "home:house" "info:info" "warning:triangle-exclamation-point"
-  "error:circle-exclamation-point" "notification:bell" "calendar:calendar" "clock:clock"
+  "error:circle-exclamation-point" "notification:bell" "notification-off:bell-off" "calendar:calendar" "clock:clock"
   "mail:mail" "folder:folder" "file:file" "image:image" "link:link" "lock:lock"
   "unlock:lock-open" "visibility:eye" "visibility-off:eye-off" "wifi:wifi"
   "volume:volume-2" "mute:volume-x" "chevron-left:chevron-left" "chevron-right:chevron-right"
@@ -216,7 +216,7 @@ set(_N8V_CUPERTINO_ICONS
   "add:plus" "remove:minus" "delete:trash" "edit:pencil" "copy:copy"
   "download:download" "upload:upload" "refresh:refresh" "share:share-2"
   "star:star" "heart:heart" "home:home" "info:info-circle" "warning:alert-triangle"
-  "error:alert-circle" "notification:bell" "calendar:calendar" "clock:clock"
+  "error:alert-circle" "notification:bell" "notification-off:bell-off" "calendar:calendar" "clock:clock"
   "mail:mail" "folder:folder" "file:file" "image:photo" "link:link" "lock:lock"
   "unlock:lock-open" "visibility:eye" "visibility-off:eye-off" "wifi:wifi"
   "volume:volume-2" "mute:volume-off" "chevron-left:chevron-left" "chevron-right:chevron-right"
@@ -242,7 +242,7 @@ set(_N8V_MATERIAL_ICONS
   "add:add" "remove:remove" "delete:delete" "edit:edit" "copy:content_copy"
   "download:download" "upload:upload" "refresh:refresh" "share:share"
   "star:star" "heart:favorite" "home:home" "info:info" "warning:warning"
-  "error:error" "notification:notifications" "calendar:calendar_today" "clock:schedule"
+  "error:error" "notification:notifications" "notification-off:notifications_off" "calendar:calendar_today" "clock:schedule"
   "mail:mail" "folder:folder" "file:description" "image:image" "link:link" "lock:lock"
   "unlock:lock_open" "visibility:visibility" "visibility-off:visibility_off" "wifi:wifi"
   "volume:volume_up" "mute:volume_off" "chevron-left:chevron_left" "chevron-right:chevron_right"
@@ -274,7 +274,7 @@ set(_N8V_FLUENT_ICONS
   "download:Arrow Download:arrow_download" "upload:Arrow Upload:arrow_upload"
   "refresh:Arrow Sync:arrow_sync" "share:Share:share" "star:Star:star" "heart:Heart:heart"
   "home:Home:home" "info:Info:info" "warning:Warning:warning" "error:Error Circle:error_circle"
-  "notification:Alert:alert" "calendar:Calendar:calendar" "clock:Clock:clock" "mail:Mail:mail"
+  "notification:Alert:alert" "notification-off:Alert Off:alert_off" "calendar:Calendar:calendar" "clock:Clock:clock" "mail:Mail:mail"
   "folder:Folder:folder" "file:Document:document" "image:Image:image" "link:Link:link"
   "lock:Lock Closed:lock_closed" "unlock:Lock Open:lock_open" "visibility:Eye:eye"
   "visibility-off:Eye Off:eye_off" "wifi:WiFi 1:wifi_1" "volume:Speaker 2:speaker_2" "mute:Speaker Mute:speaker_mute"
@@ -578,6 +578,7 @@ if(N8V_EXAMPLES)
   add_subdirectory(examples/file_dialog)
   add_subdirectory(examples/message_dialog)
   add_subdirectory(examples/sidebar_badges)
+  add_subdirectory(examples/toggle_button)
   add_subdirectory(examples/multiline_entry)
 endif()
 

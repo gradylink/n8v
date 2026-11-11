@@ -6,7 +6,6 @@
 #include "core/entry_lines.hpp"
 #include "core/icon_loader.hpp"
 #include "core/image_loader.hpp"
-#include "core/widgets/page_badge.hpp"
 #include "core/markdown/markdown.hpp"
 #include "core/markdown/markdown_to_html.hpp"
 #include "core/style.hpp"
@@ -14,6 +13,7 @@
 #include "core/tree/persistent.hpp"
 #include "core/tree/props.hpp"
 #include "core/tree/reconcile.hpp"
+#include "core/widgets/page_badge.hpp"
 
 #include <emscripten.h>
 #include <emscripten/html5.h>
@@ -843,12 +843,19 @@ void HtmlTreeBackend::build(NativeNode &nn) {
 
 void HtmlTreeBackend::applyButton(NativeNode &nn, const n8v_button_options &o) {
   const Paint &paint = activePaint();
-  setClass(nn.outer, classFor(css::buttonCss(paint, toButtonStyle(o.style))));
+  ButtonStyle style = toButtonStyle(o.style);
+  if (o.checked) {
+    const bool on = *o.checked;
+    nn.outer.call<void>("setAttribute", std::string("aria-pressed"), std::string(on ? "true" : "false"));
+    if (on && style == ButtonStyle::Ghost) style = ButtonStyle::Secondary;
+    else if (on && style == ButtonStyle::Secondary) style = ButtonStyle::Primary;
+  }
+  setClass(nn.outer, classFor(css::buttonCss(paint, style)));
   bindEvents(nn, nn.outer, true);
   nn.label.set("textContent", nn.node->current.label);
   const bool hasIcon = o.icon && *o.icon;
   if (hasIcon) {
-    const ButtonPaint bp = paint.button(toButtonStyle(o.style), false, false);
+    const ButtonPaint bp = paint.button(style, false, false);
     setImage(nn.image, getOrDecodeIcon(o.icon, bp.fontSize, bp.textColor));
     if (o.icon_position == N8V_ICON_POSITION_TRAILING) nn.outer.call<void>("appendChild", nn.image);
     else nn.outer.call<void>("insertBefore", nn.image, nn.label);

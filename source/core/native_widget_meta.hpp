@@ -24,9 +24,9 @@ struct NativeWidgetMeta {
   n8v_click_fn onClick = nullptr;                           // Button/Link
   void *onClickUserdata = nullptr;                          // Button/Link
   std::string *url = nullptr;                               // Link only
-  bool *checked = nullptr;                                  // Checkbox/Switch only
-  n8v_bool_change_fn onChange = nullptr;                    // Checkbox/Switch only
-  void *onChangeUserdata = nullptr;                         // Checkbox/Switch only
+  bool *checked = nullptr;                                  // Checkbox/Switch, and Button when it is a toggle button
+  n8v_bool_change_fn onChange = nullptr;                    // Checkbox/Switch/toggle Button
+  void *onChangeUserdata = nullptr;                         // Checkbox/Switch/toggle Button
   std::string *entryValue = nullptr;                        // Entry only
   n8v_string_buf *entryBuf = nullptr;                       // Entry only - the caller's buffer entryValue shadows; see EntryEditState
   std::string *placeholder = nullptr;                       // Entry only
@@ -112,6 +112,15 @@ inline std::function<void()> toStdFunction(n8v_click_fn fn, void *userdata) {
 
 inline std::function<void(bool)> toStdFunction(n8v_bool_change_fn fn, void *userdata) {
   return fn ? std::function<void(bool)>([fn, userdata](bool value) { fn(value, userdata); }) : std::function<void(bool)>{};
+}
+
+inline std::function<void()> buttonAction(const NativeWidgetMeta &meta) {
+  if (!meta.checked) return toStdFunction(meta.onClick, meta.onClickUserdata);
+  return [checked = meta.checked, onChange = meta.onChange, changeData = meta.onChangeUserdata, onClick = meta.onClick, clickData = meta.onClickUserdata] {
+    *checked = !*checked;
+    if (onChange) onChange(*checked, changeData);
+    if (onClick) onClick(clickData);
+  };
 }
 
 inline std::function<void(int)> toStdFunction(n8v_int_change_fn fn, void *userdata) {

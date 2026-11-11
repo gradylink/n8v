@@ -664,6 +664,26 @@ struct LeafBuilder {
   }
 };
 
+struct ToggleButtonBuilder {
+  ToggleButtonOptions options;
+
+  void operator()(std::string_view label) && {
+    std::string labelStorage(label);
+    std::string iconStorage(options.icon);
+    std::string idStorage(options.id);
+    n8v_button_options c_opts{};
+    c_opts.style = toC(options.style);
+    c_opts.icon = iconStorage.empty() ? nullptr : iconStorage.c_str();
+    c_opts.icon_variant = toC(options.iconVariant);
+    c_opts.icon_position = toC(options.iconPosition);
+    c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
+    c_opts.checked = options.checked;
+    if (options.onChange) callback_bridge::bridge(callback_bridge::boolChangeClosures, std::move(options.onChange), c_opts.on_change, c_opts.on_change_userdata);
+    _n8v_set_button_opts(c_opts);
+    _n8v_button_commit(labelStorage.c_str());
+  }
+};
+
 struct CheckboxBuilder {
   CheckboxOptions options;
 
@@ -866,6 +886,9 @@ inline detail::LeafBuilder text(TextOptions options) { return detail::LeafBuilde
 inline void text(std::string_view label) { text(TextOptions{})(label); }
 
 inline detail::CheckboxBuilder checkbox(CheckboxOptions options) { return detail::CheckboxBuilder{std::move(options)}; }
+
+/** A button that stays pressed while `*checked` is true, with the same icon support as button(). */
+inline detail::ToggleButtonBuilder toggleButton(ToggleButtonOptions options) { return detail::ToggleButtonBuilder{std::move(options)}; }
 
 inline detail::ToggleBuilder toggle(ToggleOptions options) { return detail::ToggleBuilder{std::move(options)}; }
 

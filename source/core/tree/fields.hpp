@@ -76,6 +76,9 @@ template <typename V> void visitFields(n8v_button_options &o, V &v) {
   v.num(o.icon_variant);
   v.num(o.icon_position);
   v.str(o.id);
+  v.ptr(o.checked);
+  v.ptr(o.on_change);
+  v.ptr(o.on_change_userdata);
 }
 
 template <typename V> void visitFields(n8v_text_options &o, V &v) {

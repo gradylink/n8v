@@ -302,6 +302,28 @@ export function button(label: string, opts: ButtonOptions = {}): void {
   );
 }
 
+export interface ToggleButtonOptions extends Omit<ButtonOptions, "onClick"> {
+  /** Flipped on every click; the button is drawn pressed while it is true. */
+  checked: Ref<boolean>;
+  onChange?: (value: boolean) => void;
+}
+
+/** A button that stays pressed while `checked` is true, with the same icon and style options as `button`. */
+export function toggleButton(label: string, opts: ToggleButtonOptions): void {
+  n().button(
+    {
+      style: BUTTON_STYLE[opts.style ?? "secondary"],
+      icon: opts.icon,
+      iconVariant: ICON_VARIANT[opts.iconVariant ?? "outline"],
+      iconPosition: ICON_POSITION[opts.iconPosition ?? "leading"],
+      checked: opts.checked,
+      onChange: opts.onChange,
+      id: opts.id,
+    },
+    label,
+  );
+}
+
 export interface CheckedOptions {
   checked: Ref<boolean>;
   onChange?: (value: boolean) => void;

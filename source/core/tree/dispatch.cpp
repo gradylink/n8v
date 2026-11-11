@@ -17,6 +17,12 @@ void refreshBound(PNode &node) { node.bound = readBound(node.current.props); }
 
 void activate(PNode &node) {
   if (auto *button = optionsOf<n8v_button_options>(node)) {
+    if (button->checked) {
+      *button->checked = !*button->checked;
+      const bool checked = *button->checked;
+      refreshBound(node);
+      if (button->on_change) button->on_change(checked, button->on_change_userdata);
+    }
     if (button->on_click) button->on_click(button->on_click_userdata);
   } else if (auto *text = optionsOf<n8v_text_options>(node)) {
     if (text->on_click) {

@@ -1217,7 +1217,8 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
     break;
   }
   case Kind::Button: {
-    nn.outer = nn.widget = gtk_button_new();
+    const auto *buttonProps = propsOf<n8v_button_options>(pn);
+    nn.outer = nn.widget = buttonProps && buttonProps->checked ? gtk_toggle_button_new() : gtk_button_new();
     connect(nn.widget, "clicked", &Gtk4TreeBackend::onButtonClicked, pn);
     break;
   }
@@ -1472,6 +1473,10 @@ void Gtk4TreeBackend::applyButton(NativeNode &nn, const n8v_button_options &o) {
   else gtk_widget_remove_css_class(nn.widget, "flat");
   if (o.style == N8V_BUTTON_STYLE_PRIMARY) gtk_widget_add_css_class(nn.widget, "suggested-action");
   else gtk_widget_remove_css_class(nn.widget, "suggested-action");
+  if (o.checked && GTK_IS_TOGGLE_BUTTON(nn.widget)) {
+    GtkToggleButton *toggle = GTK_TOGGLE_BUTTON(nn.widget);
+    if ((gtk_toggle_button_get_active(toggle) != FALSE) != *o.checked) gtk_toggle_button_set_active(toggle, *o.checked);
+  }
 }
 
 void Gtk4TreeBackend::applySidebar(NativeNode &nn, const n8v_sidebar_options &o) {

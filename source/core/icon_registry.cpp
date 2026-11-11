@@ -30,6 +30,7 @@ constexpr IconEntry icons[] = {
   {"warning", "dialog-warning-symbolic"},
   {"error", "dialog-error-symbolic"},
   {"notification", "preferences-system-notifications-symbolic"},
+  {"notification-off", "notifications-disabled-symbolic"},
   {"calendar", "x-office-calendar-symbolic"},
   {"clock", "clock-symbolic"},
   {"mail", "mail-unread-symbolic"},

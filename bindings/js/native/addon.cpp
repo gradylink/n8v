@@ -69,7 +69,7 @@ public:
   static Napi::Function GetClass(Napi::Env env) { return DefineClass(env, "StringRef", {InstanceAccessor<&StringRef::GetValue, &StringRef::SetValue>("value")}); }
 
   explicit StringRef(const Napi::CallbackInfo &info) : Napi::ObjectWrap<StringRef>(info) {
-    buf_ = {}; // data=nullptr, length=0, capacity=0 - n8v_ffi_string_buf_set/n8v itself lazily mallocs on first write.
+    buf_ = {};
     if (info.Length() > 0 && info[0].IsString()) {
       std::string s = info[0].As<Napi::String>().Utf8Value();
       n8v_ffi_string_buf_set(&buf_, s.data(), s.size());
@@ -266,6 +266,10 @@ Napi::Value Button(const Napi::CallbackInfo &info) {
   b.icon_variant = (n8v_icon_variant)EnumOr(o, "iconVariant", N8V_ICON_VARIANT_OUTLINE);
   b.icon_position = (n8v_icon_position)EnumOr(o, "iconPosition", N8V_ICON_POSITION_LEADING);
   WireCallback(o, "onClick", ClickTrampoline, b.on_click, b.on_click_userdata);
+  if (o.Get("checked").IsObject()) {
+    b.checked = UnwrapRef<BoolRef>(o.Get("checked"), "BoolRef")->Pointer();
+    WireCallback(o, "onChange", BoolChangeTrampoline, b.on_change, b.on_change_userdata);
+  }
   std::string idStorage;
   StrOr(o, "id", b.id, idStorage);
   _n8v_set_button_opts(b);

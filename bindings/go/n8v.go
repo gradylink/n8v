@@ -423,6 +423,20 @@ func Button(label string, onClick func(), opts ...Option) {
 	}, cstr(label))
 }
 
+// ToggleButton is a button that stays pressed while checked is true; each click flips it. It takes the same icon and style
+// options as Button (Icon, Ghost, Primary, ...).
+func ToggleButton(label string, checked *Bool, opts ...Option) {
+	c := apply(opts)
+	pos := C.n8v_icon_position(C.N8V_ICON_POSITION_LEADING)
+	if c.trailing {
+		pos = C.N8V_ICON_POSITION_TRAILING
+	}
+	C.n8v_go_button(C.n8v_button_options{
+		style: c.buttonStyle, checked: checked.p,
+		icon: cstr(c.icon), icon_variant: c.iconVariant(), icon_position: pos, id: cstr(c.id),
+	}, cstr(label))
+}
+
 func Checkbox(label string, checked *Bool, opts ...Option) {
 	c := apply(opts)
 	C.n8v_go_checkbox(C.n8v_checkbox_options{checked: checked.p, id: cstr(c.id)}, cstr(label))

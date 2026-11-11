@@ -29,6 +29,17 @@ void dispatchClick(Clay_ElementId /*elementId*/, Clay_PointerData pointerData, v
   if (meta && meta->onClick) meta->onClick(meta->onClickUserdata);
 }
 
+void dispatchButtonClick(Clay_ElementId /*elementId*/, Clay_PointerData pointerData, void *userData) {
+  if (pointerData.state != CLAY_POINTER_DATA_PRESSED_THIS_FRAME) return;
+  auto *meta = static_cast<n8v::detail::NativeWidgetMeta *>(userData);
+  if (!meta) return;
+  if (meta->checked) {
+    *meta->checked = !*meta->checked;
+    if (meta->onChange) meta->onChange(*meta->checked, meta->onChangeUserdata);
+  }
+  if (meta->onClick) meta->onClick(meta->onClickUserdata);
+}
+
 void openUrlClickCallback(void *userdata) {
   auto *url = static_cast<std::string *>(userdata);
   if (url) n8v::detail::openUrl(*url);
@@ -56,8 +67,14 @@ void button(const n8v_button_options &opts, std::string_view labelView, int ordi
   Clay__OpenElement();
 
   const bool hovered = Clay_Hovered();
-  const bool pressed = hovered && n8v::activeBackend().pointerDown();
-  const n8v::ButtonPaint paint = n8v::activePaint().button(toButtonStyle(opts.style), hovered, pressed);
+  bool pressed = hovered && n8v::activeBackend().pointerDown();
+  n8v::ButtonStyle style = toButtonStyle(opts.style);
+  if (opts.checked && *opts.checked) {
+    if (style == n8v::ButtonStyle::Ghost) style = n8v::ButtonStyle::Secondary;
+    else if (style == n8v::ButtonStyle::Secondary) style = n8v::ButtonStyle::Primary;
+    else pressed = true;
+  }
+  const n8v::ButtonPaint paint = n8v::activePaint().button(style, hovered, pressed);
 
   const n8v::detail::DecodedImage *iconImage = hasIcon ? n8v::detail::getOrDecodeIcon(iconView, paint.fontSize, paint.textColor) : nullptr;
   bool iconTrailing = opts.icon_position == N8V_ICON_POSITION_TRAILING;
@@ -99,6 +116,9 @@ void button(const n8v_button_options &opts, std::string_view labelView, int ordi
   if (opts.id) meta.id = opts.id;
   meta.onClick = opts.on_click;
   meta.onClickUserdata = opts.on_click_userdata;
+  meta.checked = opts.checked;
+  meta.onChange = opts.on_change;
+  meta.onChangeUserdata = opts.on_change_userdata;
   meta.image = iconImage;
   meta.iconName = hasIcon ? internCString(iconView) : nullptr;
   meta.iconVariant = toIconVariant(opts.icon_variant);
@@ -108,8 +128,8 @@ void button(const n8v_button_options &opts, std::string_view labelView, int ordi
 
   Clay__ConfigureOpenElement(decl);
 
-  if (opts.on_click) {
-    Clay_OnHover(dispatchClick, &meta);
+  if (opts.on_click || opts.checked) {
+    Clay_OnHover(dispatchButtonClick, &meta);
   }
 
   bool drawIconAsClayChild = iconImage && !n8v::activeBackend().rendersNativeChrome();
