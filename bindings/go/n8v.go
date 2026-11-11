@@ -95,6 +95,9 @@ type config struct {
 	onSubmit               func()
 	rounding               C.n8v_rounding
 	id, image              string
+	notify                 bool
+	badge                  string
+	badgeColor             C.n8v_badge_color
 	stickToBottom          bool
 	onHover                func(bool)
 	onChange               func(int)
@@ -124,6 +127,28 @@ func Italic() Option                 { return func(c *config) { c.italic = true 
 func Strikethrough() Option          { return func(c *config) { c.strike = true } }
 func Link(url string) Option         { return func(c *config) { c.url = url } }
 func Icon(name string) Option        { return func(c *config) { c.icon = name } }
+
+// BadgeColor is a named color resolved against the toolkit's palette where it has one.
+type BadgeColor int
+
+const (
+	BadgeDefault BadgeColor = iota
+	BadgeRed
+	BadgeOrange
+	BadgeYellow
+	BadgeGreen
+	BadgeBlue
+	BadgePurple
+	BadgePink
+)
+
+// Notify draws attention to a Page: a marker on the left of its row and an emphasised name.
+func Notify() Option { return func(c *config) { c.notify = true } }
+
+// Badge shows short text (e.g. a count) in a colored pill on the right of a Page's row. Empty text shows nothing.
+func Badge(text string, color BadgeColor) Option {
+	return func(c *config) { c.badge, c.badgeColor = text, C.n8v_badge_color(color) }
+}
 func FilledIcon() Option             { return func(c *config) { c.filled = true } }
 func TrailingIcon() Option           { return func(c *config) { c.trailing = true } }
 func Primary() Option                { return func(c *config) { c.buttonStyle = C.N8V_BUTTON_STYLE_PRIMARY } }
@@ -363,7 +388,7 @@ func Sidebar(title string, selected *Int, body func(), opts ...Option) {
 // Page adds a sidebar entry and runs body when it is the selected page.
 func Page(name string, body func(), opts ...Option) {
 	c := apply(opts)
-	if C.n8v_open_page(C.n8v_page_options{name: cstr(name), icon: cstr(c.icon), image: cstr(c.image), image_rounding: c.rounding}) {
+	if C.n8v_open_page(C.n8v_page_options{name: cstr(name), icon: cstr(c.icon), image: cstr(c.image), image_rounding: c.rounding, notify: C.bool(c.notify), badge: cstr(c.badge), badge_color: c.badgeColor}) {
 		body()
 		C.n8v_close_page()
 	}

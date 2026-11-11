@@ -619,6 +619,10 @@ inline bool openPage(const PageOptions &options) {
   c_opts.icon = iconStorage.empty() ? nullptr : iconStorage.c_str();
   c_opts.image = imageStorage.empty() ? nullptr : imageStorage.c_str();
   c_opts.image_rounding = toC(options.imageRounding);
+  std::string badgeStorage(options.badge);
+  c_opts.notify = options.notify;
+  c_opts.badge = badgeStorage.empty() ? nullptr : badgeStorage.c_str();
+  c_opts.badge_color = static_cast<n8v_badge_color>(options.badgeColor);
   return n8v_open_page(c_opts);
 }
 

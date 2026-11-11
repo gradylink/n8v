@@ -219,15 +219,46 @@ export function sidebar(opts: SidebarOptions, body: () => void): void {
   n().closeSidebar();
 }
 
+export type BadgeColor =
+  | "default"
+  | "red"
+  | "orange"
+  | "yellow"
+  | "green"
+  | "blue"
+  | "purple"
+  | "pink";
+
+const BADGE_COLORS = {
+  default: 0,
+  red: 1,
+  orange: 2,
+  yellow: 3,
+  green: 4,
+  blue: 5,
+  purple: 6,
+  pink: 7,
+} as const;
+
 export interface PageOptions {
   name?: string;
   icon?: string;
   image?: string;
   imageRounding?: NativeRounding;
+  /** Draws attention to the row: a marker on its left and an emphasised name. */
+  notify?: boolean;
+  /** Short text shown in a pill on the right of the row, e.g. a count. */
+  badge?: string;
+  /** Resolved against the toolkit's palette where it has one. */
+  badgeColor?: BadgeColor;
 }
 
 export function page(opts: PageOptions, body: () => void): boolean {
-  const selected = n().openPage({ ...opts, imageRounding: opts.imageRounding });
+  const selected = n().openPage({
+    ...opts,
+    imageRounding: opts.imageRounding,
+    badgeColor: BADGE_COLORS[opts.badgeColor ?? "default"],
+  });
   if (selected) {
     body();
     n().closePage();

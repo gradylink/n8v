@@ -1,4 +1,5 @@
 #include <n8v/n8v_c.h>
+#include "core/widgets/page_badge.hpp"
 
 #include "core/backend.hpp"
 #include "core/icon_loader.hpp"
@@ -293,7 +294,7 @@ bool openPage(const n8v_page_options &opts, int rowOrdinal) {
   textConfig.fontId = n8v::detail::textFontId(paint.font, false, false);
   textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
   textConfig.userData = &textStyleStorage.back();
-  CLAY_TEXT(internString(nameView), textConfig);
+  CLAY_TEXT(internString(n8v::detail::pageLabelWithBadges(std::string(nameView), opts.notify, opts.badge)), textConfig);
 
   Clay__CloseElement(); // row
 

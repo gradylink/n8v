@@ -149,6 +149,18 @@ struct SidebarOptions {
   bool compact = false;
 };
 
+/** Named colors resolved against the active toolkit's palette where it has one. */
+enum class BadgeColor {
+  Default,
+  Red,
+  Orange,
+  Yellow,
+  Green,
+  Blue,
+  Purple,
+  Pink,
+};
+
 struct PageOptions {
   std::string_view name = {};
   /** Mutually exclusive with `image`. */
@@ -157,6 +169,11 @@ struct PageOptions {
   std::string_view image = {};
   /** Only affects `.image`; ignored when `.icon` is used. */
   Rounding imageRounding = Rounding::styleDefault();
+  /** Draws attention to the row: a marker on its left and an emphasised name. */
+  bool notify = false;
+  /** Short text shown in a pill on the right of the row (e.g. a count). Empty shows nothing. */
+  std::string_view badge = {};
+  BadgeColor badgeColor = BadgeColor::Default;
 };
 
 struct DocumentOptions {

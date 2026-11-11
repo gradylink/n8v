@@ -7,6 +7,7 @@
 #include "core/icon_loader.hpp"
 #include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
+#include "core/widgets/page_badge.hpp"
 #include "core/open_url.hpp"
 #include "core/style.hpp"
 #include "core/tree/dispatch.hpp"
@@ -1301,7 +1302,7 @@ void QtTreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   NativeNode *sidebar = nn.node->parent ? native(*nn.node->parent) : nullptr;
   const auto *sidebarProps = sidebar && sidebar->node ? propsOf<n8v_sidebar_options>(*sidebar->node) : nullptr;
   const bool compact = sidebarProps && sidebarProps->compact;
-  nn.item->setText(qstr(o.name));
+  nn.item->setText(qstr(n8v::detail::pageLabelWithBadges(o.name ? o.name : "", o.notify, o.badge)));
   nn.item->setSizeHint(QSize(0, compact ? 26 : 38));
   if (o.icon && *o.icon) {
     if (nn.iconKey != o.icon) {

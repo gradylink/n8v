@@ -6,6 +6,7 @@
 #include "core/entry_lines.hpp"
 #include "core/icon_loader.hpp"
 #include "core/image_loader.hpp"
+#include "core/widgets/page_badge.hpp"
 #include "core/markdown/markdown.hpp"
 #include "core/markdown/markdown_to_html.hpp"
 #include "core/style.hpp"
@@ -869,7 +870,7 @@ void HtmlTreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   setClass(nn.outer, classFor(css::buttonCss(paint, style)));
   setCss(nn.outer, "width:100%;justify-content:flex-start;flex:none;");
   bindEvents(nn, nn.outer, true);
-  nn.label.set("textContent", std::string(o.name ? o.name : ""));
+  nn.label.set("textContent", pageLabelWithBadges(o.name ? o.name : "", o.notify, o.badge));
   const bool hasIcon = o.icon && *o.icon;
   const bool hasImage = !hasIcon && o.image && *o.image;
   const ButtonPaint bp = paint.button(style, false, false);

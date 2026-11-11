@@ -12,6 +12,7 @@
 #include "core/tree/persistent.hpp"
 #include "core/tree/props.hpp"
 #include "core/tree/reconcile.hpp"
+#include "core/widgets/page_badge.hpp"
 
 #include <gtk/gtk.h>
 
@@ -111,6 +112,8 @@ struct NativeNode {
   GtkWidget *titleLabel = nullptr;
   GtkWidget *contentArea = nullptr;
   GtkWidget *rowLabel = nullptr;
+  GtkWidget *badge = nullptr;
+  GtkWidget *notifyBar = nullptr;
   bool adwRow = false;
 
   bool floating = false;
@@ -166,7 +169,32 @@ public:
     root_.content = rootBox_;
 
     cardCss_ = gtk_css_provider_new();
-    gtk_css_provider_load_from_string(cardCss_, ".n8v-card { border: 1px solid alpha(currentColor, 0.2); border-radius: 6px; }\n");
+    gtk_css_provider_load_from_string(
+      cardCss_,
+      ".n8v-card { border: 1px solid alpha(currentColor, 0.2); border-radius: 6px; }\n"
+      ".n8v-badge { background: alpha(currentColor, 0.18); border-radius: 999px; padding: 0 7px; font-size: smaller; font-weight: bold; min-height: 16px; }\n"
+#ifdef N8V_HAVE_ADWAITA
+      ".n8v-badge-red { background: @error_bg_color; color: @error_fg_color; }\n"
+      ".n8v-badge-orange { background: @orange_3; color: white; }\n"
+      ".n8v-badge-yellow { background: @warning_bg_color; color: @warning_fg_color; }\n"
+      ".n8v-badge-green { background: @success_bg_color; color: @success_fg_color; }\n"
+      ".n8v-badge-blue { background: @accent_bg_color; color: @accent_fg_color; }\n"
+      ".n8v-badge-purple { background: @purple_3; color: white; }\n"
+      ".n8v-badge-pink { background: mix(@purple_3, @red_3, 0.5); color: white; }\n"
+#else
+      ".n8v-badge-red, .n8v-badge-orange, .n8v-badge-green, .n8v-badge-blue, .n8v-badge-purple, .n8v-badge-pink { color: white; }\n"
+      ".n8v-badge-yellow { color: rgba(0, 0, 0, 0.8); }\n"
+      ".n8v-badge-red { background: #e01b24; }\n"
+      ".n8v-badge-orange { background: #e66100; }\n"
+      ".n8v-badge-yellow { background: #f5c211; }\n"
+      ".n8v-badge-green { background: #26a269; }\n"
+      ".n8v-badge-blue { background: #3584e4; }\n"
+      ".n8v-badge-purple { background: #9141ac; }\n"
+      ".n8v-badge-pink { background: #d6428f; }\n"
+#endif
+      ".n8v-notify-bar { background: currentColor; border-radius: 2px; min-width: 3px; min-height: 16px; }\n"
+      ".n8v-notify-label, .n8v-notify-label label { font-weight: bold; }\n"
+    );
     gtk_style_context_add_provider_for_display(gtk_widget_get_display(window_), GTK_STYLE_PROVIDER(cardCss_), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
     multilineCss_ = gtk_css_provider_new();
@@ -1482,11 +1510,21 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
     GtkWidget *row = nullptr;
     nn.image = nullptr;
     nn.rowLabel = nullptr;
+    nn.notifyBar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_widget_add_css_class(nn.notifyBar, "n8v-notify-bar");
+    gtk_widget_set_valign(nn.notifyBar, GTK_ALIGN_CENTER);
+    gtk_widget_set_opacity(nn.notifyBar, 0.0);
+    nn.badge = gtk_label_new("");
+    gtk_widget_add_css_class(nn.badge, "n8v-badge");
+    gtk_widget_set_valign(nn.badge, GTK_ALIGN_CENTER);
+    gtk_widget_set_visible(nn.badge, FALSE);
 #ifdef N8V_HAVE_ADWAITA
     if (wantAdw) {
       row = adw_action_row_new();
       nn.image = gtk_image_new();
+      adw_action_row_add_prefix(ADW_ACTION_ROW(row), nn.notifyBar);
       adw_action_row_add_prefix(ADW_ACTION_ROW(row), nn.image);
+      adw_action_row_add_suffix(ADW_ACTION_ROW(row), nn.badge);
     } else
 #endif
     {
@@ -1500,8 +1538,11 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
       nn.image = gtk_image_new();
       nn.rowLabel = gtk_label_new("");
       gtk_widget_set_halign(nn.rowLabel, GTK_ALIGN_START);
+      gtk_box_append(GTK_BOX(hbox), nn.notifyBar);
       gtk_box_append(GTK_BOX(hbox), nn.image);
+      gtk_widget_set_hexpand(nn.rowLabel, TRUE);
       gtk_box_append(GTK_BOX(hbox), nn.rowLabel);
+      gtk_box_append(GTK_BOX(hbox), nn.badge);
       gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), hbox);
     }
     gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(row), TRUE);
@@ -1526,6 +1567,25 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   const bool hasIcon = o.icon && *o.icon;
   gtk_widget_set_visible(nn.image, hasIcon);
   if (hasIcon) setIconImage(nn, nn.image, o.icon, kDefaultIconSize);
+
+  gtk_widget_set_opacity(nn.notifyBar, o.notify ? 1.0 : 0.0);
+  const std::string notifyLabelClass = "n8v-notify-label";
+  GtkWidget *nameWidget = nn.rowLabel;
+#ifdef N8V_HAVE_ADWAITA
+  if (nn.adwRow) nameWidget = nn.outer;
+#endif
+  if (o.notify) gtk_widget_add_css_class(nameWidget, notifyLabelClass.c_str());
+  else gtk_widget_remove_css_class(nameWidget, notifyLabelClass.c_str());
+
+  const bool hasBadge = o.badge && *o.badge;
+  gtk_widget_set_visible(nn.badge, hasBadge);
+  gtk_label_set_text(GTK_LABEL(nn.badge), hasBadge ? o.badge : "");
+  static const char *const colorClasses[] =
+    {nullptr, "n8v-badge-red", "n8v-badge-orange", "n8v-badge-yellow", "n8v-badge-green", "n8v-badge-blue", "n8v-badge-purple", "n8v-badge-pink"};
+  for (const char *cls : colorClasses) {
+    if (cls) gtk_widget_remove_css_class(nn.badge, cls);
+  }
+  if (o.badge_color > 0 && o.badge_color < (int)(sizeof(colorClasses) / sizeof(colorClasses[0]))) gtk_widget_add_css_class(nn.badge, colorClasses[o.badge_color]);
 }
 
 void Gtk4TreeBackend::applyMultilineEntry(NativeNode &nn, const n8v_entry_options &o) {

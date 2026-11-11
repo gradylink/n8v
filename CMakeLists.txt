@@ -577,6 +577,7 @@ if(N8V_EXAMPLES)
   add_subdirectory(examples/custom_style)
   add_subdirectory(examples/file_dialog)
   add_subdirectory(examples/message_dialog)
+  add_subdirectory(examples/sidebar_badges)
   add_subdirectory(examples/multiline_entry)
 endif()
 

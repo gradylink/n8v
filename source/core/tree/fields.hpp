@@ -63,6 +63,9 @@ template <typename V> void visitFields(n8v_page_options &o, V &v) {
   v.str(o.icon);
   v.str(o.image);
   v.num(o.image_rounding);
+  v.num(o.notify);
+  v.str(o.badge);
+  v.num(o.badge_color);
 }
 
 template <typename V> void visitFields(n8v_button_options &o, V &v) {

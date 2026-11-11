@@ -373,11 +373,28 @@ typedef struct n8v_floating_options {
 N8V_API void n8v_open_floating(n8v_floating_options options);
 N8V_API void n8v_close_floating(void);
 
+/** Named colors resolved against the active toolkit's palette. */
+typedef enum n8v_badge_color {
+  N8V_BADGE_COLOR_DEFAULT,
+  N8V_BADGE_COLOR_RED,
+  N8V_BADGE_COLOR_ORANGE,
+  N8V_BADGE_COLOR_YELLOW,
+  N8V_BADGE_COLOR_GREEN,
+  N8V_BADGE_COLOR_BLUE,
+  N8V_BADGE_COLOR_PURPLE,
+  N8V_BADGE_COLOR_PINK,
+} n8v_badge_color;
+
 typedef struct n8v_page_options {
   const char *name;
   const char *icon;
   const char *image;
   n8v_rounding image_rounding;
+  /** Draws attention to the row: a marker on its left and an emphasised name. */
+  bool notify;
+  /** Short text shown in a pill on the right of the row (e.g. a count). NULL or empty shows nothing. */
+  const char *badge;
+  n8v_badge_color badge_color;
 } n8v_page_options;
 
 typedef struct n8v_button_paint {

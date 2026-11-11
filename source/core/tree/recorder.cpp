@@ -112,6 +112,7 @@ bool n8v_open_page(n8v_page_options options) {
   options.name = own(options.name);
   options.icon = own(options.icon);
   options.image = own(options.image);
+  options.badge = own(options.badge);
   Node &node = append(options);
 
   if (!selected) return false;

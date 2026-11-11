@@ -234,6 +234,10 @@ Napi::Value OpenPage(const Napi::CallbackInfo &info) {
   std::string imageStorage;
   StrOr(o, "image", p.image, imageStorage);
   p.image_rounding = ReadRounding(o.Get("imageRounding"));
+  p.notify = BoolOr(o, "notify", false);
+  std::string badgeStorage;
+  StrOr(o, "badge", p.badge, badgeStorage);
+  p.badge_color = (n8v_badge_color)EnumOr(o, "badgeColor", N8V_BADGE_COLOR_DEFAULT);
   return Napi::Boolean::New(info.Env(), n8v_open_page(p));
 }
 Napi::Value ClosePage(const Napi::CallbackInfo &info) {
