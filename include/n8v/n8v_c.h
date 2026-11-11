@@ -619,6 +619,7 @@ N8V_API void n8v_close_page(void);
 N8V_API void n8v_open_panel(n8v_panel_options options);
 N8V_API void n8v_close_panel(void);
 
+N8V_API void n8v_focus(const char *id);
 /** Scrolls the container to the bottom of its content (vertical axis only). */
 N8V_API void n8v_scroll_to_bottom(const char *container_id);
 /** Scrolls the container to the top of its content (vertical axis only). */

@@ -232,12 +232,15 @@ public:
     updateMultilineHeights();
     applyStickyBottom();
     resolvePendingScrolls();
+    resolvePendingFocus();
     if (++frames_ == 30 && std::getenv("N8V_GTK_DUMP")) dumpWidget(window_, 0);
   }
 
   bool isHovered(std::string_view id) const override { return hovered_.count(std::string(id)) != 0; }
 
   void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back(PendingScroll{request, std::chrono::steady_clock::now()}); }
+
+  void requestFocus(std::string_view id) override { pendingFocus_.push_back(PendingFocus{std::string(id), 0}); }
 
 #if GTK_CHECK_VERSION(4, 10, 0)
   bool showMessageDialog(const MessageDialogRequest &request, MessageDialogDone done) override {
@@ -476,6 +479,7 @@ private:
   void unregisterId(NativeNode &nn);
   void watchHover(NativeNode &nn);
   void resolvePendingScrolls();
+  void resolvePendingFocus();
   void applyStickyBottom();
   void setIconImage(NativeNode &nn, GtkWidget *image, const char *name, int pixelSize);
   void setLabelFromText(GtkWidget *label, const n8v_text_options &o, std::string_view text);
@@ -667,6 +671,11 @@ private:
   NativeNode root_;
   std::unordered_set<PNode *> live_;
   std::unordered_map<std::string, NativeNode *> byId_;
+  struct PendingFocus {
+    std::string id;
+    int framesWaited;
+  };
+  std::vector<PendingFocus> pendingFocus_;
   std::unordered_set<std::string> hovered_;
   std::vector<PendingScroll> pendingScrolls_;
   bool closeRequested_ = false;
@@ -1182,6 +1191,20 @@ void Gtk4TreeBackend::applyStickyBottom() {
       nn->stickyLastPage = page;
     }
     nn->stickyAtBottom = gtk_adjustment_get_value(adj) + page >= upper - kStickyBottomEpsilonPx;
+  }
+}
+
+void Gtk4TreeBackend::resolvePendingFocus() {
+  for (auto it = pendingFocus_.begin(); it != pendingFocus_.end();) {
+    auto found = byId_.find(it->id);
+    if (found != byId_.end() && found->second->widget) {
+      gtk_widget_grab_focus(found->second->widget);
+      it = pendingFocus_.erase(it);
+    } else if (++it->framesWaited > 10) {
+      it = pendingFocus_.erase(it); // never appeared
+    } else {
+      ++it;
+    }
   }
 }
 

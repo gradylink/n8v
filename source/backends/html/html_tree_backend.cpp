@@ -271,11 +271,14 @@ public:
     if (styleGeneration_ != activeStyleGeneration()) restyleAll();
     applyStickyBottom();
     resolvePendingScrolls();
+    resolvePendingFocus();
   }
 
   bool isHovered(std::string_view id) const override { return hovered_.count(std::string(id)) != 0; }
 
   void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back(PendingScroll{request, emscripten_get_now()}); }
+
+  void requestFocus(std::string_view id) override { pendingFocus_.push_back(PendingFocus{std::string(id), 0}); }
 
   bool showMessageDialog(const MessageDialogRequest &request, MessageDialogDone done) override {
     const std::string text = request.title.empty() ? request.message : request.title + "\n\n" + request.message;
@@ -498,6 +501,7 @@ private:
   void unregisterId(NativeNode &nn);
   void applyStickyBottom();
   void resolvePendingScrolls();
+  void resolvePendingFocus();
 
   val doc_ = val::undefined();
   val rootEl_ = val::undefined();
@@ -506,6 +510,11 @@ private:
   std::unordered_set<PNode *> live_;
   std::unordered_map<int, PNode *> byOrdinal_;
   std::unordered_map<std::string, NativeNode *> byId_;
+  struct PendingFocus {
+    std::string id;
+    int framesWaited;
+  };
+  std::vector<PendingFocus> pendingFocus_;
   std::unordered_set<std::string> hovered_;
   std::vector<PendingScroll> pendingScrolls_;
   std::unordered_map<int, FileDialogDone> fileDialogs_;
@@ -702,6 +711,20 @@ void HtmlTreeBackend::applyStickyBottom() {
       nn->lastScrollHeight = height;
     }
     nn->stickyAtBottom = el["scrollTop"].as<double>() + el["clientHeight"].as<double>() >= height - kStickyBottomEpsilonPx;
+  }
+}
+
+void HtmlTreeBackend::resolvePendingFocus() {
+  for (auto it = pendingFocus_.begin(); it != pendingFocus_.end();) {
+    auto found = byId_.find(it->id);
+    if (found != byId_.end()) {
+      found->second->widget.call<void>("focus");
+      it = pendingFocus_.erase(it);
+    } else if (++it->framesWaited > 10) {
+      it = pendingFocus_.erase(it);
+    } else {
+      ++it;
+    }
   }
 }
 

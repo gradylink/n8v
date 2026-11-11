@@ -363,6 +363,11 @@ void closeFloating() { Clay__CloseElement(); }
 
 extern "C" {
 
+void n8v_focus(const char *id) {
+  if (!id || !*id) return;
+  n8v::activeBackend().requestFocus(id);
+}
+
 void n8v_scroll_to_bottom(const char *container_id) {
   if (!container_id || !*container_id) return;
   if (forwardScrollToNative(n8v::NativeScrollRequest::Kind::Bottom, container_id, {}, 0.0f, 0.0f, 0.0f, 0.0f)) return;

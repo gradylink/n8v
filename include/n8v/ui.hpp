@@ -994,6 +994,11 @@ inline void showMessageDialog(const MessageDialogOptions &options, MessageDialog
   n8v_show_message_dialog(c_opts);
 }
 
+inline void focus(std::string_view id) {
+  std::string storage(id);
+  n8v_focus(storage.c_str());
+}
+
 inline void scrollToBottom(std::string_view containerId) {
   std::string storage(containerId);
   n8v_scroll_to_bottom(storage.c_str());

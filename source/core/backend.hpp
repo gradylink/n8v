@@ -90,6 +90,8 @@ struct Backend {
 
   virtual void requestScroll(const NativeScrollRequest & /*request*/) {}
 
+  virtual void requestFocus(std::string_view /*id*/) {}
+
   virtual bool showMessageDialog(const detail::MessageDialogRequest & /*request*/, detail::MessageDialogDone /*done*/) { return false; }
 
   virtual bool showFileDialog(const detail::FileDialogRequest & /*request*/, detail::FileDialogDone /*done*/) { return false; }

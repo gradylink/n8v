@@ -416,11 +416,14 @@ public:
     updateFloating();
     applyStickyBottom();
     resolvePendingScrolls();
+    resolvePendingFocus();
   }
 
   bool isHovered(std::string_view id) const override { return hovered_.count(std::string(id)) != 0; }
 
   void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back(PendingScroll{request, std::chrono::steady_clock::now()}); }
+
+  void requestFocus(std::string_view id) override { pendingFocus_.push_back(PendingFocus{std::string(id), 0}); }
 
   bool showMessageDialog(const MessageDialogRequest &request, MessageDialogDone done) override {
     if (!window_) return false;
@@ -596,6 +599,7 @@ private:
   void updateFloating();
   void applyStickyBottom();
   void resolvePendingScrolls();
+  void resolvePendingFocus();
 
   QIcon iconFor(const char *name, int pixelSize, QWidget *reference, n8v::Color tint);
 
@@ -605,6 +609,11 @@ private:
   NativeNode root_;
   std::unordered_set<PNode *> live_;
   std::unordered_map<std::string, NativeNode *> byId_;
+  struct PendingFocus {
+    std::string id;
+    int framesWaited;
+  };
+  std::vector<PendingFocus> pendingFocus_;
   std::unordered_map<QObject *, NativeNode *> watched_;
   std::unordered_set<std::string> hovered_;
   std::vector<PendingScroll> pendingScrolls_;
@@ -1002,6 +1011,20 @@ void QtTreeBackend::applyStickyBottom() {
       nn->stickyLastMax = max;
     }
     nn->stickyAtBottom = bar->value() >= max - kStickyBottomEpsilonPx;
+  }
+}
+
+void QtTreeBackend::resolvePendingFocus() {
+  for (auto it = pendingFocus_.begin(); it != pendingFocus_.end();) {
+    auto found = byId_.find(it->id);
+    if (found != byId_.end() && found->second->widget) {
+      found->second->widget->setFocus(Qt::OtherFocusReason);
+      it = pendingFocus_.erase(it);
+    } else if (++it->framesWaited > 10) {
+      it = pendingFocus_.erase(it);
+    } else {
+      ++it;
+    }
   }
 }
 
