@@ -1347,6 +1347,14 @@ void QtTreeBackend::applyPanel(NativeNode &nn, const n8v_panel_options &o) {
   const int vpad = card ? 10 : 6, hpad = card ? 12 : 10;
   nn.layout->setContentsMargins(hpad, vpad, hpad, vpad);
   frame->setFrameShape(card ? QFrame::StyledPanel : QFrame::NoFrame);
+  if (o.accent.a > 0.0f) {
+    frame->setObjectName("n8vAccent");
+    frame->setStyleSheet(
+      QString("QFrame#n8vAccent { border: 1px solid palette(mid); border-left: 4px solid rgb(%1, %2, %3); }").arg((int)o.accent.r).arg((int)o.accent.g).arg((int)o.accent.b)
+    );
+  } else if (!frame->styleSheet().isEmpty()) {
+    frame->setStyleSheet(QString());
+  }
 }
 
 void QtTreeBackend::applyButton(NativeNode &nn, const n8v_button_options &o) {

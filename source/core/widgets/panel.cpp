@@ -70,6 +70,15 @@ void openPanel(const n8v_panel_options &opts, int ordinal) {
   decl.cornerRadius = n8v::detail::toClay(paint.cornerRadius);
   decl.border.color = n8v::detail::toClay(paint.borderColor);
   decl.border.width = {(uint16_t)paint.borderWidth, (uint16_t)paint.borderWidth, (uint16_t)paint.borderWidth, (uint16_t)paint.borderWidth, 0};
+  float borderWidth = paint.borderWidth;
+  n8v::Color borderColor = paint.borderColor;
+  if (opts.accent.a > 0.0f) {
+    constexpr uint16_t kAccentWidth = 4;
+    decl.border.color = {opts.accent.r, opts.accent.g, opts.accent.b, opts.accent.a};
+    decl.border.width = {kAccentWidth, 0, 0, 0, 0};
+    borderWidth = kAccentWidth;
+    borderColor = n8v::Color{opts.accent.r, opts.accent.g, opts.accent.b, opts.accent.a};
+  }
 
   widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
   n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
@@ -77,8 +86,8 @@ void openPanel(const n8v_panel_options &opts, int ordinal) {
   meta.ordinal = ordinal;
   meta.panelRole = role;
   meta.panelBackground = paint.background;
-  meta.panelBorderColor = paint.borderColor;
-  meta.panelBorderWidth = paint.borderWidth;
+  meta.panelBorderColor = borderColor;
+  meta.panelBorderWidth = borderWidth;
   meta.panelCornerRadius = paint.cornerRadius;
   decl.userData = &meta;
 

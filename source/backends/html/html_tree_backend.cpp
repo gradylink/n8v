@@ -571,7 +571,14 @@ std::string HtmlTreeBackend::containerCss(NativeNode &nn) {
   std::visit(
     Overloaded{
       [&](const n8v_flex_options &o) { flexBox(o.direction, o.gap, &o.padding, o.h_align, o.v_align, o.clip_horizontal, o.clip_vertical); },
-      [&](const n8v_panel_options &o) { flexBox(o.direction, o.gap, nullptr, o.h_align, o.v_align, o.clip_horizontal, o.clip_vertical); },
+      [&](const n8v_panel_options &o) {
+        flexBox(o.direction, o.gap, nullptr, o.h_align, o.v_align, o.clip_horizontal, o.clip_vertical);
+        if (o.accent.a > 0.0f) {
+          char bar[64];
+          std::snprintf(bar, sizeof(bar), "border-left:4px solid rgb(%d,%d,%d);", (int)o.accent.r, (int)o.accent.g, (int)o.accent.b);
+          out += bar;
+        }
+      },
       [&](const n8v_floating_options &) { out += "display:flex;flex-direction:column;align-items:flex-start;"; },
       [&](const n8v_sidebar_options &) { out += "display:flex;flex-direction:row;min-width:0;min-height:0;"; },
       [](const auto &) {},

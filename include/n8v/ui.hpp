@@ -588,6 +588,7 @@ inline void openPanel(const PanelOptions &options) {
   c_opts.clip_horizontal = options.clipHorizontal;
   c_opts.clip_vertical = options.clipVertical;
   c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
+  c_opts.accent = toC(options.accent);
   n8v_open_panel(c_opts);
 }
 

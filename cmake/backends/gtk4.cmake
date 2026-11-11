@@ -81,6 +81,8 @@ if(N8V_BACKEND_GTK4)
         pango_layout_index_to_pos
         pango_context_get_metrics
         pango_font_metrics_get_ascent
+        pango_font_metrics_get_approximate_char_width
+        pango_font_metrics_get_approximate_digit_width
         pango_font_metrics_get_descent
         pango_font_metrics_unref
         pango_attr_list_new

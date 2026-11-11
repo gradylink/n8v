@@ -231,8 +231,14 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
     case CLAY_RENDER_COMMAND_TYPE_BORDER: {
       const Clay_BorderRenderData &border = command->renderData.border;
       float width = (float)border.width.left;
+      const bool leftOnly = border.width.right == 0 && border.width.top == 0 && border.width.bottom == 0;
       if (width > 0.0f && border.color.a > 0.0f) {
-        drawRoundedRectBorder(command->boundingBox, border.color, border.cornerRadius, width);
+        if (leftOnly) {
+          const Clay_BoundingBox &box = command->boundingBox;
+          drawFilledRect(Clay_BoundingBox{box.x, box.y, width, box.height}, border.color);
+        } else {
+          drawRoundedRectBorder(command->boundingBox, border.color, border.cornerRadius, width);
+        }
       }
       break;
     }
@@ -312,7 +318,9 @@ bool Sdl2Backend::showMessageDialog(const MessageDialogRequest &request, Message
     buttons.push_back({i == 0 ? (Uint32)SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT : 0u, (int)i, request.buttons[i].label.c_str()});
   }
   SDL_MessageBoxData data{};
-  data.flags = request.kind == N8V_MESSAGE_DIALOG_ERROR ? SDL_MESSAGEBOX_ERROR : request.kind == N8V_MESSAGE_DIALOG_WARNING ? SDL_MESSAGEBOX_WARNING : SDL_MESSAGEBOX_INFORMATION;
+  data.flags = request.kind == N8V_MESSAGE_DIALOG_ERROR     ? SDL_MESSAGEBOX_ERROR
+               : request.kind == N8V_MESSAGE_DIALOG_WARNING ? SDL_MESSAGEBOX_WARNING
+                                                            : SDL_MESSAGEBOX_INFORMATION;
   data.window = window_;
   data.title = request.title.c_str();
   data.message = request.message.c_str();

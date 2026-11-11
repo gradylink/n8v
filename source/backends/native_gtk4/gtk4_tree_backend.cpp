@@ -149,6 +149,7 @@ struct NativeNode {
   double stickyLastUpper = 0.0;
   double stickyLastPage = 0.0;
   std::string lastItemsKey;
+  std::string accentClass;
   std::vector<GtkWidget *> inlinePics;
   size_t dropdownCount = 0;
   const void *textureSource = nullptr;
@@ -948,7 +949,17 @@ void Gtk4TreeBackend::applyDocument(NativeNode &nn, const n8v_document_options &
 
   PangoFontMetrics *metrics = pango_context_get_metrics(gtk_widget_get_pango_context(nn.widget), nullptr, nullptr);
   const int lineHeight = (pango_font_metrics_get_ascent(metrics) + pango_font_metrics_get_descent(metrics)) / PANGO_SCALE;
+  const int charWidth = std::max(1, std::max(pango_font_metrics_get_approximate_char_width(metrics), pango_font_metrics_get_approximate_digit_width(metrics)) / PANGO_SCALE);
   pango_font_metrics_unref(metrics);
+
+  if (o.width.mode == N8V_SIZING_FIXED && o.width.value > 0.0f) {
+    const int chars = std::max(1, (int)(o.width.value / (float)charWidth));
+    gtk_label_set_width_chars(label, chars);
+    gtk_label_set_max_width_chars(label, chars);
+  } else {
+    gtk_label_set_width_chars(label, -1);
+    gtk_label_set_max_width_chars(label, -1);
+  }
   struct Placed {
     const DecodedImage *image;
     int width, height;
@@ -1637,6 +1648,27 @@ void Gtk4TreeBackend::applyPanel(NativeNode &nn, const n8v_panel_options &o) {
   if (card) gtk_widget_add_css_class(nn.outer, "n8v-card");
   else gtk_widget_remove_css_class(nn.outer, "n8v-card");
 #endif
+
+  std::string wanted;
+  if (o.accent.a > 0.0f) {
+    char name[40];
+    std::snprintf(name, sizeof(name), "n8v-accent-%02x%02x%02x", (int)o.accent.r & 255, (int)o.accent.g & 255, (int)o.accent.b & 255);
+    wanted = name;
+    static std::unordered_set<std::string> made;
+    if (made.insert(wanted).second) {
+      char rule[160];
+      std::snprintf(rule, sizeof(rule), ".%s { border-left: 4px solid #%02x%02x%02x; }", name, (int)o.accent.r & 255, (int)o.accent.g & 255, (int)o.accent.b & 255);
+      GtkCssProvider *provider = gtk_css_provider_new();
+      gtk_css_provider_load_from_string(provider, rule);
+      gtk_style_context_add_provider_for_display(gtk_widget_get_display(nn.outer), GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+      g_object_unref(provider);
+    }
+  }
+  if (wanted != nn.accentClass) {
+    if (!nn.accentClass.empty()) gtk_widget_remove_css_class(nn.outer, nn.accentClass.c_str());
+    if (!wanted.empty()) gtk_widget_add_css_class(nn.outer, wanted.c_str());
+    nn.accentClass = wanted;
+  }
 }
 
 void Gtk4TreeBackend::applyButton(NativeNode &nn, const n8v_button_options &o) {

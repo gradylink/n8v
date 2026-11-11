@@ -39,6 +39,8 @@ struct PanelOptions {
   bool clipHorizontal = false;
   bool clipVertical = false;
   std::string_view id = {};
+  /** A colored bar down the left edge, like a chat embed's. A zero alpha (the default) means none. */
+  Color accent = {0, 0, 0, 0};
 };
 
 struct TextOptions {
