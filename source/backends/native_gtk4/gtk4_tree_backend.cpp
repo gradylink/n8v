@@ -1210,7 +1210,8 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
     nn.outer = nn.widget = gtk_label_new("");
     gtk_label_set_use_markup(GTK_LABEL(nn.widget), TRUE);
     gtk_label_set_wrap(GTK_LABEL(nn.widget), TRUE);
-    gtk_label_set_wrap_mode(GTK_LABEL(nn.widget), PANGO_WRAP_WORD_CHAR);
+    gtk_label_set_wrap_mode(GTK_LABEL(nn.widget), PANGO_WRAP_WORD);
+    gtk_label_set_natural_wrap_mode(GTK_LABEL(nn.widget), GTK_NATURAL_WRAP_NONE);
     gtk_label_set_xalign(GTK_LABEL(nn.widget), 0.0f);
     connect(nn.widget, "activate-link", &Gtk4TreeBackend::onLinkActivated, pn);
     break;
