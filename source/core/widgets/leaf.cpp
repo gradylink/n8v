@@ -5,6 +5,7 @@
 
 #include "core/clay_convert.hpp"
 #include "core/icon_loader.hpp"
+#include "core/image_loader.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
@@ -13,6 +14,8 @@
 
 #include <clay.h>
 
+#include <algorithm>
+#include <cmath>
 #include <deque>
 #include <string>
 #include <string_view>
@@ -77,6 +80,20 @@ void button(const n8v_button_options &opts, std::string_view labelView, int ordi
   const n8v::ButtonPaint paint = n8v::activePaint().button(style, hovered, pressed);
 
   const n8v::detail::DecodedImage *iconImage = hasIcon ? n8v::detail::getOrDecodeIcon(iconView, paint.fontSize, paint.textColor) : nullptr;
+
+  float graphicWidth = (float)paint.fontSize, graphicHeight = (float)paint.fontSize;
+  bool graphicIsImage = false;
+  if (!hasIcon && opts.image && *opts.image) {
+    n8v_image_options imageOptions{};
+    imageOptions.source_kind = N8V_IMAGE_SOURCE_PATH;
+    imageOptions.path = opts.image;
+    if (const n8v::detail::DecodedImage *picture = n8v::detail::getOrDecodeImage(imageOptions); picture && picture->width > 0 && picture->height > 0) {
+      iconImage = picture;
+      graphicIsImage = true;
+      graphicHeight = opts.image_height > 0 ? (float)opts.image_height : (float)paint.fontSize * 1.15f;
+      graphicWidth = std::max(1.0f, std::round((float)picture->width * graphicHeight / (float)picture->height));
+    }
+  }
   bool iconTrailing = opts.icon_position == N8V_ICON_POSITION_TRAILING;
 
   Clay_ElementDeclaration decl = {};
@@ -137,15 +154,15 @@ void button(const n8v_button_options &opts, std::string_view labelView, int ordi
     Clay__OpenElement();
     Clay_ElementDeclaration iconDecl = {};
     iconDecl.image.imageData = const_cast<n8v::detail::DecodedImage *>(iconImage);
-    iconDecl.layout.sizing.width = CLAY_SIZING_FIXED((float)paint.fontSize);
-    iconDecl.layout.sizing.height = CLAY_SIZING_FIXED((float)paint.fontSize);
+    iconDecl.layout.sizing.width = CLAY_SIZING_FIXED(graphicWidth);
+    iconDecl.layout.sizing.height = CLAY_SIZING_FIXED(graphicHeight);
     widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
     n8v::detail::NativeWidgetMeta &iconMeta = widgetMetaStorage.back();
     iconMeta.kind = n8v::NativeWidgetKind::Icon;
     iconMeta.ordinal = ordinal + 1;
     iconMeta.image = iconImage;
     iconMeta.iconName = hasIcon ? internCString(iconView) : nullptr;
-    iconMeta.iconTint = paint.textColor;
+    iconMeta.iconTint = graphicIsImage ? n8v::Color{255, 255, 255, 255} : paint.textColor; // a picture keeps its own colors
     iconDecl.userData = &iconMeta;
     Clay__ConfigureOpenElement(iconDecl);
     Clay__CloseElement();

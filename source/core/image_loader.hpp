@@ -24,4 +24,6 @@ const DecodedImage *getOrBakeRoundedImage(
 
 const DecodedImage *getOrFitImageInSquare(const DecodedImage *source, int boxSize);
 
+const DecodedImage *getOrScaleImage(const DecodedImage *source, int width, int height);
+
 } // namespace n8v::detail

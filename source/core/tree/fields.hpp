@@ -79,6 +79,8 @@ template <typename V> void visitFields(n8v_button_options &o, V &v) {
   v.ptr(o.checked);
   v.ptr(o.on_change);
   v.ptr(o.on_change_userdata);
+  v.str(o.image);
+  v.num(o.image_height);
 }
 
 template <typename V> void visitFields(n8v_text_options &o, V &v) {

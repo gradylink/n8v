@@ -647,6 +647,9 @@ struct LeafBuilder {
       c_opts.icon_variant = toC(buttonOptions.iconVariant);
       c_opts.icon_position = toC(buttonOptions.iconPosition);
       c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
+      std::string imageStorage(buttonOptions.image);
+      c_opts.image = imageStorage.empty() ? nullptr : imageStorage.c_str();
+      c_opts.image_height = buttonOptions.imageHeight;
       _n8v_set_button_opts(c_opts);
       _n8v_button_commit(labelStorage.c_str());
     } else {
@@ -678,6 +681,9 @@ struct ToggleButtonBuilder {
     c_opts.icon_position = toC(options.iconPosition);
     c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
     c_opts.checked = options.checked;
+    std::string imageStorage(options.image);
+    c_opts.image = imageStorage.empty() ? nullptr : imageStorage.c_str();
+    c_opts.image_height = options.imageHeight;
     if (options.onChange) callback_bridge::bridge(callback_bridge::boolChangeClosures, std::move(options.onChange), c_opts.on_change, c_opts.on_change_userdata);
     _n8v_set_button_opts(c_opts);
     _n8v_button_commit(labelStorage.c_str());

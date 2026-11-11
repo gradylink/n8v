@@ -237,6 +237,8 @@ typedef struct n8v_button_options {
   bool *checked;
   n8v_bool_change_fn on_change;
   void *on_change_userdata;
+  const char *image;
+  int image_height;
 } n8v_button_options;
 
 typedef struct n8v_checkbox_options {

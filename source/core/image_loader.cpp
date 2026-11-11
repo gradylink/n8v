@@ -233,6 +233,23 @@ const DecodedImage *getOrBakeRoundedImage(
   return &(roundedCache[key] = std::move(baked));
 }
 
+const DecodedImage *getOrScaleImage(const DecodedImage *source, int width, int height) {
+  if (!source || width <= 0 || height <= 0 || source->width <= 0 || source->height <= 0) return source;
+  if (source->width == width && source->height == height) return source;
+
+  static std::map<std::tuple<const DecodedImage *, int, int>, DecodedImage> scaleCache;
+  const auto key = std::make_tuple(source, width, height);
+  auto it = scaleCache.find(key);
+  if (it != scaleCache.end()) return &it->second;
+
+  DecodedImage scaled;
+  resizeRgba(source->rgba, source->width, source->height, scaled.owned, width, height);
+  scaled.rgba = scaled.owned.data();
+  scaled.width = width;
+  scaled.height = height;
+  return &(scaleCache[key] = std::move(scaled));
+}
+
 const DecodedImage *getOrFitImageInSquare(const DecodedImage *source, int boxSize) {
   if (!source || boxSize <= 0 || source->width <= 0 || source->height <= 0) return source;
   if (source->width == boxSize && source->height == boxSize) return source;

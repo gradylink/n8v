@@ -122,6 +122,7 @@ struct NativeNode {
   GtkWidget *widget = nullptr;
   GtkWidget *label = nullptr;
   GtkWidget *image = nullptr;
+  GtkWidget *picture = nullptr;
   GtkWidget *startSpacer = nullptr;
   GtkWidget *endSpacer = nullptr;
   GtkWidget *backdrop = nullptr;
@@ -1642,18 +1643,26 @@ void Gtk4TreeBackend::applyButton(NativeNode &nn, const n8v_button_options &o) {
   GtkButton *button = GTK_BUTTON(nn.widget);
   const std::string &label = nn.node->current.label;
   const bool hasIcon = o.icon && *o.icon;
+  const bool hasImage = !hasIcon && o.image && *o.image;
   const bool trailing = o.icon_position == N8V_ICON_POSITION_TRAILING;
-  if (hasIcon) {
+  if (hasIcon || hasImage) {
     if (!nn.hasIconBox || nn.iconTrailing != trailing) {
       GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
       gtk_widget_set_halign(box, GTK_ALIGN_CENTER);
       nn.image = gtk_image_new();
+      nn.picture = gtk_picture_new();
+      gtk_picture_set_can_shrink(GTK_PICTURE(nn.picture), TRUE);
+      gtk_picture_set_content_fit(GTK_PICTURE(nn.picture), GTK_CONTENT_FIT_FILL);
+      gtk_widget_set_halign(nn.picture, GTK_ALIGN_CENTER);
+      gtk_widget_set_valign(nn.picture, GTK_ALIGN_CENTER);
       nn.label = gtk_label_new("");
       if (trailing) {
         gtk_box_append(GTK_BOX(box), nn.label);
         gtk_box_append(GTK_BOX(box), nn.image);
+        gtk_box_append(GTK_BOX(box), nn.picture);
       } else {
         gtk_box_append(GTK_BOX(box), nn.image);
+        gtk_box_append(GTK_BOX(box), nn.picture);
         gtk_box_append(GTK_BOX(box), nn.label);
       }
       gtk_button_set_child(button, box);
@@ -1663,7 +1672,29 @@ void Gtk4TreeBackend::applyButton(NativeNode &nn, const n8v_button_options &o) {
     }
     gtk_label_set_text(GTK_LABEL(nn.label), label.c_str());
     gtk_widget_set_visible(nn.label, !label.empty());
-    setIconImage(nn, nn.image, o.icon, kDefaultIconSize);
+    gtk_widget_set_visible(nn.image, hasIcon);
+    gtk_widget_set_visible(nn.picture, hasImage);
+    if (hasIcon) setIconImage(nn, nn.image, o.icon, kDefaultIconSize);
+    if (hasImage) {
+      n8v_image_options imageOptions{};
+      imageOptions.source_kind = N8V_IMAGE_SOURCE_PATH;
+      imageOptions.path = o.image;
+      const DecodedImage *decoded = getOrDecodeImage(imageOptions);
+      if (decoded && decoded->width > 0 && decoded->height > 0) {
+        const int height = o.image_height > 0 ? o.image_height : (int)(kDefaultIconSize * 1.15f);
+        const int width = std::max(1, (int)std::lround((double)decoded->width * height / decoded->height));
+        const DecodedImage *scaled = getOrScaleImage(decoded, width, height);
+        if (nn.textureSource != scaled) {
+          GdkTexture *texture = makeTexture(scaled);
+          gtk_picture_set_paintable(GTK_PICTURE(nn.picture), GDK_PAINTABLE(texture));
+          g_object_unref(texture);
+          nn.textureSource = scaled;
+        }
+        gtk_widget_set_size_request(nn.picture, width, height);
+      } else {
+        gtk_widget_set_visible(nn.picture, FALSE); // not loaded
+      }
+    }
   } else {
     if (nn.hasIconBox) {
       gtk_button_set_child(button, nullptr);

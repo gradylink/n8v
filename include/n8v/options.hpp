@@ -63,6 +63,8 @@ struct ButtonOptions {
   IconVariant iconVariant = IconVariant::Outline;
   IconPosition iconPosition = IconPosition::Leading;
   std::string_view id = {};
+  std::string image = {};
+  int imageHeight = 0;
 };
 
 struct CheckboxOptions {
@@ -81,6 +83,8 @@ struct ToggleButtonOptions {
   IconVariant iconVariant = IconVariant::Outline;
   IconPosition iconPosition = IconPosition::Leading;
   std::string_view id = {};
+  std::string image = {};
+  int imageHeight = 0;
 };
 
 struct ToggleOptions {

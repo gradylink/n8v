@@ -907,9 +907,21 @@ void HtmlTreeBackend::applyButton(NativeNode &nn, const n8v_button_options &o) {
   bindEvents(nn, nn.outer, true);
   nn.label.set("textContent", nn.node->current.label);
   const bool hasIcon = o.icon && *o.icon;
-  if (hasIcon) {
+  const bool hasImage = !hasIcon && o.image && *o.image;
+  if (hasIcon || hasImage) {
     const ButtonPaint bp = paint.button(style, false, false);
-    setImage(nn.image, getOrDecodeIcon(o.icon, bp.fontSize, bp.textColor));
+    if (hasIcon) {
+      setImage(nn.image, getOrDecodeIcon(o.icon, bp.fontSize, bp.textColor));
+    } else {
+      n8v_image_options imageOptions = {};
+      imageOptions.source_kind = N8V_IMAGE_SOURCE_PATH;
+      imageOptions.path = o.image;
+      const DecodedImage *decoded = getOrDecodeImage(imageOptions);
+      setImage(nn.image, decoded);
+      const int height = o.image_height > 0 ? o.image_height : (int)(bp.fontSize * 1.15f);
+      nn.image["style"].set("height", std::to_string(height) + "px");
+      nn.image["style"].set("width", "auto");
+    }
     if (o.icon_position == N8V_ICON_POSITION_TRAILING) nn.outer.call<void>("appendChild", nn.image);
     else nn.outer.call<void>("insertBefore", nn.image, nn.label);
   } else if (!nn.image["parentNode"].isNull()) {

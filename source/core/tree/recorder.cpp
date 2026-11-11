@@ -144,6 +144,7 @@ void _n8v_set_button_opts(n8v_button_options opts) { pendingButtonOpts = opts; }
 void _n8v_button_commit(const char *label) {
   n8v_button_options opts = pendingButtonOpts;
   opts.icon = own(opts.icon);
+  opts.image = own(opts.image);
   opts.id = own(opts.id);
   ownLabel(append(opts), label);
 }

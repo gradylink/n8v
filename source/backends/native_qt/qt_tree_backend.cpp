@@ -1353,11 +1353,26 @@ void QtTreeBackend::applyButton(NativeNode &nn, const n8v_button_options &o) {
   auto *button = static_cast<N8VButton *>(nn.widget);
   button->setText(qstr(nn.node->current.label));
   const bool hasIcon = o.icon && *o.icon;
+  const bool hasImage = !hasIcon && o.image && *o.image;
   if (hasIcon) {
     const std::string key = std::string(o.icon) + (o.icon_variant == N8V_ICON_VARIANT_FILLED ? "#filled" : "");
     if (key != nn.iconKey) {
       button->setIcon(iconFor(o.icon, kDefaultIconSize, button, n8v::Color{0, 0, 0, 0}));
       button->setIconSize(QSize(kDefaultIconSize, kDefaultIconSize));
+      nn.iconKey = key;
+    }
+  } else if (hasImage) {
+    n8v_image_options imageOptions{};
+    imageOptions.source_kind = N8V_IMAGE_SOURCE_PATH;
+    imageOptions.path = o.image;
+    const n8v::detail::DecodedImage *decoded = n8v::detail::getOrDecodeImage(imageOptions);
+    const std::string key = std::string("image:") + o.image + "@" + std::to_string(o.image_height);
+    if (decoded && decoded->width > 0 && decoded->height > 0 && key != nn.iconKey) {
+      const int height = o.image_height > 0 ? o.image_height : (int)(kDefaultIconSize * 1.15f);
+      const int width = std::max(1, (int)std::lround((double)decoded->width * height / decoded->height));
+      const QImage picture(decoded->rgba, decoded->width, decoded->height, decoded->width * 4, QImage::Format_RGBA8888);
+      button->setIcon(QIcon(QPixmap::fromImage(picture.copy())));
+      button->setIconSize(QSize(width, height));
       nn.iconKey = key;
     }
   } else if (!nn.iconKey.empty()) {
