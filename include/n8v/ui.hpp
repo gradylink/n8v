@@ -921,6 +921,30 @@ inline void openFolderDialog(const FileDialogOptions &options, FileDialogCallbac
   detail::showFileDialog(N8V_FILE_DIALOG_OPEN_FOLDER, options, std::move(onResult));
 }
 
+using MessageDialogCallback = std::function<void(int button)>;
+
+inline void showMessageDialog(const MessageDialogOptions &options, MessageDialogCallback onResult = {}) {
+  std::string title = options.title, message = options.message;
+  std::vector<n8v_message_button> buttons;
+  for (const MessageButton &b : options.buttons) buttons.push_back({b.label.c_str(), b.destructive});
+
+  n8v_message_dialog_options c_opts{};
+  c_opts.title = title.c_str();
+  c_opts.message = message.c_str();
+  c_opts.kind = static_cast<n8v_message_dialog_kind>(options.kind);
+  c_opts.buttons = buttons.data();
+  c_opts.button_count = buttons.size();
+  if (onResult) {
+    auto *owned = new MessageDialogCallback(std::move(onResult));
+    c_opts.on_result = [](int button, void *userdata) {
+      std::unique_ptr<MessageDialogCallback> cb(static_cast<MessageDialogCallback *>(userdata));
+      (*cb)(button);
+    };
+    c_opts.on_result_userdata = owned;
+  }
+  n8v_show_message_dialog(c_opts);
+}
+
 inline void scrollToBottom(std::string_view containerId) {
   std::string storage(containerId);
   n8v_scroll_to_bottom(storage.c_str());

@@ -688,6 +688,33 @@ typedef struct n8v_file_dialog_options {
 
 N8V_API void n8v_show_file_dialog(n8v_file_dialog_options options);
 
+typedef enum n8v_message_dialog_kind {
+  N8V_MESSAGE_DIALOG_INFO,
+  N8V_MESSAGE_DIALOG_WARNING,
+  N8V_MESSAGE_DIALOG_ERROR,
+} n8v_message_dialog_kind;
+
+typedef void (*n8v_message_dialog_fn)(int button, void *userdata);
+
+typedef struct n8v_message_button {
+  const char *label;
+  /** Styled as a destructive action (e.g. red) where the toolkit supports it. */
+  bool destructive;
+} n8v_message_button;
+
+typedef struct n8v_message_dialog_options {
+  const char *title;
+  const char *message;
+  n8v_message_dialog_kind kind;
+  /** First is the default. NULL or empty shows a single "OK". */
+  const n8v_message_button *buttons;
+  size_t button_count;
+  n8v_message_dialog_fn on_result;
+  void *on_result_userdata;
+} n8v_message_dialog_options;
+
+N8V_API void n8v_show_message_dialog(n8v_message_dialog_options options);
+
 #ifdef __cplusplus
 }
 

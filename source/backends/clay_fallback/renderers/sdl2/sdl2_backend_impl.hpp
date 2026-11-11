@@ -24,6 +24,7 @@ public:
 
   bool initialize(int width, int height, std::string_view title) override;
   bool pumpEvents() override;
+  bool showMessageDialog(const MessageDialogRequest &request, MessageDialogDone done) override;
   bool pointerDown() const override { return pointerDown_; }
   bool isEntryFocused(int ordinal) const override { return entry_.ordinal == ordinal; }
   Clay_Vector2 consumeScrollDelta() override {

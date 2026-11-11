@@ -131,3 +131,15 @@ n8v.openFile(
   (paths) => console.log(paths),
 );
 ```
+
+## Message dialogs
+
+`showMessage` shows an info, warning or error dialog without blocking. The optional callback receives the index of the
+pressed button (or `-1` if it was dismissed) from a later `pumpEvents()`. Mark dangerous buttons as `destructive`:
+
+```ts
+n8v.showMessage(
+  { title: "Delete?", message: "This can't be undone.", kind: "warning", buttons: [{ label: "Delete", destructive: true }, "Cancel"] },
+  (button) => console.log(button),
+);
+```

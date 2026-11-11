@@ -2,6 +2,7 @@
 
 #include "core/backend.hpp"
 #include "core/dialogs/file_dialog.hpp"
+#include "core/dialogs/message_dialog.hpp"
 #include "core/style.hpp"
 
 #include "core/ui_core_internal.hpp"
@@ -57,6 +58,7 @@ bool n8v_initialize(int width, int height, const char *title) { return n8v::acti
 bool n8v_pump_events(void) {
   const bool keepOpen = n8v::activeBackend().pumpEvents();
   n8v::detail::pumpFileDialogs();
+  n8v::detail::pumpMessageDialogs();
   return keepOpen;
 }
 
@@ -88,6 +90,23 @@ void n8v_show_file_dialog(n8v_file_dialog_options options) {
     std::vector<const char *> paths;
     for (const std::string &p : result.paths) paths.push_back(p.c_str());
     onResult(paths.data(), paths.size(), userdata);
+  });
+}
+
+void n8v_show_message_dialog(n8v_message_dialog_options options) {
+  using namespace n8v::detail;
+  MessageDialogRequest request;
+  if (options.title) request.title = options.title;
+  if (options.message) request.message = options.message;
+  request.kind = options.kind;
+  for (size_t i = 0; options.buttons && i < options.button_count; ++i) {
+    if (options.buttons[i].label) request.buttons.push_back({options.buttons[i].label, options.buttons[i].destructive});
+  }
+
+  n8v_message_dialog_fn onResult = options.on_result;
+  void *userdata = options.on_result_userdata;
+  showMessageDialog(std::move(request), [onResult, userdata](int button) {
+    if (onResult) onResult(button, userdata);
   });
 }
 

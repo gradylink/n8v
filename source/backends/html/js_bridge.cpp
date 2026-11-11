@@ -111,7 +111,15 @@ EM_JS(void, n8vHtmlPickFiles, (int id, int multiple, int folder, const char *acc
   });
   input.click();
 });
+
+EM_JS(int, n8vHtmlMessage, (const char *text, int confirmDialog), {
+  var message = UTF8ToString(text);
+  if (confirmDialog) return window.confirm(message) ? 1 : 0;
+  window.alert(message);
+  return 1;
+});
 // clang-format on
 
+extern "C" int n8vHtmlMessageBridge(const char *text, int confirm) { return n8vHtmlMessage(text, confirm); }
 extern "C" void n8vHtmlInstallListenersBridge() { n8vHtmlInstallListeners(); }
 extern "C" void n8vHtmlPickFilesBridge(int id, int multiple, int folder, const char *accept) { n8vHtmlPickFiles(id, multiple, folder, accept); }

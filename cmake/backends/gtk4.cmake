@@ -81,6 +81,8 @@ if(N8V_BACKEND_GTK4)
         g_list_store_append
         g_list_model_get_n_items
         g_list_model_get_item
+        g_list_model_get_type
+        g_file_get_type
         g_file_new_for_path
         g_file_get_path
     )

@@ -30,6 +30,7 @@
 #include <vector>
 
 extern "C" void n8vHtmlInstallListenersBridge();
+extern "C" int n8vHtmlMessageBridge(const char *text, int confirm);
 extern "C" void n8vHtmlPickFilesBridge(int id, int multiple, int folder, const char *accept);
 
 namespace n8v::detail {
@@ -274,6 +275,14 @@ public:
   bool isHovered(std::string_view id) const override { return hovered_.count(std::string(id)) != 0; }
 
   void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back(PendingScroll{request, emscripten_get_now()}); }
+
+  bool showMessageDialog(const MessageDialogRequest &request, MessageDialogDone done) override {
+    const std::string text = request.title.empty() ? request.message : request.title + "\n\n" + request.message;
+    const bool confirm = request.buttons.size() > 1;
+    const int ok = n8vHtmlMessageBridge(text.c_str(), confirm);
+    done(confirm && !ok ? 1 : 0);
+    return true;
+  }
 
   bool showFileDialog(const FileDialogRequest &request, FileDialogDone done) override {
     if (request.kind == N8V_FILE_DIALOG_SAVE_FILE) return false;

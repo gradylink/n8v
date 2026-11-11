@@ -524,3 +524,33 @@ export function openFolder(
 ): void {
   showFileDialog(FILE_DIALOG_KIND.openFolder, opts, onResult);
 }
+
+export interface MessageButton {
+  label: string;
+  /** Styled as a dangerous action (e.g. red) where the toolkit supports it. */
+  destructive?: boolean;
+}
+
+export interface MessageDialogOptions {
+  title?: string;
+  message?: string;
+  kind?: "info" | "warning" | "error";
+  /** The first is the default. A plain string is a normal button. Omit for a single "OK". */
+  buttons?: (string | MessageButton)[];
+}
+
+/** The index of the pressed button, or -1 if the dialog was dismissed. */
+export type MessageDialogCallback = (button: number) => void;
+
+const MESSAGE_KIND = { info: 0, warning: 1, error: 2 } as const;
+
+/** Shows a message dialog without blocking; `onResult` runs from a later `pumpEvents()`. */
+export function showMessage(
+  opts: MessageDialogOptions,
+  onResult?: MessageDialogCallback,
+): void {
+  n().showMessageDialog(
+    { ...opts, kind: MESSAGE_KIND[opts.kind ?? "info"] },
+    onResult,
+  );
+}

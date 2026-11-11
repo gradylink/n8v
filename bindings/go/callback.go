@@ -39,3 +39,14 @@ func n8vGoFileDialog(paths **C.char, count C.size_t, userdata unsafe.Pointer) {
 	}
 	fn(out)
 }
+
+//export n8vGoMessageDialog
+func n8vGoMessageDialog(button C.int, userdata unsafe.Pointer) {
+	if userdata == nil {
+		return
+	}
+	h := cgo.Handle(uintptr(userdata))
+	fn := h.Value().(func(int))
+	h.Delete()
+	fn(int(button))
+}

@@ -3,6 +3,7 @@
 #include <n8v/types.hpp>
 
 #include "core/dialogs/file_dialog.hpp"
+#include "core/dialogs/message_dialog.hpp"
 
 #include <clay.h>
 
@@ -88,6 +89,8 @@ struct Backend {
   virtual bool isHovered(std::string_view /*id*/) const { return false; }
 
   virtual void requestScroll(const NativeScrollRequest & /*request*/) {}
+
+  virtual bool showMessageDialog(const detail::MessageDialogRequest & /*request*/, detail::MessageDialogDone /*done*/) { return false; }
 
   virtual bool showFileDialog(const detail::FileDialogRequest & /*request*/, detail::FileDialogDone /*done*/) { return false; }
 

@@ -1,5 +1,5 @@
 set(N8V_HAVE_DBUS FALSE)
-set(N8V_DIALOG_SOURCES source/core/dialogs/file_dialog.cpp)
+set(N8V_DIALOG_SOURCES source/core/dialogs/file_dialog.cpp source/core/dialogs/message_dialog.cpp)
 
 if(WIN32)
   list(APPEND N8V_DIALOG_SOURCES source/core/dialogs/dialog_win32.cpp)

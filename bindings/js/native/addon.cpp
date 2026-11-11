@@ -516,6 +516,50 @@ Napi::Value ShowFileDialog(const Napi::CallbackInfo &info) {
   return info.Env().Undefined();
 }
 
+void MessageDialogTrampoline(int button, void *userdata) {
+  std::unique_ptr<Napi::FunctionReference> ref(static_cast<Napi::FunctionReference *>(userdata));
+  Napi::Env env = ref->Env();
+  Napi::HandleScope scope(env);
+  ref->Call({Napi::Number::New(env, button)});
+}
+
+Napi::Value ShowMessageDialog(const Napi::CallbackInfo &info) {
+  Napi::Object o = info[0].As<Napi::Object>();
+  n8v_message_dialog_options d{};
+  d.kind = (n8v_message_dialog_kind)EnumOr(o, "kind", N8V_MESSAGE_DIALOG_INFO);
+  std::string titleStorage, messageStorage;
+  StrOr(o, "title", d.title, titleStorage);
+  StrOr(o, "message", d.message, messageStorage);
+
+  std::deque<std::string> labels;
+  std::vector<n8v_message_button> buttons;
+  Napi::Value buttonsValue = o.Get("buttons");
+  if (buttonsValue.IsArray()) {
+    Napi::Array arr = buttonsValue.As<Napi::Array>();
+    for (uint32_t i = 0; i < arr.Length(); i++) {
+      Napi::Value b = arr.Get(i);
+      if (b.IsString()) {
+        labels.push_back(b.As<Napi::String>().Utf8Value());
+        buttons.push_back({labels.back().c_str(), false});
+      } else if (b.IsObject()) {
+        Napi::Object bo = b.As<Napi::Object>();
+        labels.push_back(bo.Get("label").IsString() ? bo.Get("label").As<Napi::String>().Utf8Value() : std::string());
+        buttons.push_back({labels.back().c_str(), BoolOr(bo, "destructive", false)});
+      }
+    }
+    d.buttons = buttons.data();
+    d.button_count = buttons.size();
+  }
+
+  Napi::Value cb = info[1];
+  if (cb.IsFunction()) {
+    d.on_result = MessageDialogTrampoline;
+    d.on_result_userdata = new Napi::FunctionReference(Napi::Persistent(cb.As<Napi::Function>()));
+  }
+  n8v_show_message_dialog(d);
+  return info.Env().Undefined();
+}
+
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("BoolRef", BoolRef::GetClass(env));
   exports.Set("IntRef", IntRef::GetClass(env));
@@ -552,6 +596,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("document", Napi::Function::New(env, Document));
 
   exports.Set("showFileDialog", Napi::Function::New(env, ShowFileDialog));
+  exports.Set("showMessageDialog", Napi::Function::New(env, ShowMessageDialog));
 
   exports.Set("openFloating", Napi::Function::New(env, OpenFloating));
   exports.Set("closeFloating", Napi::Function::New(env, CloseFloating));

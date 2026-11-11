@@ -42,6 +42,10 @@ export interface NativeAddon {
     opts: object,
     onResult: (paths: string[]) => void,
   ): void;
+  showMessageDialog(
+    opts: object,
+    onResult?: (button: number) => void,
+  ): void;
 
   openFloating(opts: object): void;
   closeFloating(): void;

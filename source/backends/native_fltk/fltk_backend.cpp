@@ -33,6 +33,7 @@
 #include <FL/Fl_Round_Button.H>
 #include <FL/Fl_Scroll.H>
 #include <FL/Fl_Toggle_Button.H>
+#include <FL/fl_ask.H>
 #include <FL/fl_draw.H>
 
 #include <algorithm>
@@ -122,6 +123,14 @@ public:
       prevW = window_->w();
       prevH = window_->h();
     }
+    return true;
+  }
+
+  bool showMessageDialog(const MessageDialogRequest &request, MessageDialogDone done) override {
+    const char *labels[3] = {nullptr, nullptr, nullptr};
+    for (size_t i = 0; i < 3 && i < request.buttons.size(); ++i) labels[i] = request.buttons[i].label.c_str();
+    fl_message_title(request.title.c_str());
+    done(fl_choice("%s", labels[0], labels[1], labels[2], request.message.c_str()));
     return true;
   }
 

@@ -122,6 +122,7 @@ if(NOT EMSCRIPTEN)
       SDL_GetTicks
       SDL_SetTextureAlphaMod
       SDL_SetTextureColorMod
+      SDL_ShowMessageBox
   )
   target_include_directories(sdl2_lazy PUBLIC ${_N8V_SDL2_INCLUDE_DIRS})
 endif()
@@ -575,6 +576,7 @@ if(N8V_EXAMPLES)
   add_subdirectory(examples/basic_c)
   add_subdirectory(examples/custom_style)
   add_subdirectory(examples/file_dialog)
+  add_subdirectory(examples/message_dialog)
   add_subdirectory(examples/multiline_entry)
 endif()
 

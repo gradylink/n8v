@@ -21,12 +21,19 @@ extern void n8vGoClick(void *userdata);
 extern void n8vGoBool(bool value, void *userdata);
 extern void n8vGoInt(int value, void *userdata);
 extern void n8vGoFileDialog(char **paths, size_t count, void *userdata);
+extern void n8vGoMessageDialog(int button, void *userdata);
 
 static void n8v_go_file_dialog_result(const char *const *paths, size_t count, void *userdata) { n8vGoFileDialog((char **)paths, count, userdata); }
 static void n8v_go_show_file_dialog(n8v_file_dialog_options o, uintptr_t h) {
   o.on_result = n8v_go_file_dialog_result;
   o.on_result_userdata = (void *)h;
   n8v_show_file_dialog(o);
+}
+static void n8v_go_message_dialog_result(int button, void *userdata) { n8vGoMessageDialog(button, userdata); }
+static void n8v_go_show_message_dialog(n8v_message_dialog_options o, uintptr_t h) {
+  o.on_result = n8v_go_message_dialog_result;
+  o.on_result_userdata = (void *)h;
+  n8v_show_message_dialog(o);
 }
 static void *n8v_go_handle(uintptr_t h) { return (void *)h; }
 static void n8v_go_button(n8v_button_options o, const char *label) { _n8v_set_button_opts(o); _n8v_button_commit(label); }
@@ -617,4 +624,63 @@ func SaveFile(opts FileDialogOptions, onResult func(paths []string)) {
 // OpenFolder shows the system folder chooser.
 func OpenFolder(opts FileDialogOptions, onResult func(paths []string)) {
 	showFileDialog(C.N8V_FILE_DIALOG_OPEN_FOLDER, opts, onResult)
+}
+
+// MessageKind picks the icon or styling of a message dialog.
+type MessageKind int
+
+const (
+	MessageInfo MessageKind = iota
+	MessageWarning
+	MessageError
+)
+
+// MessageButton is one button of a message dialog.
+type MessageButton struct {
+	Label string
+	// Destructive styles the button as a dangerous action (e.g. red) where the toolkit supports it.
+	Destructive bool
+}
+
+// MessageDialogOptions configures ShowMessage.
+type MessageDialogOptions struct {
+	Title   string
+	Message string
+	Kind    MessageKind
+	// Buttons are shown in order and the first is the default. Empty shows a single "OK".
+	Buttons []MessageButton
+}
+
+// ShowMessage shows a message dialog without blocking. onResult runs from a later Pump with the index of the pressed
+// button, or -1 if the dialog was dismissed (or none could be shown). onResult may be nil.
+func ShowMessage(opts MessageDialogOptions, onResult func(button int)) {
+	// n8v copies every string, so all of this is freed as soon as the call returns.
+	var allocs []unsafe.Pointer
+	str := func(s string) *C.char {
+		p := C.CString(s)
+		allocs = append(allocs, unsafe.Pointer(p))
+		return p
+	}
+	defer func() {
+		for _, p := range allocs {
+			C.free(p)
+		}
+	}()
+
+	o := C.n8v_message_dialog_options{title: str(opts.Title), message: str(opts.Message), kind: C.n8v_message_dialog_kind(opts.Kind)}
+	if len(opts.Buttons) > 0 {
+		buttons := (*C.n8v_message_button)(C.calloc(C.size_t(len(opts.Buttons)), C.size_t(unsafe.Sizeof(C.n8v_message_button{}))))
+		allocs = append(allocs, unsafe.Pointer(buttons))
+		for i, b := range opts.Buttons {
+			unsafe.Slice(buttons, len(opts.Buttons))[i] = C.n8v_message_button{label: str(b.Label), destructive: C.bool(b.Destructive)}
+		}
+		o.buttons, o.button_count = buttons, C.size_t(len(opts.Buttons))
+	}
+
+	var handle C.uintptr_t
+	if onResult != nil {
+		// Released by n8vGoMessageDialog when the result arrives.
+		handle = C.uintptr_t(cgo.NewHandle(onResult))
+	}
+	C.n8v_go_show_message_dialog(o, handle)
 }

@@ -306,6 +306,25 @@ void Sdl2Backend::shutdown() {
   SDL_Quit();
 }
 
+bool Sdl2Backend::showMessageDialog(const MessageDialogRequest &request, MessageDialogDone done) {
+  std::vector<SDL_MessageBoxButtonData> buttons;
+  for (size_t i = 0; i < request.buttons.size(); ++i) {
+    buttons.push_back({i == 0 ? (Uint32)SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT : 0u, (int)i, request.buttons[i].label.c_str()});
+  }
+  SDL_MessageBoxData data{};
+  data.flags = request.kind == N8V_MESSAGE_DIALOG_ERROR ? SDL_MESSAGEBOX_ERROR : request.kind == N8V_MESSAGE_DIALOG_WARNING ? SDL_MESSAGEBOX_WARNING : SDL_MESSAGEBOX_INFORMATION;
+  data.window = window_;
+  data.title = request.title.c_str();
+  data.message = request.message.c_str();
+  data.numbuttons = (int)buttons.size();
+  data.buttons = buttons.data();
+
+  int pressed = -1;
+  if (SDL_ShowMessageBox(&data, &pressed) < 0) return false;
+  done(pressed);
+  return true;
+}
+
 std::unique_ptr<Backend> makeSdl2Backend() { return std::make_unique<Sdl2Backend>(); }
 
 } // namespace n8v::detail

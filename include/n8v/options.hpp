@@ -205,4 +205,27 @@ struct FileDialogOptions {
   bool multiple = false;
 };
 
+enum class MessageKind {
+  Info,
+  Warning,
+  Error,
+};
+
+struct MessageButton {
+  std::string label;
+  /** Styled as a destructive action (e.g. red) where the toolkit supports it. */
+  bool destructive = false;
+
+  MessageButton(std::string label, bool destructive = false) : label(std::move(label)), destructive(destructive) {}
+  MessageButton(const char *label, bool destructive = false) : label(label), destructive(destructive) {}
+};
+
+struct MessageDialogOptions {
+  std::string title = {};
+  std::string message = {};
+  MessageKind kind = MessageKind::Info;
+  /** The first is the default. Empty shows a single "OK". */
+  std::vector<MessageButton> buttons = {};
+};
+
 } // namespace n8v

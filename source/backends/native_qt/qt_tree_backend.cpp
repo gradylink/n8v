@@ -33,6 +33,7 @@
 #include <QImage>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QMessageBox>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
@@ -415,6 +416,24 @@ public:
   bool isHovered(std::string_view id) const override { return hovered_.count(std::string(id)) != 0; }
 
   void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back(PendingScroll{request, std::chrono::steady_clock::now()}); }
+
+  bool showMessageDialog(const MessageDialogRequest &request, MessageDialogDone done) override {
+    if (!window_) return false;
+    QMessageBox::Icon icon = request.kind == N8V_MESSAGE_DIALOG_ERROR     ? QMessageBox::Critical
+                             : request.kind == N8V_MESSAGE_DIALOG_WARNING ? QMessageBox::Warning
+                                                                          : QMessageBox::Information;
+    QMessageBox box(icon, qstr(request.title), qstr(request.message), QMessageBox::NoButton, window_);
+    std::vector<QPushButton *> buttons;
+    for (const MessageDialogButton &b : request.buttons) buttons.push_back(box.addButton(qstr(b.label), b.destructive ? QMessageBox::DestructiveRole : QMessageBox::ActionRole));
+    box.setDefaultButton(buttons.front());
+    box.exec();
+    int pressed = -1;
+    for (size_t i = 0; i < buttons.size(); ++i) {
+      if (box.clickedButton() == buttons[i]) pressed = static_cast<int>(i);
+    }
+    done(pressed);
+    return true;
+  }
 
   bool showFileDialog(const FileDialogRequest &request, FileDialogDone done) override {
     if (!window_) return false;

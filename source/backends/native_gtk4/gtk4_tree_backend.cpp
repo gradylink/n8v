@@ -210,6 +210,60 @@ public:
   void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back(PendingScroll{request, std::chrono::steady_clock::now()}); }
 
 #if GTK_CHECK_VERSION(4, 10, 0)
+  bool showMessageDialog(const MessageDialogRequest &request, MessageDialogDone done) override {
+    if (!window_) return false;
+    const char *heading = request.title.empty() ? request.message.c_str() : request.title.c_str();
+    const char *body = request.title.empty() ? nullptr : request.message.c_str();
+#if defined(N8V_HAVE_ADWAITA) && ADW_CHECK_VERSION(1, 5, 0)
+    AdwDialog *dialog = adw_alert_dialog_new(heading, body);
+    for (size_t i = 0; i < request.buttons.size(); ++i) {
+      const std::string id = std::to_string(i);
+      adw_alert_dialog_add_response(ADW_ALERT_DIALOG(dialog), id.c_str(), request.buttons[i].label.c_str());
+      if (request.buttons[i].destructive) adw_alert_dialog_set_response_appearance(ADW_ALERT_DIALOG(dialog), id.c_str(), ADW_RESPONSE_DESTRUCTIVE);
+    }
+    adw_alert_dialog_set_default_response(ADW_ALERT_DIALOG(dialog), "0");
+    adw_alert_dialog_set_close_response(ADW_ALERT_DIALOG(dialog), "dismissed");
+    adw_alert_dialog_choose(ADW_ALERT_DIALOG(dialog), window_, nullptr, &Gtk4TreeBackend::onAdwMessageDialogDone, new MessageDialogDone(std::move(done)));
+    return true;
+#else
+    GtkAlertDialog *dialog = gtk_alert_dialog_new("%s", heading);
+    if (body) gtk_alert_dialog_set_detail(dialog, body);
+    gtk_alert_dialog_set_modal(dialog, TRUE);
+
+    std::vector<const char *> labels;
+    for (const MessageDialogButton &b : request.buttons) labels.push_back(b.label.c_str());
+    labels.push_back(nullptr);
+    gtk_alert_dialog_set_buttons(dialog, labels.data());
+    gtk_alert_dialog_set_default_button(dialog, 0);
+    gtk_alert_dialog_set_cancel_button(dialog, -1);
+
+    gtk_alert_dialog_choose(dialog, GTK_WINDOW(window_), nullptr, &Gtk4TreeBackend::onMessageDialogDone, new MessageDialogDone(std::move(done)));
+    g_object_unref(dialog);
+    return true;
+#endif
+  }
+
+#if defined(N8V_HAVE_ADWAITA) && ADW_CHECK_VERSION(1, 5, 0)
+  static void onAdwMessageDialogDone(GObject *source, GAsyncResult *res, gpointer data) {
+    std::unique_ptr<MessageDialogDone> done(static_cast<MessageDialogDone *>(data));
+    const char *response = adw_alert_dialog_choose_finish(ADW_ALERT_DIALOG(source), res);
+    char *end = nullptr;
+    long button = response ? std::strtol(response, &end, 10) : -1;
+    (*done)(response &&end != response && *end == '\0' ? static_cast<int>(button) : -1);
+  }
+#endif
+
+  static void onMessageDialogDone(GObject *source, GAsyncResult *res, gpointer data) {
+    std::unique_ptr<MessageDialogDone> done(static_cast<MessageDialogDone *>(data));
+    GError *error = nullptr;
+    int button = gtk_alert_dialog_choose_finish(GTK_ALERT_DIALOG(source), res, &error);
+    if (error) {
+      g_error_free(error);
+      button = -1;
+    }
+    (*done)(button);
+  }
+
   bool showFileDialog(const FileDialogRequest &request, FileDialogDone done) override {
     if (!window_) return false;
     GtkFileDialog *dialog = gtk_file_dialog_new();
