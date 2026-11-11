@@ -94,6 +94,8 @@ struct NativeWidgetMeta {
   const n8v::detail::markdown::Document *documentAst = nullptr; // Document only
   n8v::Color documentTextColor{};                               // Document only
   n8v::Color documentLinkColor{};                               // Document only
+  n8v_link_style_fn documentLinkStyle = nullptr;                // Document only - lets the app restyle (and un-click) chosen links
+  void *documentLinkStyleUserdata = nullptr;                    // Document only
   n8v::FontFamily documentFont = n8v::FontFamily::DejaVuSans;   // Document only
   uint16_t documentFontSize = 16;                               // Document only
 };

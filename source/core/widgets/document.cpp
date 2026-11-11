@@ -160,6 +160,8 @@ void document(const n8v_document_options &options, int ordinal) {
   meta.documentFontSize = basePaint.fontSize;
   meta.documentTextColor = basePaint.color;
   meta.documentLinkColor = linkPaint.color;
+  meta.documentLinkStyle = options.link_style;
+  meta.documentLinkStyleUserdata = options.link_style_userdata;
   decl.userData = &meta;
 
   Clay__ConfigureOpenElement(decl);

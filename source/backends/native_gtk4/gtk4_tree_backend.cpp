@@ -1751,7 +1751,11 @@ void Gtk4TreeBackend::apply(NativeNode &nn) {
       },
       [&](const n8v_document_options &o) {
         const markdown::Document doc = markdown::parse(o.markdown ? o.markdown : "");
-        const std::string markupText = markup::documentToPangoMarkup(doc);
+        markup::LinkStyler styler;
+        if (o.link_style) {
+          styler = [&o](const std::string &url, n8v_link_style &style) { return o.link_style(url.c_str(), &style, o.link_style_userdata); };
+        }
+        const std::string markupText = markup::documentToPangoMarkup(doc, o.link_style ? &styler : nullptr);
         if (markupText != nn.lastItemsKey) {
           gtk_label_set_markup(GTK_LABEL(nn.widget), markupText.c_str());
           nn.lastItemsKey = markupText;

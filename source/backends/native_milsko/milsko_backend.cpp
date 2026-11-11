@@ -309,9 +309,18 @@ private:
     if (action && action->callback) action->callback();
   }
 
-  static void MWAPI onDocumentActivate(MwWidget /*handle*/, void * /*userData*/, void *callData) {
+  struct DocumentLinkHook {
+    n8v_link_style_fn style = nullptr;
+    void *userdata = nullptr;
+  };
+
+  static void MWAPI onDocumentActivate(MwWidget /*handle*/, void *userData, void *callData) {
     const char *href = static_cast<const char *>(callData);
-    if (href) n8v::detail::openUrl(href);
+    if (!href) return;
+    auto *hook = static_cast<DocumentLinkHook *>(userData);
+    n8v_link_style ignored{};
+    if (hook && hook->style && hook->style(href, &ignored, hook->userdata)) return;
+    n8v::detail::openUrl(href);
   }
 
   static void MWAPI onCheckboxChanged(MwWidget handle, void *userData, void * /*callData*/) {
@@ -472,6 +481,7 @@ private:
         MwSetInteger(it->second, MwNvalue, sliderPositionFor(*meta.sliderValue, meta.sliderMin, meta.sliderMax));
       } else if (meta.kind == NativeWidgetKind::Panel) {
       } else if (meta.kind == NativeWidgetKind::Document && meta.documentSource) {
+        documentLinkHooks_[effectiveKey(meta)] = {meta.documentLinkStyle, meta.documentLinkStyleUserdata};
         std::string &lastText = documentLastText_[effectiveKey(meta)];
         if (*meta.documentSource != lastText) {
           MwSetString(it->second, MwNtext, meta.documentSource->c_str());
@@ -535,7 +545,9 @@ private:
         MwSetString(widget, MwNtext, meta.documentSource->c_str());
         documentLastText_[effectiveKey(meta)] = *meta.documentSource;
       }
-      MwAddUserHandler(widget, MwNdocumentActivateHandler, onDocumentActivate, nullptr);
+      DocumentLinkHook &hook = documentLinkHooks_[effectiveKey(meta)];
+      hook = {meta.documentLinkStyle, meta.documentLinkStyleUserdata};
+      MwAddUserHandler(widget, MwNdocumentActivateHandler, onDocumentActivate, &hook);
     } else {
       action.callback = meta.kind == NativeWidgetKind::Button ? buttonAction(meta) : toStdFunction(meta.onClick, meta.onClickUserdata);
 
@@ -648,6 +660,7 @@ private:
   std::unordered_map<int, ClickAction> actions_;
   std::unordered_map<int, EntryState> entryStates_;
   std::unordered_map<int, std::string> documentLastText_;
+  std::unordered_map<int, DocumentLinkHook> documentLinkHooks_;
   std::unordered_map<MwWidget, const void *> imagePixmapSources_;
   std::unordered_map<uint32_t, ContainerFrame> scrollContainers_;
   std::vector<ContainerFrame> containerStack_;

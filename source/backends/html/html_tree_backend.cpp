@@ -1060,7 +1060,9 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
       [&](const n8v_document_options &o) {
         setClass(nn.outer, classFor(css::documentCss(paint)));
         const markdown::CachedDocument cached = markdown::getOrParse(o.markdown ? o.markdown : "");
-        const std::string html = markdown::toHtml(*cached.document);
+        markdown::HtmlOptions htmlOptions;
+        htmlOptions.linkStyler = markdown::makeLinkStyler(o.link_style, o.link_style_userdata);
+        const std::string html = markdown::toHtml(*cached.document, htmlOptions);
         if (nn.lastItemsKey != html) {
           nn.widget.set("innerHTML", html);
           nn.lastItemsKey = html;

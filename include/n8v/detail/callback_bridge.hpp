@@ -35,6 +35,7 @@ inline std::deque<std::function<void(bool)>> boolChangeClosures;
 inline std::deque<std::function<void(int)>> intChangeClosures;
 inline std::deque<std::function<void(float)>> floatChangeClosures;
 inline std::deque<std::function<void(std::string_view)>> textChangeClosures;
+inline std::deque<std::function<bool(const char *, n8v_link_style *)>> linkStyleClosures;
 
 inline void clearCallbackStorage() {
   clickClosures.clear();
@@ -42,6 +43,7 @@ inline void clearCallbackStorage() {
   intChangeClosures.clear();
   floatChangeClosures.clear();
   textChangeClosures.clear();
+  linkStyleClosures.clear();
 }
 
 template <typename Ret, typename... Args, typename CFnPtr>

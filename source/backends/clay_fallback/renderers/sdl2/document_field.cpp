@@ -44,13 +44,13 @@ void Sdl2Backend::renderDocument(NativeWidgetMeta &meta, const Clay_BoundingBox 
     cursor.y += lineHeightFor(fontSize);
   };
 
-  auto drawWord = [&](std::string_view word, uint16_t fontSize, bool bold, bool italic, bool strike, bool link, float wordWidth) {
+  auto drawWord = [&](std::string_view word, uint16_t fontSize, bool bold, bool italic, bool strike, bool link, float wordWidth, const n8v_link_style *styled = nullptr) {
     TextStyleFlags flags{};
     flags.font = family;
     flags.bold = bold;
     flags.italic = italic;
     flags.strikethrough = strike;
-    flags.underline = link;
+    flags.underline = link && !styled;
     flags.ownedByWidget = false;
 
     float glyphHeight = measureLine(word, family, fontSize, bold, italic).height;
@@ -59,7 +59,8 @@ void Sdl2Backend::renderDocument(NativeWidgetMeta &meta, const Clay_BoundingBox 
     cmd.boundingBox = {cursor.x, cursor.y, wordWidth, glyphHeight};
     cmd.renderData.text.stringContents = Clay_StringSlice{(int32_t)word.size(), word.data(), word.data()};
     cmd.renderData.text.fontSize = fontSize;
-    n8v::Color c = link ? linkColor : baseColor;
+    n8v::Color c = link && !styled ? linkColor : baseColor;
+    if (styled && styled->foreground.a > 0.0f) c = n8v::Color{styled->foreground.r, styled->foreground.g, styled->foreground.b, styled->foreground.a};
     cmd.renderData.text.textColor = Clay_Color{c.r, c.g, c.b, c.a};
     cmd.userData = &flags;
     drawText(cmd);
@@ -67,15 +68,28 @@ void Sdl2Backend::renderDocument(NativeWidgetMeta &meta, const Clay_BoundingBox 
 
   auto layoutRun = [&](const InlineRun &run, uint16_t fontSize) {
     bool link = !run.linkUrl.empty();
+    n8v_link_style style{};
+    const bool styled = link && meta.documentLinkStyle && meta.documentLinkStyle(run.linkUrl.c_str(), &style, meta.documentLinkStyleUserdata);
+    const bool bold = run.bold || (styled && style.bold);
     size_t pos = 0;
     while (pos <= run.text.size()) {
       size_t next = run.text.find(' ', pos);
       std::string_view word = next == std::string::npos ? std::string_view(run.text).substr(pos) : std::string_view(run.text).substr(pos, next - pos);
       if (!word.empty()) {
-        float w = measureLine(word, family, fontSize, run.bold, run.italic).width;
+        float w = measureLine(word, family, fontSize, bold, run.italic).width;
         if (cursor.x > cursor.originX && cursor.x + w > cursor.originX + cursor.maxWidth) newline(fontSize);
-        drawWord(word, fontSize, run.bold, run.italic, run.strikethrough, link, w);
-        float spaceWidth = measureLine(" ", family, fontSize, run.bold, run.italic).width;
+        float spaceWidth = measureLine(" ", family, fontSize, bold, run.italic).width;
+        if (styled && style.background.a > 0.0f) {
+          const bool first = pos == 0;
+          const bool continues = next != std::string::npos && next + 1 < run.text.size();
+          const float padLeft = first ? 2.0f : 0.0f;
+          const float padRight = continues ? spaceWidth : 2.0f;
+          drawFilledRect(
+            Clay_BoundingBox{cursor.x - padLeft, cursor.y, w + padLeft + padRight, lineHeightFor(fontSize)},
+            Clay_Color{style.background.r, style.background.g, style.background.b, style.background.a}
+          );
+        }
+        drawWord(word, fontSize, bold, run.italic, run.strikethrough, link, w, styled ? &style : nullptr);
         cursor.x += w + spaceWidth;
       }
       if (next == std::string::npos) break;

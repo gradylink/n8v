@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -188,11 +189,18 @@ struct PageOptions {
   BadgeColor badgeColor = BadgeColor::Default;
 };
 
+struct LinkStyle {
+  Color foreground = {0, 0, 0, 0};
+  Color background = {0, 0, 0, 0};
+  bool bold = false;
+};
+
 struct DocumentOptions {
   std::string_view markdown = {};
   Sizing width = Sizing::grow();
   Sizing height = Sizing::grow();
   std::string_view id = {};
+  std::function<std::optional<LinkStyle>(std::string_view url)> linkStyle = nullptr;
 };
 
 /**

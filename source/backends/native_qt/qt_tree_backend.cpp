@@ -7,6 +7,8 @@
 #include "core/icon_loader.hpp"
 #include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
+#include "core/markdown/markdown.hpp"
+#include "core/markdown/markdown_to_html.hpp"
 #include "core/open_url.hpp"
 #include "core/style.hpp"
 #include "core/tree/dispatch.hpp"
@@ -1431,7 +1433,21 @@ void QtTreeBackend::apply(NativeNode &nn) {
           nn.iconKey = key;
         }
       },
-      [&](const n8v_document_options &o) { static_cast<QLabel *>(nn.widget)->setText(qstr(o.markdown)); },
+      [&](const n8v_document_options &o) {
+        auto *label = static_cast<QLabel *>(nn.widget);
+        if (!o.link_style) {
+          label->setText(qstr(o.markdown));
+          return;
+        }
+        const n8v::detail::markdown::CachedDocument cached = n8v::detail::markdown::getOrParse(o.markdown ? o.markdown : "");
+        n8v::detail::markdown::HtmlOptions htmlOptions;
+        htmlOptions.flavor = n8v::detail::markdown::HtmlFlavor::QtRichText;
+        htmlOptions.linkStyler = n8v::detail::markdown::makeLinkStyler(o.link_style, o.link_style_userdata);
+        const QColor backdrop = label->palette().color(QPalette::Window);
+        htmlOptions.backdrop = {(float)backdrop.red(), (float)backdrop.green(), (float)backdrop.blue(), 255.0f};
+        label->setTextFormat(Qt::RichText);
+        label->setText(QString::fromStdString(n8v::detail::markdown::toHtml(*cached.document, htmlOptions)));
+      },
     },
     pn.current.props
   );

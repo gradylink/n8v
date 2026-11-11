@@ -636,7 +636,7 @@ private:
       } else if (meta.kind == NativeWidgetKind::Panel && meta.panelRole != n8v::PanelRole::ListItem) {
         applyPanelStyle(static_cast<Fl_Box *>(it->second), meta);
       } else if (meta.kind == NativeWidgetKind::Document && meta.documentAst) {
-        syncDocumentHtml(static_cast<Fl_Help_View *>(it->second), *meta.documentAst, effectiveKey(meta));
+        syncDocumentHtml(static_cast<Fl_Help_View *>(it->second), meta);
       }
       return it->second;
     }
@@ -726,7 +726,7 @@ private:
     } else if (meta.kind == NativeWidgetKind::Document) {
       auto *view = new Fl_Help_View(0, 0, 1, 1);
       view->link(&FltkBackend::onHelpLinkClicked);
-      if (meta.documentAst) syncDocumentHtml(view, *meta.documentAst, effectiveKey(meta));
+      if (meta.documentAst) syncDocumentHtml(view, meta);
       widget = view;
     } else {
       auto *button = new Fl_Button(0, 0, 1, 1);
@@ -753,9 +753,12 @@ private:
     return nullptr; // non-null would make Fl_Help_View navigate to it as its own document
   }
 
-  void syncDocumentHtml(Fl_Help_View *view, const n8v::detail::markdown::Document &doc, int stateKey) {
-    std::string &lastHtml = documentLastHtml_[stateKey];
-    std::string html = n8v::detail::markdown::toHtml(doc);
+  void syncDocumentHtml(Fl_Help_View *view, const NativeWidgetMeta &meta) {
+    std::string &lastHtml = documentLastHtml_[effectiveKey(meta)];
+    n8v::detail::markdown::HtmlOptions options;
+    options.flavor = n8v::detail::markdown::HtmlFlavor::Basic;
+    options.linkStyler = n8v::detail::markdown::makeLinkStyler(meta.documentLinkStyle, meta.documentLinkStyleUserdata);
+    std::string html = n8v::detail::markdown::toHtml(*meta.documentAst, options);
     if (html != lastHtml) {
       view->value(html.c_str());
       lastHtml = std::move(html);

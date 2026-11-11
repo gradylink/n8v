@@ -343,11 +343,21 @@ typedef struct n8v_sidebar_options {
   bool compact;
 } n8v_sidebar_options;
 
+typedef struct n8v_link_style {
+  n8v_color foreground;
+  n8v_color background;
+  bool bold;
+} n8v_link_style;
+
+typedef bool (*n8v_link_style_fn)(const char *url, n8v_link_style *out, void *userdata);
+
 typedef struct n8v_document_options {
   const char *markdown;
   n8v_sizing width;
   n8v_sizing height;
   const char *id;
+  n8v_link_style_fn link_style;
+  void *link_style_userdata;
 } n8v_document_options;
 
 typedef enum n8v_attach_point {

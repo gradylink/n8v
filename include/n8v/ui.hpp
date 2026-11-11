@@ -855,6 +855,18 @@ inline void document(DocumentOptions options) {
   c_opts.width = toC(options.width);
   c_opts.height = toC(options.height);
   c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
+  if (options.linkStyle) {
+    callback_bridge::bridge(
+      callback_bridge::linkStyleClosures,
+      std::function<bool(const char *, n8v_link_style *)>([style = std::move(options.linkStyle)](const char *url, n8v_link_style *out) {
+        std::optional<LinkStyle> result = style(url ? url : "");
+        if (!result) return false;
+        *out = n8v_link_style{toC(result->foreground), toC(result->background), result->bold};
+        return true;
+      }),
+      c_opts.link_style, c_opts.link_style_userdata
+    );
+  }
 
   n8v_document(c_opts);
 }
