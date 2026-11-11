@@ -842,6 +842,21 @@ inline void image(ImageOptions options) {
   n8v_image(c_opts);
 }
 
+inline void video(VideoOptions options) {
+  n8v_video_options c_opts{};
+  c_opts.source = options.source.empty() ? nullptr : options.source.c_str();
+  c_opts.width = toC(options.width);
+  c_opts.height = toC(options.height);
+  c_opts.rounding = toC(options.rounding);
+  c_opts.autoplay = options.autoplay;
+  c_opts.loop = options.loop;
+  c_opts.muted = options.muted;
+  c_opts.controls = options.controls;
+  c_opts.id = options.id.empty() ? nullptr : options.id.c_str();
+
+  n8v_video(c_opts);
+}
+
 inline void icon(IconOptions options) {
   std::string nameStorage(options.name);
   n8v_icon_options c_opts{};
@@ -930,6 +945,8 @@ inline void dropdown(DropdownOptions options) { detail::dropdown(std::move(optio
 inline void slider(SliderOptions options) { detail::slider(std::move(options)); }
 
 inline void image(ImageOptions options) { detail::image(std::move(options)); }
+
+inline void video(VideoOptions options) { detail::video(std::move(options)); }
 
 inline void icon(IconOptions options) { detail::icon(std::move(options)); }
 

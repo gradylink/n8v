@@ -108,7 +108,8 @@ enum class NativeKind {
   Icon,
   Document,
   SidebarSection,
-  SidebarDivider
+  SidebarDivider,
+  Video
 };
 
 struct NativeNode {
@@ -150,6 +151,8 @@ struct NativeNode {
   double stickyLastPage = 0.0;
   std::string lastItemsKey;
   std::string accentClass;
+  std::string videoSource;
+  std::string roundClass;
   std::vector<GtkWidget *> inlinePics;
   size_t dropdownCount = 0;
   const void *textureSource = nullptr;
@@ -510,6 +513,7 @@ private:
   void resolvePendingFocus();
   void applyStickyBottom();
   void setIconImage(NativeNode &nn, GtkWidget *image, const char *name, int pixelSize);
+  void applyVideo(NativeNode &nn, const n8v_video_options &o);
   void setLabelFromText(GtkWidget *label, const n8v_text_options &o, std::string_view text);
 
   void applyFlex(NativeNode &nn, const n8v_flex_options &o);
@@ -737,6 +741,11 @@ n8v_sizing sizingFor(const NativeNode &nn, bool horizontal) {
       [&](const n8v_image_options &o) {
         n8v_sizing s = horizontal ? o.width : o.height;
         if (s.mode == N8V_SIZING_FIT && s.min <= 0.0f && s.max <= 0.0f) return n8v_sizing_fixed((float)(horizontal ? nn.imageWidth : nn.imageHeight));
+        return s;
+      },
+      [&](const n8v_video_options &o) {
+        n8v_sizing s = horizontal ? o.width : o.height;
+        if (s.mode == N8V_SIZING_FIT && s.min <= 0.0f && s.max <= 0.0f) return n8v_sizing_fixed(horizontal ? 480.0f : 270.0f);
         return s;
       },
       [&](const n8v_sidebar_options &) { return growSizing(); },
@@ -1330,6 +1339,100 @@ void Gtk4TreeBackend::resolvePendingScrolls() {
   }
 }
 
+void Gtk4TreeBackend::applyVideo(NativeNode &nn, const n8v_video_options &o) {
+  const std::string source = o.source ? o.source : "";
+  const bool withControls = GTK_IS_VIDEO(nn.widget);
+
+  if (source != nn.videoSource) {
+    nn.videoSource = source;
+    GFile *file = source.empty() ? nullptr : source.find("://") != std::string::npos ? g_file_new_for_uri(source.c_str()) : g_file_new_for_path(source.c_str());
+    if (withControls) {
+      gtk_video_set_file(GTK_VIDEO(nn.widget), file);
+    } else {
+      GtkMediaStream *stream = file ? gtk_media_file_new_for_file(file) : nullptr;
+      gtk_picture_set_paintable(GTK_PICTURE(nn.widget), stream ? GDK_PAINTABLE(stream) : nullptr);
+      g_object_set_data_full(G_OBJECT(nn.widget), "n8v-video-stream", stream, g_object_unref);
+    }
+    if (file) g_object_unref(file);
+  }
+
+  GtkMediaStream *stream = withControls ? gtk_video_get_media_stream(GTK_VIDEO(nn.widget)) : GTK_MEDIA_STREAM(g_object_get_data(G_OBJECT(nn.widget), "n8v-video-stream"));
+  if (withControls) {
+    gtk_video_set_autoplay(GTK_VIDEO(nn.widget), o.autoplay);
+    gtk_video_set_loop(GTK_VIDEO(nn.widget), o.loop);
+  } else if (stream) {
+    gtk_media_stream_set_loop(stream, o.loop);
+    if (o.autoplay && !gtk_media_stream_get_playing(stream)) gtk_media_stream_play(stream);
+  }
+  if (stream) {
+    g_object_set_data(G_OBJECT(stream), "n8v-muted", GINT_TO_POINTER(o.muted ? 1 : 0));
+    if (gtk_media_stream_is_prepared(stream)) {
+      gtk_media_stream_set_muted(stream, o.muted);
+    } else if (!g_object_get_data(G_OBJECT(stream), "n8v-mute-hooked")) {
+      g_object_set_data(G_OBJECT(stream), "n8v-mute-hooked", GINT_TO_POINTER(1));
+      g_signal_connect_data(
+        stream,
+        "notify::prepared",
+        G_CALLBACK(+[](GObject *object, GParamSpec *, gpointer) {
+          GtkMediaStream *s = GTK_MEDIA_STREAM(object);
+          if (gtk_media_stream_is_prepared(s)) gtk_media_stream_set_muted(s, GPOINTER_TO_INT(g_object_get_data(object, "n8v-muted")) != 0);
+        }),
+        nullptr,
+        nullptr,
+        (GConnectFlags)0
+      );
+    }
+  }
+
+  CornerRadius radius;
+  switch (o.rounding.mode) {
+  case N8V_ROUNDING_STYLE_DEFAULT:
+    radius = activePaint().image().cornerRadius;
+    break;
+  case N8V_ROUNDING_NONE:
+    radius = {};
+    break;
+  case N8V_ROUNDING_FIXED:
+    radius = {o.rounding.radius.top_left, o.rounding.radius.top_right, o.rounding.radius.bottom_left, o.rounding.radius.bottom_right};
+    break;
+  }
+  std::string wanted;
+  if (radius.topLeft > 0 || radius.topRight > 0 || radius.bottomLeft > 0 || radius.bottomRight > 0) {
+    char name[64];
+    std::snprintf(name, sizeof(name), "n8v-round-%d-%d-%d-%d", (int)radius.topLeft, (int)radius.topRight, (int)radius.bottomRight, (int)radius.bottomLeft);
+    wanted = name;
+    static std::unordered_set<std::string> made;
+    if (made.insert(wanted).second) {
+      char rule[160];
+      std::snprintf(
+        rule,
+        sizeof(rule),
+        ".%s { border-radius: %dpx %dpx %dpx %dpx; }",
+        name,
+        (int)radius.topLeft,
+        (int)radius.topRight,
+        (int)radius.bottomRight,
+        (int)radius.bottomLeft
+      );
+      GtkCssProvider *provider = gtk_css_provider_new();
+      gtk_css_provider_load_from_string(provider, rule);
+      gtk_style_context_add_provider_for_display(gtk_widget_get_display(nn.outer), GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+      g_object_unref(provider);
+    }
+  }
+  if (wanted != nn.roundClass) {
+    if (!nn.roundClass.empty()) gtk_widget_remove_css_class(nn.outer, nn.roundClass.c_str());
+    if (!wanted.empty()) gtk_widget_add_css_class(nn.outer, wanted.c_str());
+    nn.roundClass = wanted;
+  }
+
+  gtk_widget_set_size_request(
+    nn.widget,
+    o.width.mode == N8V_SIZING_FIXED ? std::max(1, (int)o.width.value) : 480,
+    o.height.mode == N8V_SIZING_FIXED ? std::max(1, (int)o.height.value) : 270
+  );
+}
+
 void Gtk4TreeBackend::setIconImage(NativeNode &nn, GtkWidget *image, const char *name, int pixelSize) {
   if (!name || !*name) return;
   gtk_image_set_pixel_size(GTK_IMAGE(image), pixelSize);
@@ -1520,6 +1623,18 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
   }
   case Kind::Icon: {
     nn.outer = nn.widget = gtk_image_new();
+    break;
+  }
+  case Kind::Video: {
+    const n8v_video_options *o = std::get_if<n8v_video_options>(&pn.current.props);
+    if (o && !o->controls) {
+      nn.outer = nn.widget = gtk_picture_new();
+      gtk_picture_set_can_shrink(GTK_PICTURE(nn.widget), TRUE);
+      gtk_picture_set_content_fit(GTK_PICTURE(nn.widget), GTK_CONTENT_FIT_COVER);
+    } else {
+      nn.outer = nn.widget = gtk_video_new();
+    }
+    gtk_widget_set_overflow(nn.outer, GTK_OVERFLOW_HIDDEN);
     break;
   }
   case Kind::Document: {
@@ -2043,6 +2158,7 @@ void Gtk4TreeBackend::apply(NativeNode &nn) {
         }
         gtk_widget_set_size_request(nn.widget, targetW, targetH);
       },
+      [&](const n8v_video_options &o) { applyVideo(nn, o); },
       [&](const n8v_icon_options &o) {
         const int size = o.width.mode == N8V_SIZING_FIXED ? (int)o.width.value : kDefaultIconSize;
         setIconImage(nn, nn.widget, o.name, size);

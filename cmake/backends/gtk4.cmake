@@ -44,6 +44,7 @@ if(N8V_BACKEND_GTK4)
         g_object_ref_sink
         g_object_ref
         g_object_set_data
+        g_object_set_data_full
         g_object_get_data
         g_type_check_instance_cast
         g_type_check_instance_is_a
@@ -107,6 +108,7 @@ if(N8V_BACKEND_GTK4)
         g_list_model_get_type
         g_file_get_type
         g_file_new_for_path
+        g_file_new_for_uri
         g_file_get_path
     )
     target_include_directories(gio_lazy PUBLIC ${_N8V_GTK4_INCLUDE_DIRS})

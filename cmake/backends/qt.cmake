@@ -49,6 +49,39 @@ if(N8V_BACKEND_QT)
       LIBRARY "${_N8V_QT6CORE_SO}"
     )
     target_include_directories(qt6core_lazy PUBLIC ${_N8V_QT6CORE_INCLUDE_DIRS})
+
+    set(N8V_HAVE_QT_MULTIMEDIA FALSE)
+    find_package(Qt6 QUIET COMPONENTS Multimedia MultimediaWidgets)
+    find_library(_N8V_QT6MM_SO NAMES Qt6Multimedia)
+    find_library(_N8V_QT6MMW_SO NAMES Qt6MultimediaWidgets)
+    if(Qt6Multimedia_FOUND AND Qt6MultimediaWidgets_FOUND AND _N8V_QT6MM_SO AND _N8V_QT6MMW_SO)
+      set(N8V_HAVE_QT_MULTIMEDIA TRUE)
+      get_target_property(_N8V_QT6MM_INCLUDE_DIRS Qt6::Multimedia INTERFACE_INCLUDE_DIRECTORIES)
+      get_target_property(_N8V_QT6MMW_INCLUDE_DIRS Qt6::MultimediaWidgets INTERFACE_INCLUDE_DIRECTORIES)
+
+      lzy_add_wrapper(qt6multimedia_lazy
+        LIBRARY_NAMES
+          "libQt6Multimedia.so.6"
+          "libQt6Multimedia.so"
+          "libQt6Multimedia.6.dylib"
+          "libQt6Multimedia.dylib"
+          "Qt6Multimedia.dll"
+        LIBRARY "${_N8V_QT6MM_SO}"
+      )
+      target_include_directories(qt6multimedia_lazy PUBLIC ${_N8V_QT6MM_INCLUDE_DIRS})
+
+      lzy_add_wrapper(qt6multimediawidgets_lazy
+        LIBRARY_NAMES
+          "libQt6MultimediaWidgets.so.6"
+          "libQt6MultimediaWidgets.so"
+          "libQt6MultimediaWidgets.6.dylib"
+          "libQt6MultimediaWidgets.dylib"
+          "Qt6MultimediaWidgets.dll"
+        LIBRARY "${_N8V_QT6MMW_SO}"
+        RTTI_SHIMS QVideoWidget
+      )
+      target_include_directories(qt6multimediawidgets_lazy PUBLIC ${_N8V_QT6MMW_INCLUDE_DIRS})
+    endif()
   else()
     message(STATUS "[n8v] Qt6 Widgets not found - native_qt backend disabled")
   endif()

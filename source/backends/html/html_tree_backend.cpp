@@ -88,10 +88,12 @@ enum class NativeKind {
   Icon,
   Document,
   SidebarSection,
-  SidebarDivider
+  SidebarDivider,
+  Video
 };
 
 struct NativeNode {
+  std::string videoSource;
   NativeKind kind() const { return node ? (NativeKind)node->current.props.index() : NativeKind::Root; }
 
   PNode *node = nullptr;
@@ -133,6 +135,11 @@ n8v_sizing sizingFor(const NativeNode &nn, bool horizontal) {
       [&](const n8v_document_options &o) { return horizontal ? o.width : o.height; },
       [&](const n8v_icon_options &o) { return horizontal ? o.width : o.height; },
       [&](const n8v_image_options &o) { return horizontal ? o.width : o.height; },
+      [&](const n8v_video_options &o) {
+        n8v_sizing s = horizontal ? o.width : o.height;
+        if (s.mode == N8V_SIZING_FIT && s.min <= 0.0f && s.max <= 0.0f) return n8v_sizing_fixed(horizontal ? 480.0f : 270.0f);
+        return s;
+      },
       [&](const n8v_sidebar_options &) { return growSizing(); },
       [&](const n8v_entry_options &) { return horizontal ? growSizing() : fitSizing(); },
       [&](const n8v_dropdown_options &) { return horizontal ? growSizing() : fitSizing(); },
@@ -863,6 +870,10 @@ void HtmlTreeBackend::build(NativeNode &nn) {
   case Kind::Icon:
     nn.outer = nn.widget = createEl("img");
     break;
+  case Kind::Video:
+    nn.outer = nn.widget = createEl("video");
+    nn.widget.set("playsInline", true);
+    break;
   case Kind::Document:
     nn.outer = nn.widget = createEl("div");
     break;
@@ -1119,6 +1130,30 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
           if (o.width.mode == N8V_SIZING_FIT && o.width.min <= 0.0f && o.width.max <= 0.0f) nn.widget.set("width", decoded->width);
           if (o.height.mode == N8V_SIZING_FIT && o.height.min <= 0.0f && o.height.max <= 0.0f) nn.widget.set("height", decoded->height);
         }
+      },
+      [&](const n8v_video_options &o) {
+        CornerRadius radius;
+        switch (o.rounding.mode) {
+        case N8V_ROUNDING_STYLE_DEFAULT:
+          radius = paint.image().cornerRadius;
+          break;
+        case N8V_ROUNDING_NONE:
+          radius = {};
+          break;
+        case N8V_ROUNDING_FIXED:
+          radius = {o.rounding.radius.top_left, o.rounding.radius.top_right, o.rounding.radius.bottom_left, o.rounding.radius.bottom_right};
+          break;
+        }
+        setClass(nn.outer, classFor(css::imageCss(radius)));
+        const std::string source = o.source ? o.source : "";
+        if (source != nn.videoSource) {
+          nn.videoSource = source;
+          nn.widget.set("src", source);
+        }
+        nn.widget.set("controls", o.controls);
+        nn.widget.set("loop", o.loop);
+        nn.widget.set("muted", o.muted);
+        nn.widget.set("autoplay", o.autoplay);
       },
       [&](const n8v_icon_options &o) {
         const IconPaint ip = paint.icon();

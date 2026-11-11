@@ -38,6 +38,7 @@
 #include <QImage>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QLibrary>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
@@ -54,6 +55,12 @@
 #include <QStyle>
 #include <QTextDocument>
 #include <QVBoxLayout>
+#ifdef N8V_HAVE_QT_MULTIMEDIA
+#include <QAudioOutput>
+#include <QMediaPlayer>
+#include <QUrl>
+#include <QVideoWidget>
+#endif
 #include <QWidget>
 
 #include <cstdio>
@@ -187,6 +194,28 @@ private:
   mutable QSize idealHint_;
 };
 
+#ifdef N8V_HAVE_QT_MULTIMEDIA
+class N8VVideoWidget final : public QVideoWidget {
+public:
+  using QVideoWidget::QVideoWidget;
+  QMediaPlayer *player = nullptr;
+
+protected:
+  void mouseReleaseEvent(QMouseEvent *event) override {
+    if (player && event->button() == Qt::LeftButton) {
+      if (player->playbackState() == QMediaPlayer::PlayingState) player->pause();
+      else player->play();
+    }
+    QVideoWidget::mouseReleaseEvent(event);
+  }
+};
+
+bool multimediaAvailable() {
+  static const bool available = QLibrary("Qt6Multimedia").load() && QLibrary("Qt6MultimediaWidgets").load();
+  return available;
+}
+#endif
+
 class N8VLineEdit final : public QLineEdit {
 public:
   using QLineEdit::QLineEdit;
@@ -251,7 +280,8 @@ enum class NativeKind {
   Icon,
   Document,
   SidebarSection,
-  SidebarDivider
+  SidebarDivider,
+  Video
 };
 
 struct NativeNode {
@@ -286,6 +316,13 @@ struct NativeNode {
   std::string lastItemsKey;
   std::string iconKey;
   const void *pixmapSource = nullptr;
+#ifdef N8V_HAVE_QT_MULTIMEDIA
+  QMediaPlayer *player = nullptr;
+  QAudioOutput *audio = nullptr;
+  QSlider *seek = nullptr;
+  int seekSet = 0;
+#endif
+  std::string videoSource;
   std::string registeredId;
 
   BoundValue lastValue;
@@ -311,6 +348,11 @@ n8v_sizing sizingFor(const NativeNode &nn, bool horizontal) {
       [&](const n8v_document_options &o) { return horizontal ? o.width : o.height; },
       [&](const n8v_icon_options &o) { return horizontal ? o.width : o.height; },
       [&](const n8v_image_options &o) { return horizontal ? o.width : o.height; },
+      [&](const n8v_video_options &o) {
+        n8v_sizing s = horizontal ? o.width : o.height;
+        if (s.mode == N8V_SIZING_FIT && s.min <= 0.0f && s.max <= 0.0f) return n8v_sizing_fixed(horizontal ? 480.0f : 270.0f);
+        return s;
+      },
       [&](const n8v_sidebar_options &) { return growSizing(); },
       [&](const n8v_entry_options &o) {
         if (horizontal) return growSizing();
@@ -964,6 +1006,19 @@ void QtTreeBackend::pollNative() {
   const std::vector<PNode *> nodes(live_.begin(), live_.end());
   for (PNode *pn : nodes) {
     NativeNode &nn = *native(*pn);
+#ifdef N8V_HAVE_QT_MULTIMEDIA
+    if (nn.kind() == Kind::Video && nn.player && nn.seek) {
+      const qint64 duration = nn.player->duration();
+      if (nn.seek->value() != nn.seekSet) {
+        if (duration > 0) nn.player->setPosition(duration * nn.seek->value() / 1000);
+        nn.seekSet = nn.seek->value();
+      } else if (duration > 0 && !nn.seek->isSliderDown()) {
+        nn.seekSet = (int)(nn.player->position() * 1000 / duration);
+        nn.seek->setValue(nn.seekSet);
+      }
+      continue;
+    }
+#endif
     switch (nn.kind()) {
     case Kind::Checkbox:
     case Kind::Toggle:
@@ -1259,6 +1314,36 @@ void QtTreeBackend::build(NativeNode &nn) {
     nn.outer = nn.widget = label;
     break;
   }
+  case Kind::Video: {
+    const n8v_video_options *o = propsOf<n8v_video_options>(pn);
+#ifdef N8V_HAVE_QT_MULTIMEDIA
+    if (multimediaAvailable()) {
+      nn.outer = new QWidget();
+      auto *box = new QVBoxLayout(nn.outer);
+      box->setContentsMargins(0, 0, 0, 0);
+      box->setSpacing(4);
+      auto *surface = new N8VVideoWidget();
+      nn.player = new QMediaPlayer(nn.outer);
+      nn.audio = new QAudioOutput(nn.outer);
+      nn.player->setAudioOutput(nn.audio);
+      nn.player->setVideoOutput(surface);
+      surface->player = nn.player;
+      box->addWidget(surface, 1);
+      if (o && o->controls) {
+        nn.seek = new QSlider(Qt::Horizontal);
+        nn.seek->setRange(0, 1000);
+        box->addWidget(nn.seek);
+      }
+      nn.widget = surface;
+      break;
+    }
+#endif
+    (void)o;
+    auto *label = new QLabel("Video playback needs Qt Multimedia");
+    label->setAlignment(Qt::AlignCenter);
+    nn.outer = nn.widget = label;
+    break;
+  }
   case Kind::Document: {
     auto *label = new QLabel();
     label->setTextFormat(Qt::MarkdownText);
@@ -1549,6 +1634,28 @@ void QtTreeBackend::apply(NativeNode &nn) {
           labelWidget->setPixmap(pixmapFromDecoded(baked));
           nn.pixmapSource = baked;
         }
+      },
+      [&](const n8v_video_options &o) {
+#ifdef N8V_HAVE_QT_MULTIMEDIA
+        if (nn.player) {
+          const std::string source = o.source ? o.source : "";
+          if (source != nn.videoSource) {
+            nn.videoSource = source;
+            if (source.empty()) {
+              nn.player->setSource(QUrl());
+            } else if (source.find("://") != std::string::npos) {
+              nn.player->setSource(QUrl(QString::fromStdString(source)));
+            } else {
+              nn.player->setSource(QUrl::fromLocalFile(QString::fromStdString(source)));
+            }
+            if (o.autoplay && !source.empty()) nn.player->play();
+          }
+          nn.player->setLoops(o.loop ? QMediaPlayer::Infinite : QMediaPlayer::Once);
+          nn.audio->setMuted(o.muted);
+        }
+#else
+        (void)o;
+#endif
       },
       [&](const n8v_icon_options &o) {
         auto *labelWidget = static_cast<QLabel *>(nn.widget);

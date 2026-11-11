@@ -155,6 +155,21 @@ struct ImageOptions {
   Rounding rounding = Rounding::styleDefault();
 };
 
+struct VideoOptions {
+  /** A file path, or a URL (anything with a scheme, like https://). */
+  std::string source;
+  /** Videos have no size of their own here, so a size is needed. Fit means 480x270. */
+  Sizing width = Sizing::fit();
+  Sizing height = Sizing::fit();
+  Rounding rounding = Rounding::styleDefault();
+  bool autoplay = false;
+  bool loop = false;
+  bool muted = false;
+  bool controls = true;
+  /** Keeps the player (and its position) across frames when the tree around it changes. */
+  std::string id;
+};
+
 struct SidebarOptions {
   std::string_view title = {};
   int *selected = nullptr;

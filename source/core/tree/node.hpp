@@ -28,7 +28,8 @@ struct Node {
     n8v_icon_options,
     n8v_document_options,
     n8v_sidebar_section_options,
-    n8v_sidebar_divider_options>;
+    n8v_sidebar_divider_options,
+    n8v_video_options>;
 
   Props props;
   std::string_view label;

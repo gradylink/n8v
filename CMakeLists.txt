@@ -351,6 +351,7 @@ set(N8V_SOURCES
   source/core/widgets/dropdown.cpp
   source/core/widgets/slider.cpp
   source/core/widgets/image.cpp
+  source/core/widgets/video.cpp
   source/core/widgets/icon.cpp
   source/core/widgets/sidebar.cpp
   source/core/widgets/panel.cpp
@@ -461,6 +462,10 @@ foreach(_n8v_target ${_n8v_targets})
     target_sources(${_n8v_target} PRIVATE source/backends/native_qt/qt_tree_backend.cpp)
     target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_QT_BACKEND)
     target_link_libraries(${_n8v_target} PUBLIC qt6widgets_lazy qt6gui_lazy qt6core_lazy)
+    if(N8V_HAVE_QT_MULTIMEDIA)
+      target_compile_definitions(${_n8v_target} PRIVATE N8V_HAVE_QT_MULTIMEDIA)
+      target_link_libraries(${_n8v_target} PUBLIC qt6multimedia_lazy qt6multimediawidgets_lazy)
+    endif()
   endif()
 
   if(N8V_HAVE_MILSKO)
@@ -512,6 +517,9 @@ if(N8V_INSTALL AND NOT EMSCRIPTEN)
   endif()
   if(N8V_HAVE_QT)
     list(APPEND _n8v_lazy_export_targets qt6widgets_lazy qt6gui_lazy qt6core_lazy)
+    if(N8V_HAVE_QT_MULTIMEDIA)
+      list(APPEND _n8v_lazy_export_targets qt6multimedia_lazy qt6multimediawidgets_lazy)
+    endif()
   endif()
   if(N8V_HAVE_MILSKO)
     list(APPEND _n8v_lazy_export_targets milsko_lazy)
