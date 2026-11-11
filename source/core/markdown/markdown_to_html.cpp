@@ -122,8 +122,37 @@ std::string openStyledLink(std::string &out, const n8v_link_style &style, const 
   return {};
 }
 
+void appendImage(std::string &out, const InlineRun &run, const HtmlOptions &options) {
+  const int height = run.imageSize > 0 ? run.imageSize : options.defaultImageHeight;
+  std::string source;
+  if (options.flavor == HtmlFlavor::Basic) {
+    escapeInto(out, run.text);
+    return;
+  }
+  if (options.flavor == HtmlFlavor::Browser) {
+    source = run.imageUrl;
+  } else if (options.imageResolver) {
+    source = options.imageResolver(run.imageUrl);
+  }
+  if (source.empty()) {
+    escapeInto(out, run.text);
+    return;
+  }
+  out += "<img src=\"";
+  escapeAttrInto(out, source);
+  out += "\" alt=\"";
+  escapeAttrInto(out, run.text);
+  out += "\" height=\"" + std::to_string(height) + "\"";
+  if (options.flavor != HtmlFlavor::Basic) out += " style=\"vertical-align:middle\"";
+  out += ">";
+}
+
 void appendInlines(std::string &out, const std::vector<InlineRun> &runs, const HtmlOptions &options) {
   for (const InlineRun &run : runs) {
+    if (!run.imageUrl.empty()) {
+      appendImage(out, run, options);
+      continue;
+    }
     bool link = !run.linkUrl.empty();
     n8v_link_style style{};
     if (link && options.linkStyler && options.linkStyler(run.linkUrl, style)) {

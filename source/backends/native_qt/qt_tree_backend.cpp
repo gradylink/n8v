@@ -7,6 +7,7 @@
 #include "core/icon_loader.hpp"
 #include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
+#include "core/markdown/image_state.hpp"
 #include "core/markdown/markdown.hpp"
 #include "core/markdown/markdown_to_html.hpp"
 #include "core/open_url.hpp"
@@ -30,6 +31,7 @@
 #include <QEvent>
 #include <QEventLoop>
 #include <QFileDialog>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QIcon>
@@ -1435,7 +1437,7 @@ void QtTreeBackend::apply(NativeNode &nn) {
       },
       [&](const n8v_document_options &o) {
         auto *label = static_cast<QLabel *>(nn.widget);
-        if (!o.link_style) {
+        if (!o.link_style && !o.image_resolver) {
           label->setText(qstr(o.markdown));
           return;
         }
@@ -1443,6 +1445,10 @@ void QtTreeBackend::apply(NativeNode &nn) {
         n8v::detail::markdown::HtmlOptions htmlOptions;
         htmlOptions.flavor = n8v::detail::markdown::HtmlFlavor::QtRichText;
         htmlOptions.linkStyler = n8v::detail::markdown::makeLinkStyler(o.link_style, o.link_style_userdata);
+        if (o.image_resolver) {
+          htmlOptions.imageResolver = [&o](const std::string &src) { return n8v::detail::markdown::lookupImage(o.image_state, src); };
+        }
+        htmlOptions.defaultImageHeight = (int)(QFontMetrics(label->font()).height() * 1.2);
         const QColor backdrop = label->palette().color(QPalette::Window);
         htmlOptions.backdrop = {(float)backdrop.red(), (float)backdrop.green(), (float)backdrop.blue(), 255.0f};
         label->setTextFormat(Qt::RichText);

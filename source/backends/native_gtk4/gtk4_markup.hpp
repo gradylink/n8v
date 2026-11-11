@@ -32,17 +32,29 @@ inline std::string escapeMarkup(std::string_view text) {
 
 using LinkStyler = std::function<bool(const std::string &url, n8v_link_style &style)>;
 
+using ImagePlacer = std::function<bool(const markdown::InlineRun &run)>;
+
+struct MarkupHooks {
+  const LinkStyler *links = nullptr;
+  const ImagePlacer *images = nullptr;
+};
+
 inline std::string colorAttributes(const char *name, const n8v_color &c, const char *alphaName) {
   char buf[96];
   std::snprintf(buf, sizeof buf, " %s=\"#%02x%02x%02x\" %s=\"%d%%\"", name, (int)c.r & 255, (int)c.g & 255, (int)c.b & 255, alphaName, (int)(c.a / 255.0f * 100.0f + 0.5f));
   return buf;
 }
 
-inline void appendInlineRunsMarkup(std::string &out, const std::vector<markdown::InlineRun> &runs, const LinkStyler *styler = nullptr) {
+inline void appendInlineRunsMarkup(std::string &out, const std::vector<markdown::InlineRun> &runs, const MarkupHooks &hooks = {}) {
   for (const markdown::InlineRun &run : runs) {
+    if (!run.imageUrl.empty()) {
+      if (hooks.images && *hooks.images && (*hooks.images)(run)) out += "\xEF\xBF\xBC";
+      else out += escapeMarkup(run.text);
+      continue;
+    }
     bool link = !run.linkUrl.empty();
     n8v_link_style style{};
-    const bool styled = link && styler && *styler && (*styler)(run.linkUrl, style);
+    const bool styled = link && hooks.links && *hooks.links && (*hooks.links)(run.linkUrl, style);
     if (styled) {
       out += "<span";
       if (style.foreground.a > 0.0f) out += colorAttributes("foreground", style.foreground, "fgalpha");
@@ -71,7 +83,7 @@ inline void appendInlineRunsMarkup(std::string &out, const std::vector<markdown:
   }
 }
 
-inline void appendBlocksMarkup(std::string &out, const std::vector<markdown::Block> &blocks, const LinkStyler *styler = nullptr) {
+inline void appendBlocksMarkup(std::string &out, const std::vector<markdown::Block> &blocks, const MarkupHooks &hooks = {}) {
   using markdown::BlockKind;
   for (size_t i = 0; i < blocks.size(); i++) {
     const markdown::Block &block = blocks[i];
@@ -80,12 +92,12 @@ inline void appendBlocksMarkup(std::string &out, const std::vector<markdown::Blo
     case BlockKind::Heading: {
       const char *size = block.level <= 1 ? "xx-large" : block.level == 2 ? "x-large" : block.level == 3 ? "large" : "medium";
       out += "<span size=\"" + std::string(size) + "\" weight=\"bold\">";
-      appendInlineRunsMarkup(out, block.inlines, styler);
+      appendInlineRunsMarkup(out, block.inlines, hooks);
       out += "</span>";
       break;
     }
     case BlockKind::Paragraph: {
-      appendInlineRunsMarkup(out, block.inlines, styler);
+      appendInlineRunsMarkup(out, block.inlines, hooks);
       break;
     }
     case BlockKind::CodeBlock: {
@@ -96,7 +108,7 @@ inline void appendBlocksMarkup(std::string &out, const std::vector<markdown::Blo
       for (size_t j = 0; j < block.listItems.size(); j++) {
         if (j > 0) out += "\n";
         out += "• ";
-        appendInlineRunsMarkup(out, block.listItems[j], styler);
+        appendInlineRunsMarkup(out, block.listItems[j], hooks);
       }
       break;
     }
@@ -104,13 +116,13 @@ inline void appendBlocksMarkup(std::string &out, const std::vector<markdown::Blo
       for (size_t j = 0; j < block.listItems.size(); j++) {
         if (j > 0) out += "\n";
         out += std::to_string(block.orderedStart + (int)j) + ". ";
-        appendInlineRunsMarkup(out, block.listItems[j], styler);
+        appendInlineRunsMarkup(out, block.listItems[j], hooks);
       }
       break;
     }
     case BlockKind::BlockQuote: {
       out += "<span alpha=\"75%\"><i>";
-      appendBlocksMarkup(out, block.children, styler);
+      appendBlocksMarkup(out, block.children, hooks);
       out += "</i></span>";
       break;
     }
@@ -122,9 +134,9 @@ inline void appendBlocksMarkup(std::string &out, const std::vector<markdown::Blo
   }
 }
 
-inline std::string documentToPangoMarkup(const markdown::Document &doc, const LinkStyler *styler = nullptr) {
+inline std::string documentToPangoMarkup(const markdown::Document &doc, const MarkupHooks &hooks = {}) {
   std::string out;
-  appendBlocksMarkup(out, doc, styler);
+  appendBlocksMarkup(out, doc, hooks);
   return out;
 }
 

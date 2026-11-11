@@ -6,6 +6,7 @@
 #include "core/icon_loader.hpp"
 #include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
+#include "core/markdown/image_state.hpp"
 #include "core/open_url.hpp"
 #include "core/style.hpp"
 #include "core/tree/dispatch.hpp"
@@ -127,6 +128,7 @@ struct NativeNode {
   double stickyLastUpper = 0.0;
   double stickyLastPage = 0.0;
   std::string lastItemsKey;
+  std::vector<GtkWidget *> inlinePics;
   size_t dropdownCount = 0;
   const void *textureSource = nullptr;
   std::string registeredId;
@@ -568,6 +570,8 @@ private:
   static void onMotionEnter(GtkEventControllerMotion *, gdouble, gdouble, gpointer userData) { self_->setHover(static_cast<PNode *>(userData), true); }
   static void onMotionLeave(GtkEventControllerMotion *, gpointer userData) { self_->setHover(static_cast<PNode *>(userData), false); }
   static gboolean onOverlayChildPosition(GtkOverlay *overlay, GtkWidget *child, GdkRectangle *allocation, gpointer);
+  static gboolean onInlineImagePosition(GtkOverlay *overlay, GtkWidget *child, GdkRectangle *allocation, gpointer);
+  void applyDocument(NativeNode &nn, const n8v_document_options &o);
 
   static void dumpWidget(GtkWidget *w, int depth) {
     graphene_rect_t bounds = GRAPHENE_RECT_INIT(0, 0, 0, 0);
@@ -877,6 +881,98 @@ gboolean Gtk4TreeBackend::onOverlayChildPosition(GtkOverlay *overlay, GtkWidget 
   allocation->width = w;
   allocation->height = h;
   return TRUE;
+}
+
+gboolean Gtk4TreeBackend::onInlineImagePosition(GtkOverlay *overlay, GtkWidget *child, GdkRectangle *allocation, gpointer) {
+  if (!g_object_get_data(G_OBJECT(child), "n8v-inline-pic")) return FALSE;
+  GtkWidget *label = gtk_overlay_get_child(overlay);
+  if (!label || !GTK_IS_LABEL(label)) return FALSE;
+
+  PangoRectangle spot{};
+  pango_layout_index_to_pos(gtk_label_get_layout(GTK_LABEL(label)), GPOINTER_TO_INT(g_object_get_data(G_OBJECT(child), "n8v-inline-index")), &spot);
+  int offsetX = 0, offsetY = 0;
+  gtk_label_get_layout_offsets(GTK_LABEL(label), &offsetX, &offsetY);
+  const int w = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(child), "n8v-inline-width"));
+  const int h = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(child), "n8v-inline-height"));
+  allocation->x = offsetX + PANGO_PIXELS(spot.x);
+  allocation->y = offsetY + PANGO_PIXELS(spot.y + spot.height / 2) - h / 2;
+  allocation->width = w;
+  allocation->height = h;
+  return TRUE;
+}
+
+void Gtk4TreeBackend::applyDocument(NativeNode &nn, const n8v_document_options &o) {
+  GtkLabel *label = GTK_LABEL(nn.widget);
+  const markdown::Document doc = markdown::parse(o.markdown ? o.markdown : "");
+
+  markup::LinkStyler styler;
+  if (o.link_style) {
+    styler = [&o](const std::string &url, n8v_link_style &style) { return o.link_style(url.c_str(), &style, o.link_style_userdata); };
+  }
+
+  PangoFontMetrics *metrics = pango_context_get_metrics(gtk_widget_get_pango_context(nn.widget), nullptr, nullptr);
+  const int lineHeight = (pango_font_metrics_get_ascent(metrics) + pango_font_metrics_get_descent(metrics)) / PANGO_SCALE;
+  pango_font_metrics_unref(metrics);
+  struct Placed {
+    const DecodedImage *image;
+    int width, height;
+  };
+  std::vector<Placed> placed;
+  markup::ImagePlacer placer = [&](const markdown::InlineRun &run) {
+    const std::string path = markdown::lookupImage(o.image_state, run.imageUrl);
+    if (path.empty()) return false;
+    n8v_image_options imageOptions{};
+    imageOptions.source_kind = N8V_IMAGE_SOURCE_PATH;
+    imageOptions.path = path.c_str();
+    const DecodedImage *image = getOrDecodeImage(imageOptions);
+    if (!image || image->width <= 0 || image->height <= 0) return false;
+    const int height = run.imageSize > 0 ? run.imageSize : std::max(8, (int)(lineHeight * 1.15f));
+    placed.push_back({image, std::max(1, (int)std::lround((double)image->width * height / image->height)), height});
+    return true;
+  };
+
+  markup::MarkupHooks hooks;
+  hooks.links = o.link_style ? &styler : nullptr;
+  hooks.images = o.image_resolver ? &placer : nullptr;
+  const std::string markupText = markup::documentToPangoMarkup(doc, hooks);
+
+  const std::string key = markupText + '\x01' + (o.image_state ? o.image_state : "");
+  if (key != nn.lastItemsKey) {
+    nn.lastItemsKey = key;
+    gtk_label_set_markup(label, markupText.c_str());
+
+    for (GtkWidget *picture : nn.inlinePics) gtk_overlay_remove_overlay(GTK_OVERLAY(nn.outer), picture);
+    nn.inlinePics.clear();
+
+    const char *text = gtk_label_get_text(label);
+    PangoAttrList *attributes = pango_attr_list_new();
+    size_t next = 0;
+    for (const char *at = text; (at = strstr(at, "\xEF\xBF\xBC")) && next < placed.size(); at += 3, ++next) {
+      const int index = (int)(at - text);
+      const Placed &image = placed[next];
+      PangoRectangle logical{0, -(int)(image.height * 0.85 * PANGO_SCALE), image.width * PANGO_SCALE, image.height * PANGO_SCALE};
+      PangoAttribute *shape = pango_attr_shape_new(&logical, &logical);
+      shape->start_index = (guint)index;
+      shape->end_index = (guint)index + 3;
+      pango_attr_list_insert(attributes, shape);
+
+      GdkTexture *texture = makeTexture(image.image);
+      GtkWidget *picture = gtk_picture_new_for_paintable(GDK_PAINTABLE(texture));
+      g_object_unref(texture);
+      gtk_picture_set_can_shrink(GTK_PICTURE(picture), FALSE);
+      gtk_widget_set_size_request(picture, image.width, image.height);
+      gtk_widget_set_can_target(picture, FALSE);
+      g_object_set_data(G_OBJECT(picture), "n8v-inline-pic", GINT_TO_POINTER(1));
+      g_object_set_data(G_OBJECT(picture), "n8v-inline-index", GINT_TO_POINTER(index));
+      g_object_set_data(G_OBJECT(picture), "n8v-inline-width", GINT_TO_POINTER(image.width));
+      g_object_set_data(G_OBJECT(picture), "n8v-inline-height", GINT_TO_POINTER(image.height));
+      gtk_overlay_add_overlay(GTK_OVERLAY(nn.outer), picture);
+      nn.inlinePics.push_back(picture);
+    }
+    gtk_label_set_attributes(label, attributes);
+    pango_attr_list_unref(attributes);
+  }
+  gtk_widget_set_can_target(nn.widget, markup::documentHasLinks(doc) ? TRUE : FALSE);
 }
 
 GtkWidget *Gtk4TreeBackend::siblingBefore(NativeNode &parent, size_t index) {
@@ -1343,7 +1439,10 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
     break;
   }
   case Kind::Document: {
-    nn.outer = nn.widget = gtk_label_new("");
+    nn.widget = gtk_label_new("");
+    nn.outer = gtk_overlay_new();
+    gtk_overlay_set_child(GTK_OVERLAY(nn.outer), nn.widget);
+    g_signal_connect_data(nn.outer, "get-child-position", G_CALLBACK(&Gtk4TreeBackend::onInlineImagePosition), nullptr, nullptr, (GConnectFlags)0);
     gtk_label_set_use_markup(GTK_LABEL(nn.widget), TRUE);
     gtk_label_set_wrap(GTK_LABEL(nn.widget), TRUE);
     gtk_label_set_wrap_mode(GTK_LABEL(nn.widget), PANGO_WRAP_WORD_CHAR);
@@ -1749,19 +1848,7 @@ void Gtk4TreeBackend::apply(NativeNode &nn) {
         const int size = o.width.mode == N8V_SIZING_FIXED ? (int)o.width.value : kDefaultIconSize;
         setIconImage(nn, nn.widget, o.name, size);
       },
-      [&](const n8v_document_options &o) {
-        const markdown::Document doc = markdown::parse(o.markdown ? o.markdown : "");
-        markup::LinkStyler styler;
-        if (o.link_style) {
-          styler = [&o](const std::string &url, n8v_link_style &style) { return o.link_style(url.c_str(), &style, o.link_style_userdata); };
-        }
-        const std::string markupText = markup::documentToPangoMarkup(doc, o.link_style ? &styler : nullptr);
-        if (markupText != nn.lastItemsKey) {
-          gtk_label_set_markup(GTK_LABEL(nn.widget), markupText.c_str());
-          nn.lastItemsKey = markupText;
-        }
-        gtk_widget_set_can_target(nn.widget, markup::documentHasLinks(doc) ? TRUE : FALSE);
-      },
+      [&](const n8v_document_options &o) { applyDocument(nn, o); },
     },
     pn.current.props
   );

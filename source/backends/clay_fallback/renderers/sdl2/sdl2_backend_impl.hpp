@@ -108,6 +108,7 @@ private:
   void renderSwitchIndicator(NativeWidgetMeta &meta, const Clay_BoundingBox &labelBox);
 
   void drawImage(NativeWidgetMeta &meta, const Clay_BoundingBox &box, const Clay_CornerRadius &corner);
+  void drawInlineImage(const DecodedImage *image, const Clay_BoundingBox &box);
   void renderDocument(NativeWidgetMeta &meta, const Clay_BoundingBox &box);
 
   size_t hitTestOffset(std::string_view text, FontFamily family, uint16_t fontSize, float localX, bool bold = false, bool italic = false) const;

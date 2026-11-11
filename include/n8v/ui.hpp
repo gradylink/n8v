@@ -864,8 +864,18 @@ inline void document(DocumentOptions options) {
         *out = n8v_link_style{toC(result->foreground), toC(result->background), result->bold};
         return true;
       }),
-      c_opts.link_style, c_opts.link_style_userdata
+      c_opts.link_style,
+      c_opts.link_style_userdata
     );
+  }
+
+  if (options.imageResolver) {
+    auto buffer = std::make_shared<std::string>();
+    std::function<const char *(const char *)> closure = [resolve = std::move(options.imageResolver), buffer](const char *src) -> const char * {
+      *buffer = resolve(src ? src : "");
+      return buffer->empty() ? nullptr : buffer->c_str();
+    };
+    callback_bridge::bridge(callback_bridge::imageResolveClosures, std::move(closure), c_opts.image_resolver, c_opts.image_resolver_userdata);
   }
 
   n8v_document(c_opts);

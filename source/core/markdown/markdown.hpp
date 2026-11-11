@@ -13,6 +13,8 @@ struct InlineRun {
   bool strikethrough = false;
   bool code = false;
   std::string linkUrl; // empty if this run isn't a link
+  std::string imageUrl;
+  int imageSize = 0;
 };
 
 enum class BlockKind {

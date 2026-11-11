@@ -9,6 +9,19 @@
 
 namespace n8v::detail {
 
+void Sdl2Backend::drawInlineImage(const DecodedImage *image, const Clay_BoundingBox &box) {
+  if (!image) return;
+  SDL_Texture *&texture = imageTextures_[image];
+  if (!texture) {
+    texture = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, image->width, image->height);
+    if (!texture) return;
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    SDL_UpdateTexture(texture, nullptr, image->rgba, image->width * 4);
+  }
+  SDL_Rect dest{(int)box.x, (int)box.y, (int)box.width, (int)box.height};
+  SDL_RenderCopy(renderer_, texture, nullptr, &dest);
+}
+
 void Sdl2Backend::drawImage(NativeWidgetMeta &meta, const Clay_BoundingBox &box, const Clay_CornerRadius &corner) {
   if (!meta.image) return;
 

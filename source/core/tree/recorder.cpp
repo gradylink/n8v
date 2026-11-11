@@ -1,5 +1,6 @@
 #include <n8v/n8v_c.h>
 
+#include "core/markdown/image_state.hpp"
 #include "core/tree/node.hpp"
 #include "core/ui_core_internal.hpp"
 
@@ -192,6 +193,12 @@ void n8v_icon(n8v_icon_options options) {
 void n8v_document(n8v_document_options options) {
   options.markdown = own(options.markdown);
   options.id = own(options.id);
+  options.image_state = nullptr;
+  if (options.image_resolver) {
+    const n8v::detail::markdown::CachedDocument cached = n8v::detail::markdown::getOrParse(options.markdown ? options.markdown : "");
+    const std::string state = n8v::detail::markdown::buildImageState(*cached.document, options.image_resolver, options.image_resolver_userdata);
+    options.image_state = state.empty() ? nullptr : own(state.c_str());
+  }
   append(options);
 }
 

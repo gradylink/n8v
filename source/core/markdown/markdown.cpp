@@ -2,6 +2,7 @@
 
 #include <md4c.h>
 
+#include <cstdlib>
 #include <unordered_map>
 
 namespace n8v::detail::markdown {
@@ -44,6 +45,13 @@ struct Builder {
   int strikeDepth = 0;
   int codeSpanDepth = 0;
   std::vector<std::string> linkStack;
+
+  struct PendingImage {
+    std::string src;
+    int size = 0;
+    std::string alt;
+  };
+  std::vector<PendingImage> imageStack;
 
   std::vector<InlineRun> *currentTarget() { return targetStack.empty() ? nullptr : targetStack.back(); }
 };
@@ -188,6 +196,15 @@ int enterSpan(MD_SPANTYPE type, void *detail, void *userdata) {
     b.linkStack.emplace_back(attrView(d->href));
     break;
   }
+  case MD_SPAN_IMG: {
+    auto *d = static_cast<MD_SPAN_IMG_DETAIL *>(detail);
+    Builder::PendingImage image;
+    image.src = std::string(attrView(d->src));
+    const std::string title(attrView(d->title));
+    image.size = title.empty() ? 0 : std::atoi(title.c_str());
+    b.imageStack.push_back(std::move(image));
+    break;
+  }
   default:
     break;
   }
@@ -212,6 +229,20 @@ int leaveSpan(MD_SPANTYPE type, void * /*detail*/, void *userdata) {
   case MD_SPAN_A:
     if (!b.linkStack.empty()) b.linkStack.pop_back();
     break;
+  case MD_SPAN_IMG: {
+    if (b.imageStack.empty()) break;
+    Builder::PendingImage image = std::move(b.imageStack.back());
+    b.imageStack.pop_back();
+    std::vector<InlineRun> *target = b.currentTarget();
+    if (!target || image.src.empty()) break;
+    InlineRun run{};
+    run.text = std::move(image.alt);
+    run.imageUrl = std::move(image.src);
+    run.imageSize = image.size;
+    if (!b.linkStack.empty()) run.linkUrl = b.linkStack.back();
+    target->push_back(std::move(run));
+    break;
+  }
   default:
     break;
   }
@@ -221,6 +252,11 @@ int leaveSpan(MD_SPANTYPE type, void * /*detail*/, void *userdata) {
 int onText(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *userdata) {
   auto &b = *static_cast<Builder *>(userdata);
   std::string_view view(text, size);
+
+  if (!b.imageStack.empty()) {
+    b.imageStack.back().alt.append(view);
+    return 0;
+  }
 
   if (b.inCodeBlock) {
     b.codeAccum.append(view);

@@ -2,6 +2,7 @@
 
 #include "core/backend.hpp"
 #include "core/clay_convert.hpp"
+#include "core/markdown/inline_image.hpp"
 #include "core/markdown/markdown.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/style.hpp"
@@ -10,6 +11,7 @@
 
 #include <clay.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <functional>
@@ -21,7 +23,7 @@ namespace {
 
 using namespace n8v::detail::ui_internal;
 
-float measureDocumentHeight(const n8v::detail::markdown::Document &doc, n8v::FontFamily family, uint16_t baseFontSize, float maxWidth) {
+float measureDocumentHeight(const n8v::detail::markdown::Document &doc, n8v::FontFamily family, uint16_t baseFontSize, float maxWidth, const char *imageState) {
   using n8v::detail::markdown::Block;
   using n8v::detail::markdown::BlockKind;
   using n8v::detail::markdown::InlineRun;
@@ -33,13 +35,24 @@ float measureDocumentHeight(const n8v::detail::markdown::Document &doc, n8v::Fon
 
   float x = 0.0f;
   float y = 0.0f;
+  float lineExtra = 0.0f;
 
   auto newline = [&](uint16_t fontSize) {
     x = 0.0f;
-    y += lineHeightFor(fontSize);
+    y += lineHeightFor(fontSize) + lineExtra;
+    lineExtra = 0.0f;
   };
 
   auto layoutRun = [&](const InlineRun &run, uint16_t fontSize) {
+    if (!run.imageUrl.empty()) {
+      float imageWidth = 0.0f, imageHeight = 0.0f;
+      if (n8v::detail::markdown::inlineImageFor(run, imageState, lineHeightFor(fontSize) * 0.9f, imageWidth, imageHeight)) {
+        if (x > 0.0f && x + imageWidth > maxWidth) newline(fontSize);
+        lineExtra = std::max(lineExtra, imageHeight - lineHeightFor(fontSize));
+        x += imageWidth + 2.0f;
+        return;
+      }
+    }
     size_t pos = 0;
     while (pos <= run.text.size()) {
       size_t next = run.text.find(' ', pos);
@@ -139,8 +152,8 @@ void document(const n8v_document_options &options, int ordinal) {
     Clay_ElementId elementId = Clay_GetElementId(Clay_String{false, (int32_t)std::strlen(options.id), options.id});
     Clay_ElementData previous = Clay_GetElementData(elementId);
     const n8v::TextPaint measurePaint = n8v::activePaint().text(n8v::TextOptions{});
-    float measuredHeight =
-      previous.found ? measureDocumentHeight(*cached.document, measurePaint.font, measurePaint.fontSize, previous.boundingBox.width) : measurePaint.fontSize * 1.4f;
+    float measuredHeight = previous.found ? measureDocumentHeight(*cached.document, measurePaint.font, measurePaint.fontSize, previous.boundingBox.width, options.image_state)
+                                          : measurePaint.fontSize * 1.4f;
     heightSizing = n8v::Sizing::fixed(measuredHeight);
   }
   decl.layout.sizing.height = n8v::detail::toClay(heightSizing);
@@ -162,6 +175,7 @@ void document(const n8v_document_options &options, int ordinal) {
   meta.documentLinkColor = linkPaint.color;
   meta.documentLinkStyle = options.link_style;
   meta.documentLinkStyleUserdata = options.link_style_userdata;
+  meta.documentImageState = options.image_state;
   decl.userData = &meta;
 
   Clay__ConfigureOpenElement(decl);

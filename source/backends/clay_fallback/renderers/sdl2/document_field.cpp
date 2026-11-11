@@ -1,11 +1,13 @@
 #include "sdl2_backend_impl.hpp"
 
+#include "core/markdown/inline_image.hpp"
 #include "core/markdown/markdown.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
 
 #include "backends/clay_fallback/text/line_layout.hpp"
 
+#include <algorithm>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -39,9 +41,12 @@ void Sdl2Backend::renderDocument(NativeWidgetMeta &meta, const Clay_BoundingBox 
 
   auto lineHeightFor = [](uint16_t fontSize) { return fontSize * 1.4f; };
 
+  float lineExtra = 0.0f; // how much taller than usual the current line is because of an inline image
+
   auto newline = [&](uint16_t fontSize) {
     cursor.x = cursor.originX;
-    cursor.y += lineHeightFor(fontSize);
+    cursor.y += lineHeightFor(fontSize) + lineExtra;
+    lineExtra = 0.0f;
   };
 
   auto drawWord = [&](std::string_view word, uint16_t fontSize, bool bold, bool italic, bool strike, bool link, float wordWidth, const n8v_link_style *styled = nullptr) {
@@ -67,6 +72,17 @@ void Sdl2Backend::renderDocument(NativeWidgetMeta &meta, const Clay_BoundingBox 
   };
 
   auto layoutRun = [&](const InlineRun &run, uint16_t fontSize) {
+    if (!run.imageUrl.empty()) {
+      float imageWidth = 0.0f, imageHeight = 0.0f;
+      if (const DecodedImage *image = n8v::detail::markdown::inlineImageFor(run, meta.documentImageState, lineHeightFor(fontSize) * 0.9f, imageWidth, imageHeight)) {
+        if (cursor.x > cursor.originX && cursor.x + imageWidth > cursor.originX + cursor.maxWidth) newline(fontSize);
+        lineExtra = std::max(lineExtra, imageHeight - lineHeightFor(fontSize));
+        const float lineHeight = lineHeightFor(fontSize);
+        drawInlineImage(image, Clay_BoundingBox{cursor.x, cursor.y + (std::max(lineHeight, imageHeight) - imageHeight) * 0.5f, imageWidth, imageHeight});
+        cursor.x += imageWidth + 2.0f;
+        return;
+      }
+    }
     bool link = !run.linkUrl.empty();
     n8v_link_style style{};
     const bool styled = link && meta.documentLinkStyle && meta.documentLinkStyle(run.linkUrl.c_str(), &style, meta.documentLinkStyleUserdata);

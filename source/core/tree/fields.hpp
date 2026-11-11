@@ -176,6 +176,9 @@ template <typename V> void visitFields(n8v_document_options &o, V &v) {
   v.str(o.id);
   v.ptr(o.link_style);
   v.ptr(o.link_style_userdata);
+  v.ptr(o.image_resolver);
+  v.ptr(o.image_resolver_userdata);
+  v.str(o.image_state);
 }
 
 template <typename V> void visitFields(std::monostate &, V &) {}

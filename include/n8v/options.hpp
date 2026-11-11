@@ -201,6 +201,7 @@ struct DocumentOptions {
   Sizing height = Sizing::grow();
   std::string_view id = {};
   std::function<std::optional<LinkStyle>(std::string_view url)> linkStyle = nullptr;
+  std::function<std::string(std::string_view src)> imageResolver = nullptr;
 };
 
 /**

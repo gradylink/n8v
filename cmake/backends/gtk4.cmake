@@ -7,11 +7,12 @@ if(N8V_BACKEND_GTK4)
   find_library(_N8V_GOBJECT_SO NAMES gobject-2.0)
   find_library(_N8V_GLIB_SO NAMES glib-2.0)
   find_library(_N8V_GIO_SO NAMES gio-2.0)
-  if(_N8V_GTK4_SO AND _N8V_GOBJECT_SO AND _N8V_GLIB_SO AND _N8V_GIO_SO)
+  find_library(_N8V_PANGO_SO NAMES pango-1.0)
+  if(_N8V_GTK4_SO AND _N8V_GOBJECT_SO AND _N8V_GLIB_SO AND _N8V_GIO_SO AND _N8V_PANGO_SO)
     cl_add_dep(GTK4)
   endif()
 
-  if(TARGET deps::GTK4 AND _N8V_GTK4_SO AND _N8V_GOBJECT_SO AND _N8V_GLIB_SO AND _N8V_GIO_SO)
+  if(TARGET deps::GTK4 AND _N8V_GTK4_SO AND _N8V_GOBJECT_SO AND _N8V_GLIB_SO AND _N8V_GIO_SO AND _N8V_PANGO_SO)
     set(N8V_HAVE_GTK4 TRUE)
 
     get_target_property(_N8V_GTK4_INCLUDE_DIRS deps::GTK4 INTERFACE_INCLUDE_DIRECTORIES)
@@ -68,6 +69,26 @@ if(N8V_BACKEND_GTK4)
         g_bytes_unref
     )
     target_include_directories(glib_lazy PUBLIC ${_N8V_GTK4_INCLUDE_DIRS})
+
+    lzy_add_wrapper(pango_lazy
+      LIBRARY_NAMES
+        "libpango-1.0.so.0"
+        "libpango-1.0.so"
+        "libpango-1.0.0.dylib"
+        "libpango-1.0.dylib"
+        "pango-1.0-0.dll"
+      SYMBOLS
+        pango_layout_index_to_pos
+        pango_context_get_metrics
+        pango_font_metrics_get_ascent
+        pango_font_metrics_get_descent
+        pango_font_metrics_unref
+        pango_attr_list_new
+        pango_attr_list_insert
+        pango_attr_list_unref
+        pango_attr_shape_new
+    )
+    target_include_directories(pango_lazy PUBLIC ${_N8V_GTK4_INCLUDE_DIRS})
 
     lzy_add_wrapper(gio_lazy
       LIBRARY_NAMES

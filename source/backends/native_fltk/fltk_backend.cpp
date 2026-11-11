@@ -5,6 +5,7 @@
 #include "core/icon_loader.hpp"
 #include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
+#include "core/markdown/image_state.hpp"
 #include "core/markdown/markdown_to_html.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/open_url.hpp"
@@ -758,6 +759,8 @@ private:
     n8v::detail::markdown::HtmlOptions options;
     options.flavor = n8v::detail::markdown::HtmlFlavor::Basic;
     options.linkStyler = n8v::detail::markdown::makeLinkStyler(meta.documentLinkStyle, meta.documentLinkStyleUserdata);
+    options.imageResolver = [&meta](const std::string &src) { return n8v::detail::markdown::lookupImage(meta.documentImageState, src); };
+    options.defaultImageHeight = (int)(meta.documentFontSize * 1.4f);
     std::string html = n8v::detail::markdown::toHtml(*meta.documentAst, options);
     if (html != lastHtml) {
       view->value(html.c_str());

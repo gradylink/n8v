@@ -21,6 +21,8 @@ struct HtmlOptions {
   LinkStyler linkStyler;
   HtmlFlavor flavor = HtmlFlavor::Browser;
   n8v_color backdrop = {0, 0, 0, 255};
+  std::function<std::string(const std::string &src)> imageResolver;
+  int defaultImageHeight = 20;
 };
 
 inline LinkStyler makeLinkStyler(n8v_link_style_fn fn, void *userdata) {

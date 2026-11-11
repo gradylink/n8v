@@ -351,6 +351,8 @@ typedef struct n8v_link_style {
 
 typedef bool (*n8v_link_style_fn)(const char *url, n8v_link_style *out, void *userdata);
 
+typedef const char *(*n8v_image_resolve_fn)(const char *src, void *userdata);
+
 typedef struct n8v_document_options {
   const char *markdown;
   n8v_sizing width;
@@ -358,6 +360,9 @@ typedef struct n8v_document_options {
   const char *id;
   n8v_link_style_fn link_style;
   void *link_style_userdata;
+  n8v_image_resolve_fn image_resolver;
+  void *image_resolver_userdata;
+  const char *image_state;
 } n8v_document_options;
 
 typedef enum n8v_attach_point {
