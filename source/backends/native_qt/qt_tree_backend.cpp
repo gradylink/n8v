@@ -232,7 +232,27 @@ public:
   }
 };
 
-enum class NativeKind { Root, Flex, Panel, Floating, Sidebar, Page, Button, Text, Checkbox, Toggle, Radio, Entry, Dropdown, Slider, Image, Icon, Document };
+enum class NativeKind {
+  Root,
+  Flex,
+  Panel,
+  Floating,
+  Sidebar,
+  Page,
+  Button,
+  Text,
+  Checkbox,
+  Toggle,
+  Radio,
+  Entry,
+  Dropdown,
+  Slider,
+  Image,
+  Icon,
+  Document,
+  SidebarSection,
+  SidebarDivider
+};
 
 struct NativeNode {
   NativeKind kind() const { return node ? (NativeKind)node->current.props.index() : NativeKind::Root; }
@@ -499,7 +519,7 @@ public:
     NativeNode &nn = *native(node);
     apply(nn);
     registerId(nn);
-    if (nn.parentNode && nn.kind() != Kind::Page) layoutChild(nn);
+    if (nn.parentNode && nn.kind() != Kind::Page && !isSidebarDecoration(nn.kind())) layoutChild(nn);
     for (NativeNode *kid : nn.kids) refreshChild(nn, *kid);
     updateStretches(nn);
     if (nn.kind() == Kind::Sidebar) {
@@ -593,6 +613,9 @@ private:
   }
 
   BoundValue readWidget(NativeNode &nn);
+
+  static bool isSidebarDecoration(NativeKind kind) { return kind == NativeKind::SidebarSection || kind == NativeKind::SidebarDivider; }
+  size_t rowIndex(NativeNode &sidebar, NativeNode &child) const;
   void pollNative();
   void updateMultilineHeight(NativeNode &nn);
   void updatePercentSizes();
@@ -630,6 +653,15 @@ int QtTreeBackend::layoutIndex(NativeNode &parent, size_t kidIndex) const {
   return index;
 }
 
+size_t QtTreeBackend::rowIndex(NativeNode &sidebar, NativeNode &child) const {
+  size_t index = 0;
+  for (NativeNode *kid : sidebar.kids) {
+    if (kid == &child) break;
+    if (kid->kind() == Kind::Page || isSidebarDecoration(kid->kind())) ++index;
+  }
+  return index;
+}
+
 size_t QtTreeBackend::pageIndex(NativeNode &sidebar, NativeNode &page) const {
   size_t index = 0;
   for (NativeNode *kid : sidebar.kids) {
@@ -641,8 +673,23 @@ size_t QtTreeBackend::pageIndex(NativeNode &sidebar, NativeNode &page) const {
 
 void QtTreeBackend::attach(NativeNode &parent, NativeNode &child, size_t index) {
   if (parent.kind() == Kind::Sidebar && child.kind() == Kind::Page) {
-    parent.list->insertItem((int)pageIndex(parent, child), child.item);
+    parent.list->insertItem((int)rowIndex(parent, child), child.item);
     parent.contentLayout->addWidget(child.content);
+    return;
+  }
+  if (parent.kind() == Kind::Sidebar && isSidebarDecoration(child.kind())) {
+    parent.list->insertItem((int)rowIndex(parent, child), child.item);
+    if (child.kind() == Kind::SidebarDivider) {
+      auto *line = new QFrame();
+      line->setFrameShape(QFrame::HLine);
+      line->setFrameShadow(QFrame::Sunken);
+      parent.list->setItemWidget(child.item, line);
+    } else {
+      auto *heading = new QLabel(child.item->data(Qt::UserRole).toString());
+      heading->setStyleSheet("font-weight: bold; color: palette(mid); padding: 12px 12px 4px 12px; background: transparent;");
+      heading->setAttribute(Qt::WA_TransparentForMouseEvents);
+      parent.list->setItemWidget(child.item, heading);
+    }
     return;
   }
   if (child.floating) return;
@@ -658,6 +705,11 @@ void QtTreeBackend::detach(NativeNode &parent, NativeNode &child) {
     child.content->setParent(nullptr);
     return;
   }
+  if (parent.kind() == Kind::Sidebar && isSidebarDecoration(child.kind())) {
+    parent.list->removeItemWidget(child.item);
+    parent.list->takeItem(parent.list->row(child.item));
+    return;
+  }
   QWidget *w = child.outer;
   w->hide();
   if (!child.floating) layoutFor(parent)->removeWidget(w);
@@ -666,7 +718,7 @@ void QtTreeBackend::detach(NativeNode &parent, NativeNode &child) {
 
 void QtTreeBackend::refreshChild(NativeNode &parent, NativeNode &child) {
   child.ctx = contextFor(parent);
-  if (child.kind() != Kind::Page) layoutChild(child);
+  if (child.kind() != Kind::Page && !isSidebarDecoration(child.kind())) layoutChild(child);
 }
 
 void QtTreeBackend::layoutChild(NativeNode &c) {
@@ -776,7 +828,14 @@ void QtTreeBackend::syncSidebarSelection(NativeNode &sidebar) {
   if (!sidebar.list) return;
   int selected = 0;
   if (const int *bound = std::get_if<int>(&sidebar.node->bound)) selected = *bound;
-  if (selected >= 0 && selected < sidebar.list->count()) sidebar.list->setCurrentRow(selected);
+  int pageNumber = 0;
+  for (NativeNode *kid : sidebar.kids) {
+    if (kid->kind() != Kind::Page) continue;
+    if (pageNumber++ == selected) {
+      sidebar.list->setCurrentItem(kid->item);
+      break;
+    }
+  }
   sidebar.lastValue = readWidget(sidebar);
   for (NativeNode *kid : sidebar.kids)
     if (kid->kind() == Kind::Page) kid->content->setVisible(!kid->kids.empty());
@@ -870,8 +929,16 @@ BoundValue QtTreeBackend::readWidget(NativeNode &nn) {
     return static_cast<QComboBox *>(nn.widget)->currentIndex();
   case Kind::Slider:
     return (float)static_cast<QSlider *>(nn.widget)->value();
-  case Kind::Sidebar:
-    return nn.list ? nn.list->currentRow() : 0;
+  case Kind::Sidebar: {
+    if (!nn.list) return 0;
+    int pageNumber = 0;
+    for (NativeNode *kid : nn.kids) {
+      if (kid->kind() != Kind::Page) continue;
+      if (kid->item == nn.list->currentItem()) return pageNumber;
+      ++pageNumber;
+    }
+    return 0;
+  }
   default:
     return {};
   }
@@ -1248,6 +1315,17 @@ void QtTreeBackend::build(NativeNode &nn) {
     nn.item = new QListWidgetItem();
     break;
   }
+  case Kind::SidebarSection: {
+    nn.item = new QListWidgetItem();
+    nn.item->setFlags(Qt::NoItemFlags);
+    break;
+  }
+  case Kind::SidebarDivider: {
+    nn.item = new QListWidgetItem();
+    nn.item->setFlags(Qt::NoItemFlags);
+    nn.item->setSizeHint(QSize(0, 13));
+    break;
+  }
   case Kind::Root:
     break;
   }
@@ -1458,6 +1536,14 @@ void QtTreeBackend::apply(NativeNode &nn) {
           nn.iconKey = key;
         }
       },
+      [&](const n8v_sidebar_section_options &o) {
+        nn.item->setData(Qt::UserRole, qstr(o.title ? o.title : ""));
+        nn.item->setSizeHint(QSize(0, 34));
+        if (QListWidget *list = nn.item->listWidget()) {
+          if (QWidget *heading = list->itemWidget(nn.item)) static_cast<QLabel *>(heading)->setText(qstr(o.title ? o.title : ""));
+        }
+      },
+      [&](const n8v_sidebar_divider_options &) {},
       [&](const n8v_document_options &o) {
         auto *label = static_cast<QLabel *>(nn.widget);
         if (!o.link_style && !o.image_resolver) {

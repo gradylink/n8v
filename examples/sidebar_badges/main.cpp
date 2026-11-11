@@ -16,9 +16,12 @@ int main() {
         page({.name = "Quiet server"}) { text("Nothing new."); }
         page({.name = "Busy server", .notify = true, .badge = "3", .badgeColor = BadgeColor::Red}) {
           sidebar({.title = "Channels", .selected = &channel, .width = Sizing::fixed(300), .compact = true}) {
+            sidebarSection("Text Channels");
             page({.name = "general", .notify = true, .badge = "3", .badgeColor = BadgeColor::Red}) { text("general"); }
             page({.name = "devs-chat", .notify = true}) { text("devs-chat"); }
             page({.name = "support", .badge = "new", .badgeColor = BadgeColor::Blue}) { text("support"); }
+            sidebarDivider();
+            sidebarSection("Off topic");
             page({.name = "off-topic", .badge = "12", .badgeColor = BadgeColor::Green}) { text("off-topic"); }
             page({.name = "plain"}) { text("plain"); }
           }

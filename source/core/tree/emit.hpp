@@ -15,6 +15,8 @@ void closePanel();
 void openSidebar(const n8v_sidebar_options &options, int ordinal);
 void closeSidebar();
 bool openPage(const n8v_page_options &options, int ordinal);
+void sidebarSection(const n8v_sidebar_section_options &options, int ordinal);
+void sidebarDivider(int ordinal);
 void closePage();
 
 void button(const n8v_button_options &options, std::string_view label, int ordinal);

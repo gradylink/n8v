@@ -928,6 +928,15 @@ inline void icon(IconOptions options) { detail::icon(std::move(options)); }
 
 inline void document(DocumentOptions options) { detail::document(std::move(options)); }
 
+inline void sidebarSection(std::string_view title) {
+  std::string storage(title);
+  n8v_sidebar_section_options c_opts{};
+  c_opts.title = storage.c_str();
+  n8v_sidebar_section(c_opts);
+}
+
+inline void sidebarDivider() { n8v_sidebar_divider(); }
+
 using FileDialogCallback = std::function<void(const std::vector<std::string> &paths)>;
 
 namespace detail {

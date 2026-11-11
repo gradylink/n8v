@@ -1,5 +1,5 @@
-#include <n8v/n8v_c.h>
 #include "core/widgets/page_badge.hpp"
+#include <n8v/n8v_c.h>
 
 #include "core/backend.hpp"
 #include "core/icon_loader.hpp"
@@ -76,9 +76,7 @@ namespace n8v::detail::ui_internal {
 
 void releaseSidebarState(int ordinal) { pageClickStates.erase(ordinal); }
 
-void resetSidebarFrameState() {
-  sidebarStack.clear();
-}
+void resetSidebarFrameState() { sidebarStack.clear(); }
 
 } // namespace n8v::detail::ui_internal
 
@@ -166,6 +164,45 @@ void closeSidebar() {
 
   Clay__CloseElement(); // list region
   Clay__CloseElement(); // shell
+}
+
+void sidebarSection(const n8v_sidebar_section_options &opts, int ordinal) {
+  if (sidebarStack.empty()) return;
+  const n8v::SidebarPaint paint = n8v::activePaint().sidebar();
+  const n8v::ButtonPaint rowPaint = n8v::activePaint().button(n8v::ButtonStyle::Secondary, false, false);
+
+  Clay__OpenElement();
+  Clay_ElementDeclaration decl = {};
+  decl.layout.padding = {(uint16_t)rowPaint.padding.left, (uint16_t)rowPaint.padding.right, (uint16_t)(rowPaint.fontSize * 0.8f), (uint16_t)(rowPaint.fontSize * 0.2f)};
+  decl.layout.sizing.width = CLAY_SIZING_GROW(0);
+  Clay__ConfigureOpenElement(decl);
+
+  n8v_text_options textOpts = {};
+  textOpts.bold = true;
+  n8v::Color dim = n8v::activePaint().text(n8v::TextOptions{}).color;
+  dim.a *= 0.65f;
+  textOpts.color = {dim.r, dim.g, dim.b, dim.a};
+  text(textOpts, toView(opts.title), ordinal);
+
+  Clay__CloseElement();
+  (void)paint;
+}
+
+void sidebarDivider(int /*ordinal*/) {
+  if (sidebarStack.empty()) return;
+  const n8v::SidebarPaint paint = n8v::activePaint().sidebar();
+  n8v::Color line = n8v::activePaint().text(n8v::TextOptions{}).color;
+  line.a *= 0.18f;
+
+  Clay__OpenElement();
+  Clay_ElementDeclaration decl = {};
+  decl.layout.sizing.width = CLAY_SIZING_GROW(0);
+  decl.layout.sizing.height = CLAY_SIZING_FIXED(1);
+  decl.layout.padding = {0, 0, 0, 0};
+  decl.backgroundColor = n8v::detail::toClay(line);
+  Clay__ConfigureOpenElement(decl);
+  Clay__CloseElement();
+  (void)paint;
 }
 
 bool openPage(const n8v_page_options &opts, int rowOrdinal) {

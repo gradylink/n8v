@@ -59,6 +59,8 @@ void emitNode(const PNode &node) {
                [&](const n8v_image_options &o) { emit::image(o, ordinal); },
                [&](const n8v_icon_options &o) { emit::icon(o, ordinal); },
                [&](const n8v_document_options &o) { emit::document(o, ordinal); },
+               [&](const n8v_sidebar_section_options &o) { emit::sidebarSection(o, ordinal); },
+               [&](const n8v_sidebar_divider_options &) { emit::sidebarDivider(ordinal); },
              },
              node.current.props);
 }

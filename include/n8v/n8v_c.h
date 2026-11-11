@@ -613,6 +613,20 @@ N8V_API void n8v_open_flex(n8v_flex_options options);
 N8V_API void n8v_close_flex(void);
 N8V_API void n8v_open_sidebar(n8v_sidebar_options options);
 N8V_API void n8v_close_sidebar(void);
+
+typedef struct n8v_sidebar_divider_options {
+  int reserved;
+} n8v_sidebar_divider_options;
+
+typedef struct n8v_sidebar_section_options {
+  const char *title;
+} n8v_sidebar_section_options;
+
+/** Only valid inside a sidebar */
+N8V_API void n8v_sidebar_section(n8v_sidebar_section_options options);
+
+/** Only valid inside a sidebar */
+N8V_API void n8v_sidebar_divider(void);
 /** Returns true if this page is the selected one. */
 N8V_API bool n8v_open_page(n8v_page_options options);
 N8V_API void n8v_close_page(void);

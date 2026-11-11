@@ -181,6 +181,14 @@ template <typename V> void visitFields(n8v_document_options &o, V &v) {
   v.str(o.image_state);
 }
 
+template <typename V> void visitFields(n8v_sidebar_section_options &o, V &v) {
+  v.str(o.title);
+}
+
+template <typename V> void visitFields(n8v_sidebar_divider_options &o, V &v) {
+  v.num(o.reserved);
+}
+
 template <typename V> void visitFields(std::monostate &, V &) {}
 
 template <typename V> void visitProps(Node::Props &props, V &v) {

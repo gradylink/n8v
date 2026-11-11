@@ -69,7 +69,27 @@ std::string acceptAttribute(const std::vector<FileDialogFilter> &filters) {
 }
 HtmlTreeBackend *gInstance = nullptr;
 
-enum class NativeKind { Root, Flex, Panel, Floating, Sidebar, Page, Button, Text, Checkbox, Toggle, Radio, Entry, Dropdown, Slider, Image, Icon, Document };
+enum class NativeKind {
+  Root,
+  Flex,
+  Panel,
+  Floating,
+  Sidebar,
+  Page,
+  Button,
+  Text,
+  Checkbox,
+  Toggle,
+  Radio,
+  Entry,
+  Dropdown,
+  Slider,
+  Image,
+  Icon,
+  Document,
+  SidebarSection,
+  SidebarDivider
+};
 
 struct NativeNode {
   NativeKind kind() const { return node ? (NativeKind)node->current.props.index() : NativeKind::Root; }
@@ -497,6 +517,8 @@ private:
   void attach(NativeNode &parent, NativeNode &child, size_t index);
   void afterKidsChanged(NativeNode &container);
   size_t pageIndex(NativeNode &sidebar, NativeNode &page) const;
+
+  static bool isSidebarDecoration(NativeKind kind) { return kind == NativeKind::SidebarSection || kind == NativeKind::SidebarDivider; }
   void registerId(NativeNode &nn);
   void unregisterId(NativeNode &nn);
   void applyStickyBottom();
@@ -610,7 +632,7 @@ std::string HtmlTreeBackend::floatingCss(NativeNode &nn) {
 
 void HtmlTreeBackend::applyLayout(NativeNode &nn) {
   if (!nn.node || nn.outer.isUndefined()) return;
-  if (nn.kind() == Kind::Page) return;
+  if (nn.kind() == Kind::Page || isSidebarDecoration(nn.kind())) return;
   std::string css = containerCss(nn) + sizingCss(nn) + floatingCss(nn);
   if (const auto *slider = propsOf<n8v_slider_options>(*nn.node)) {
     float value = slider->min;
@@ -648,16 +670,16 @@ size_t HtmlTreeBackend::pageIndex(NativeNode &sidebar, NativeNode &page) const {
 }
 
 void HtmlTreeBackend::attach(NativeNode &parent, NativeNode &child, size_t index) {
-  if (parent.kind() == Kind::Sidebar && child.kind() == Kind::Page) {
+  if (parent.kind() == Kind::Sidebar && (child.kind() == Kind::Page || isSidebarDecoration(child.kind()))) {
     val reference = val::null();
     for (size_t i = index + 1; i < parent.kids.size(); ++i) {
-      if (parent.kids[i]->kind() == Kind::Page) {
+      if (parent.kids[i]->kind() == Kind::Page || isSidebarDecoration(parent.kids[i]->kind())) {
         reference = parent.kids[i]->outer;
         break;
       }
     }
     parent.listEl.call<void>("insertBefore", child.outer, reference);
-    parent.contentArea.call<void>("appendChild", child.content);
+    if (child.kind() == Kind::Page) parent.contentArea.call<void>("appendChild", child.content);
     return;
   }
   val container = parent.kind() == Kind::Sidebar ? parent.contentArea : parent.content;
@@ -846,6 +868,14 @@ void HtmlTreeBackend::build(NativeNode &nn) {
     nn.outer.call<void>("appendChild", nn.listEl);
     nn.outer.call<void>("appendChild", nn.contentArea);
     nn.content = nn.contentArea;
+    break;
+  }
+  case Kind::SidebarSection: {
+    nn.outer = nn.widget = createEl("div");
+    break;
+  }
+  case Kind::SidebarDivider: {
+    nn.outer = nn.widget = createEl("div");
     break;
   }
   case Kind::Page: {
@@ -1080,6 +1110,11 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
         nn.widget.set("width", (int)size);
         nn.widget.set("height", (int)size);
       },
+      [&](const n8v_sidebar_section_options &o) {
+        nn.widget.set("textContent", std::string(o.title ? o.title : ""));
+        setCss(nn.outer, "flex:none;padding:12px 12px 4px;font-weight:bold;font-size:0.85em;opacity:0.65;text-align:left;");
+      },
+      [&](const n8v_sidebar_divider_options &) { setCss(nn.outer, "flex:none;height:1px;margin:6px 12px;background:currentColor;opacity:0.18;"); },
       [&](const n8v_document_options &o) {
         setClass(nn.outer, classFor(css::documentCss(paint)));
         const markdown::CachedDocument cached = markdown::getOrParse(o.markdown ? o.markdown : "");

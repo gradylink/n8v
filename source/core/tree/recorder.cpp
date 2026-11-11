@@ -96,6 +96,23 @@ void n8v_open_sidebar(n8v_sidebar_options options) {
   sidebarFrames.push_back(SidebarFrame{options.selected, 0});
 }
 
+void n8v_sidebar_section(n8v_sidebar_section_options options) {
+  if (sidebarFrames.empty()) {
+    std::fprintf(stderr, "[n8v] sidebarSection() called outside of sidebar()\n");
+    return;
+  }
+  options.title = own(options.title);
+  append(options);
+}
+
+void n8v_sidebar_divider(void) {
+  if (sidebarFrames.empty()) {
+    std::fprintf(stderr, "[n8v] sidebarDivider() called outside of sidebar()\n");
+    return;
+  }
+  append(n8v_sidebar_divider_options{});
+}
+
 void n8v_close_sidebar(void) {
   if (!sidebarFrames.empty()) sidebarFrames.pop_back();
   closeContainer();
