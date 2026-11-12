@@ -38,7 +38,6 @@
 #include <QImage>
 #include <QKeyEvent>
 #include <QLabel>
-#include <QLibrary>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
@@ -57,6 +56,9 @@
 #include <QVBoxLayout>
 #ifdef N8V_HAVE_QT_MULTIMEDIA
 #include <QAudioOutput>
+
+#include "qt6multimedia_lazy_vars.h"
+#include "qt6multimediawidgets_lazy_vars.h"
 #include <QMediaPlayer>
 #include <QUrl>
 #include <QVideoWidget>
@@ -210,9 +212,29 @@ protected:
   }
 };
 
-bool multimediaAvailable() {
-  static const bool available = QLibrary("Qt6Multimedia").load() && QLibrary("Qt6MultimediaWidgets").load();
-  return available;
+bool multimediaAvailable() { return lzy_qt6multimedia_lazy_is_available() && lzy_qt6multimediawidgets_lazy_is_available(); }
+#endif
+
+#ifdef N8V_HAVE_QT_MULTIMEDIA
+class N8VPlayButton final : public QPushButton {
+public:
+  using QPushButton::QPushButton;
+  QMediaPlayer *player = nullptr;
+
+protected:
+  void mouseReleaseEvent(QMouseEvent *event) override {
+    const bool wasDown = isDown();
+    QPushButton::mouseReleaseEvent(event);
+    if (wasDown && player && rect().contains(event->position().toPoint())) {
+      if (player->playbackState() == QMediaPlayer::PlayingState) player->pause();
+      else player->play();
+    }
+  }
+};
+
+QString clockText(qint64 milliseconds) {
+  const qint64 seconds = milliseconds / 1000;
+  return QStringLiteral("%1:%2").arg(seconds / 60).arg(seconds % 60, 2, 10, QLatin1Char('0'));
 }
 #endif
 
@@ -281,7 +303,8 @@ enum class NativeKind {
   Document,
   SidebarSection,
   SidebarDivider,
-  Video
+  Video,
+  Audio
 };
 
 struct NativeNode {
@@ -321,6 +344,8 @@ struct NativeNode {
   QAudioOutput *audio = nullptr;
   QSlider *seek = nullptr;
   int seekSet = 0;
+  QPushButton *playButton = nullptr;
+  QLabel *timeLabel = nullptr;
 #endif
   std::string videoSource;
   std::string registeredId;
@@ -352,6 +377,11 @@ n8v_sizing sizingFor(const NativeNode &nn, bool horizontal) {
         n8v_sizing s = horizontal ? o.width : o.height;
         if (s.mode == N8V_SIZING_FIT && s.min <= 0.0f && s.max <= 0.0f) return n8v_sizing_fixed(horizontal ? 480.0f : 270.0f);
         return s;
+      },
+      [&](const n8v_audio_options &o) {
+        if (!horizontal) return fitSizing();
+        if (o.width.mode == N8V_SIZING_FIT && o.width.min <= 0.0f && o.width.max <= 0.0f) return n8v_sizing_fixed(320.0f);
+        return o.width;
       },
       [&](const n8v_sidebar_options &) { return growSizing(); },
       [&](const n8v_entry_options &o) {
@@ -1007,7 +1037,7 @@ void QtTreeBackend::pollNative() {
   for (PNode *pn : nodes) {
     NativeNode &nn = *native(*pn);
 #ifdef N8V_HAVE_QT_MULTIMEDIA
-    if (nn.kind() == Kind::Video && nn.player && nn.seek) {
+    if ((nn.kind() == Kind::Video || nn.kind() == Kind::Audio) && nn.player && nn.seek) {
       const qint64 duration = nn.player->duration();
       if (nn.seek->value() != nn.seekSet) {
         if (duration > 0) nn.player->setPosition(duration * nn.seek->value() / 1000);
@@ -1016,6 +1046,8 @@ void QtTreeBackend::pollNative() {
         nn.seekSet = (int)(nn.player->position() * 1000 / duration);
         nn.seek->setValue(nn.seekSet);
       }
+      if (nn.playButton) nn.playButton->setText(QString::fromUtf8(nn.player->playbackState() == QMediaPlayer::PlayingState ? "\xE2\x8F\xB8" : "\xE2\x96\xB6"));
+      if (nn.timeLabel) nn.timeLabel->setText(clockText(nn.player->position()) + QStringLiteral(" / ") + clockText(duration));
       continue;
     }
 #endif
@@ -1311,6 +1343,33 @@ void QtTreeBackend::build(NativeNode &nn) {
   case Kind::Icon: {
     auto *label = new QLabel();
     label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    nn.outer = nn.widget = label;
+    break;
+  }
+  case Kind::Audio: {
+#ifdef N8V_HAVE_QT_MULTIMEDIA
+    if (multimediaAvailable()) {
+      nn.outer = nn.widget = new QWidget();
+      auto *row = new QHBoxLayout(nn.outer);
+      row->setContentsMargins(0, 0, 0, 0);
+      row->setSpacing(8);
+      nn.player = new QMediaPlayer(nn.outer);
+      nn.audio = new QAudioOutput(nn.outer);
+      nn.player->setAudioOutput(nn.audio);
+      auto *button = new N8VPlayButton(QString::fromUtf8("\xE2\x96\xB6"));
+      button->setFixedWidth(36);
+      button->player = nn.player;
+      nn.playButton = button;
+      nn.seek = new QSlider(Qt::Horizontal);
+      nn.seek->setRange(0, 1000);
+      nn.timeLabel = new QLabel(QStringLiteral("0:00"));
+      row->addWidget(button);
+      row->addWidget(nn.seek, 1);
+      row->addWidget(nn.timeLabel);
+      break;
+    }
+#endif
+    auto *label = new QLabel("Audio playback needs Qt Multimedia");
     nn.outer = nn.widget = label;
     break;
   }
@@ -1634,6 +1693,28 @@ void QtTreeBackend::apply(NativeNode &nn) {
           labelWidget->setPixmap(pixmapFromDecoded(baked));
           nn.pixmapSource = baked;
         }
+      },
+      [&](const n8v_audio_options &o) {
+#ifdef N8V_HAVE_QT_MULTIMEDIA
+        if (nn.player) {
+          const std::string source = o.source ? o.source : "";
+          if (source != nn.videoSource) {
+            nn.videoSource = source;
+            if (source.empty()) {
+              nn.player->setSource(QUrl());
+            } else if (source.find("://") != std::string::npos) {
+              nn.player->setSource(QUrl(QString::fromStdString(source)));
+            } else {
+              nn.player->setSource(QUrl::fromLocalFile(QString::fromStdString(source)));
+            }
+            if (o.autoplay && !source.empty()) nn.player->play();
+          }
+          nn.player->setLoops(o.loop ? QMediaPlayer::Infinite : QMediaPlayer::Once);
+          nn.audio->setMuted(o.muted);
+        }
+#else
+        (void)o;
+#endif
       },
       [&](const n8v_video_options &o) {
 #ifdef N8V_HAVE_QT_MULTIMEDIA

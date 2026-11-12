@@ -109,7 +109,8 @@ enum class NativeKind {
   Document,
   SidebarSection,
   SidebarDivider,
-  Video
+  Video,
+  Audio
 };
 
 struct NativeNode {
@@ -514,6 +515,7 @@ private:
   void applyStickyBottom();
   void setIconImage(NativeNode &nn, GtkWidget *image, const char *name, int pixelSize);
   void applyVideo(NativeNode &nn, const n8v_video_options &o);
+  void applyAudio(NativeNode &nn, const n8v_audio_options &o);
   void setLabelFromText(GtkWidget *label, const n8v_text_options &o, std::string_view text);
 
   void applyFlex(NativeNode &nn, const n8v_flex_options &o);
@@ -747,6 +749,11 @@ n8v_sizing sizingFor(const NativeNode &nn, bool horizontal) {
         n8v_sizing s = horizontal ? o.width : o.height;
         if (s.mode == N8V_SIZING_FIT && s.min <= 0.0f && s.max <= 0.0f) return n8v_sizing_fixed(horizontal ? 480.0f : 270.0f);
         return s;
+      },
+      [&](const n8v_audio_options &o) {
+        if (!horizontal) return fitSizing();
+        if (o.width.mode == N8V_SIZING_FIT && o.width.min <= 0.0f && o.width.max <= 0.0f) return n8v_sizing_fixed(320.0f);
+        return o.width;
       },
       [&](const n8v_sidebar_options &) { return growSizing(); },
       [&](const n8v_entry_options &) { return horizontal ? growSizing() : fitSizing(); },
@@ -1339,6 +1346,53 @@ void Gtk4TreeBackend::resolvePendingScrolls() {
   }
 }
 
+void setStreamMuted(GtkMediaStream *stream, bool muted) {
+  g_object_set_data(G_OBJECT(stream), "n8v-muted", GINT_TO_POINTER(muted ? 1 : 0));
+  if (gtk_media_stream_is_prepared(stream)) {
+    gtk_media_stream_set_muted(stream, muted);
+  } else if (!g_object_get_data(G_OBJECT(stream), "n8v-mute-hooked")) {
+    g_object_set_data(G_OBJECT(stream), "n8v-mute-hooked", GINT_TO_POINTER(1));
+    g_signal_connect_data(
+      stream,
+      "notify::prepared",
+      G_CALLBACK(+[](GObject *object, GParamSpec *, gpointer) {
+        GtkMediaStream *s = GTK_MEDIA_STREAM(object);
+        if (gtk_media_stream_is_prepared(s)) gtk_media_stream_set_muted(s, GPOINTER_TO_INT(g_object_get_data(object, "n8v-muted")) != 0);
+      }),
+      nullptr,
+      nullptr,
+      (GConnectFlags)0
+    );
+  }
+}
+
+void Gtk4TreeBackend::applyAudio(NativeNode &nn, const n8v_audio_options &o) {
+  const std::string source = o.source ? o.source : "";
+  if (source != nn.videoSource) {
+    nn.videoSource = source;
+    GtkMediaStream *stream = nullptr;
+    if (!source.empty()) {
+      GFile *file = source.find("://") != std::string::npos ? g_file_new_for_uri(source.c_str()) : g_file_new_for_path(source.c_str());
+      stream = gtk_media_file_new_for_file(file);
+      g_object_unref(file);
+    }
+    gtk_media_controls_set_media_stream(GTK_MEDIA_CONTROLS(nn.widget), stream);
+    // The controls only borrow the stream, so tie its life to the widget's.
+    g_object_set_data_full(G_OBJECT(nn.widget), "n8v-audio-stream", stream, g_object_unref);
+  }
+
+  GtkMediaStream *stream = GTK_MEDIA_STREAM(g_object_get_data(G_OBJECT(nn.widget), "n8v-audio-stream"));
+  if (stream) {
+    gtk_media_stream_set_loop(stream, o.loop);
+    setStreamMuted(stream, o.muted);
+    if (o.autoplay && !g_object_get_data(G_OBJECT(stream), "n8v-autoplayed")) {
+      g_object_set_data(G_OBJECT(stream), "n8v-autoplayed", GINT_TO_POINTER(1));
+      gtk_media_stream_play(stream);
+    }
+  }
+  gtk_widget_set_size_request(nn.widget, o.width.mode == N8V_SIZING_FIXED ? std::max(1, (int)o.width.value) : 320, -1);
+}
+
 void Gtk4TreeBackend::applyVideo(NativeNode &nn, const n8v_video_options &o) {
   const std::string source = o.source ? o.source : "";
   const bool withControls = GTK_IS_VIDEO(nn.widget);
@@ -1364,25 +1418,7 @@ void Gtk4TreeBackend::applyVideo(NativeNode &nn, const n8v_video_options &o) {
     gtk_media_stream_set_loop(stream, o.loop);
     if (o.autoplay && !gtk_media_stream_get_playing(stream)) gtk_media_stream_play(stream);
   }
-  if (stream) {
-    g_object_set_data(G_OBJECT(stream), "n8v-muted", GINT_TO_POINTER(o.muted ? 1 : 0));
-    if (gtk_media_stream_is_prepared(stream)) {
-      gtk_media_stream_set_muted(stream, o.muted);
-    } else if (!g_object_get_data(G_OBJECT(stream), "n8v-mute-hooked")) {
-      g_object_set_data(G_OBJECT(stream), "n8v-mute-hooked", GINT_TO_POINTER(1));
-      g_signal_connect_data(
-        stream,
-        "notify::prepared",
-        G_CALLBACK(+[](GObject *object, GParamSpec *, gpointer) {
-          GtkMediaStream *s = GTK_MEDIA_STREAM(object);
-          if (gtk_media_stream_is_prepared(s)) gtk_media_stream_set_muted(s, GPOINTER_TO_INT(g_object_get_data(object, "n8v-muted")) != 0);
-        }),
-        nullptr,
-        nullptr,
-        (GConnectFlags)0
-      );
-    }
-  }
+  if (stream) setStreamMuted(stream, o.muted);
 
   CornerRadius radius;
   switch (o.rounding.mode) {
@@ -1625,6 +1661,9 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
     nn.outer = nn.widget = gtk_image_new();
     break;
   }
+  case Kind::Audio:
+    nn.outer = nn.widget = gtk_media_controls_new(nullptr);
+    break;
   case Kind::Video: {
     const n8v_video_options *o = std::get_if<n8v_video_options>(&pn.current.props);
     if (o && !o->controls) {
@@ -2159,6 +2198,7 @@ void Gtk4TreeBackend::apply(NativeNode &nn) {
         gtk_widget_set_size_request(nn.widget, targetW, targetH);
       },
       [&](const n8v_video_options &o) { applyVideo(nn, o); },
+      [&](const n8v_audio_options &o) { applyAudio(nn, o); },
       [&](const n8v_icon_options &o) {
         const int size = o.width.mode == N8V_SIZING_FIXED ? (int)o.width.value : kDefaultIconSize;
         setIconImage(nn, nn.widget, o.name, size);

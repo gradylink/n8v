@@ -29,6 +29,7 @@ void dropdown(const n8v_dropdown_options &options, int ordinal);
 void slider(const n8v_slider_options &options, int ordinal);
 void image(const n8v_image_options &options, int ordinal);
 void video(const n8v_video_options &options, int ordinal);
+void audio(const n8v_audio_options &options, int ordinal);
 void icon(const n8v_icon_options &options, int ordinal);
 void document(const n8v_document_options &options, int ordinal);
 

@@ -58,6 +58,7 @@ void emitNode(const PNode &node) {
                [&](const n8v_slider_options &o) { emit::slider(o, ordinal); },
                [&](const n8v_image_options &o) { emit::image(o, ordinal); },
                [&](const n8v_video_options &o) { emit::video(o, ordinal); },
+               [&](const n8v_audio_options &o) { emit::audio(o, ordinal); },
                [&](const n8v_icon_options &o) { emit::icon(o, ordinal); },
                [&](const n8v_document_options &o) { emit::document(o, ordinal); },
                [&](const n8v_sidebar_section_options &o) { emit::sidebarSection(o, ordinal); },

@@ -203,6 +203,12 @@ void n8v_image(n8v_image_options options) {
   append(options);
 }
 
+void n8v_audio(n8v_audio_options options) {
+  options.source = own(options.source);
+  options.id = own(options.id);
+  append(options);
+}
+
 void n8v_video(n8v_video_options options) {
   options.source = own(options.source);
   options.id = own(options.id);

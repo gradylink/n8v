@@ -89,7 +89,8 @@ enum class NativeKind {
   Document,
   SidebarSection,
   SidebarDivider,
-  Video
+  Video,
+  Audio
 };
 
 struct NativeNode {
@@ -139,6 +140,11 @@ n8v_sizing sizingFor(const NativeNode &nn, bool horizontal) {
         n8v_sizing s = horizontal ? o.width : o.height;
         if (s.mode == N8V_SIZING_FIT && s.min <= 0.0f && s.max <= 0.0f) return n8v_sizing_fixed(horizontal ? 480.0f : 270.0f);
         return s;
+      },
+      [&](const n8v_audio_options &o) {
+        if (!horizontal) return fitSizing();
+        if (o.width.mode == N8V_SIZING_FIT && o.width.min <= 0.0f && o.width.max <= 0.0f) return n8v_sizing_fixed(320.0f);
+        return o.width;
       },
       [&](const n8v_sidebar_options &) { return growSizing(); },
       [&](const n8v_entry_options &) { return horizontal ? growSizing() : fitSizing(); },
@@ -870,6 +876,9 @@ void HtmlTreeBackend::build(NativeNode &nn) {
   case Kind::Icon:
     nn.outer = nn.widget = createEl("img");
     break;
+  case Kind::Audio:
+    nn.outer = nn.widget = createEl("audio");
+    break;
   case Kind::Video:
     nn.outer = nn.widget = createEl("video");
     nn.widget.set("playsInline", true);
@@ -1151,6 +1160,17 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
           nn.widget.set("src", source);
         }
         nn.widget.set("controls", o.controls);
+        nn.widget.set("loop", o.loop);
+        nn.widget.set("muted", o.muted);
+        nn.widget.set("autoplay", o.autoplay);
+      },
+      [&](const n8v_audio_options &o) {
+        const std::string source = o.source ? o.source : "";
+        if (source != nn.videoSource) {
+          nn.videoSource = source;
+          nn.widget.set("src", source);
+        }
+        nn.widget.set("controls", true);
         nn.widget.set("loop", o.loop);
         nn.widget.set("muted", o.muted);
         nn.widget.set("autoplay", o.autoplay);

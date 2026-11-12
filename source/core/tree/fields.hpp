@@ -163,6 +163,15 @@ template <typename V> void visitFields(n8v_video_options &o, V &v) {
   v.str(o.id);
 }
 
+template <typename V> void visitFields(n8v_audio_options &o, V &v) {
+  v.str(o.source);
+  v.num(o.width);
+  v.num(o.autoplay);
+  v.num(o.loop);
+  v.num(o.muted);
+  v.str(o.id);
+}
+
 template <typename V> void visitFields(n8v_image_options &o, V &v) {
   v.num(o.source_kind);
   v.str(o.path);

@@ -170,6 +170,18 @@ struct VideoOptions {
   std::string id;
 };
 
+struct AudioOptions {
+  /** A file path, or a URL (anything with a scheme, like https://). */
+  std::string source;
+  /** A player bar: play/pause, a seek bar and the time. Fit means 320 wide. */
+  Sizing width = Sizing::fit();
+  bool autoplay = false;
+  bool loop = false;
+  bool muted = false;
+  /** Keeps the player (and its position) across frames when the tree around it changes. */
+  std::string id;
+};
+
 struct SidebarOptions {
   std::string_view title = {};
   int *selected = nullptr;

@@ -340,6 +340,17 @@ typedef struct n8v_video_options {
   const char *id;
 } n8v_video_options;
 
+typedef struct n8v_audio_options {
+  /** A file path, or a URL (anything with a scheme, like https://). */
+  const char *source;
+  /** A player bar: play/pause, a seek bar and the time. Fit means 320 wide. */
+  n8v_sizing width;
+  bool autoplay;
+  bool loop;
+  bool muted;
+  const char *id;
+} n8v_audio_options;
+
 typedef bool (*n8v_image_bundle_lookup_fn)(const char *virtual_path, const void **out_data, size_t *out_size, void *userdata);
 
 typedef struct n8v_icon_options {
@@ -724,6 +735,7 @@ N8V_API void n8v_dropdown(n8v_dropdown_options options);
 N8V_API void n8v_slider(n8v_slider_options options);
 N8V_API void n8v_image(n8v_image_options options);
 N8V_API void n8v_video(n8v_video_options options);
+N8V_API void n8v_audio(n8v_audio_options options);
 N8V_API void n8v_set_image_bundle_lookup(n8v_image_bundle_lookup_fn fn, void *userdata);
 N8V_API void n8v_icon(n8v_icon_options options);
 N8V_API void n8v_document(n8v_document_options options);
@@ -817,6 +829,7 @@ inline void n8v_text(const char *label) {
 #define slider n8v_slider
 #define image n8v_image
 #define video n8v_video
+#define audio n8v_audio
 #define set_image_bundle_lookup n8v_set_image_bundle_lookup
 
 #define set_style_family n8v_set_style_family
@@ -863,6 +876,7 @@ inline void n8v_text(const char *label) {
 #define slider_options n8v_slider_options
 #define image_options n8v_image_options
 #define video_options n8v_video_options
+#define audio_options n8v_audio_options
 #define image_source_kind n8v_image_source_kind
 #define icon_options n8v_icon_options
 
