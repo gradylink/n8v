@@ -2,6 +2,7 @@
 
 #include "core/backend.hpp"
 #include "core/style.hpp"
+#include "core/theme_color.hpp"
 
 #include "core/clay_convert.hpp"
 #include "core/native_widget_meta.hpp"
@@ -72,12 +73,13 @@ void openPanel(const n8v_panel_options &opts, int ordinal) {
   decl.border.width = {(uint16_t)paint.borderWidth, (uint16_t)paint.borderWidth, (uint16_t)paint.borderWidth, (uint16_t)paint.borderWidth, 0};
   float borderWidth = paint.borderWidth;
   n8v::Color borderColor = paint.borderColor;
-  if (opts.accent.a > 0.0f) {
+  const n8v_color accent = n8v::detail::resolveThemeColor(opts.accent);
+  if (accent.a > 0.0f) {
     constexpr uint16_t kAccentWidth = 4;
-    decl.border.color = {opts.accent.r, opts.accent.g, opts.accent.b, opts.accent.a};
+    decl.border.color = {accent.r, accent.g, accent.b, accent.a};
     decl.border.width = {kAccentWidth, 0, 0, 0, 0};
     borderWidth = kAccentWidth;
-    borderColor = n8v::Color{opts.accent.r, opts.accent.g, opts.accent.b, opts.accent.a};
+    borderColor = n8v::Color{accent.r, accent.g, accent.b, accent.a};
   }
 
   widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});

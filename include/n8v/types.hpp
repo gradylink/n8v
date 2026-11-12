@@ -118,8 +118,28 @@ struct Sizing {
   static Sizing percent(float fraction) { return {SizingMode::Percent, fraction, 0.0f, 0.0f}; }
 };
 
+/** Named colors that follow the active theme where the toolkit has a palette, and a built-in one where it doesn't. */
+enum class NamedColor {
+  Default,
+  Red,
+  Orange,
+  Yellow,
+  Green,
+  Blue,
+  Purple,
+  Pink,
+};
+
 struct Color {
   float r = 0, g = 0, b = 0, a = 255;
+
+  /**
+   * A color that follows the theme, for any option that takes a Color (text, accents, dividers). It is carried as a
+   * negative alpha with the name in `r`, so code that doesn't know about it sees "no color" rather than a wrong one.
+   */
+  static constexpr Color theme(NamedColor name) { return Color{(float)(int)name, 0, 0, -1}; }
+  constexpr bool isTheme() const { return a < 0; }
+  constexpr NamedColor themeName() const { return (NamedColor)(int)r; }
 };
 
 struct Padding {

@@ -9,6 +9,7 @@
 #include "core/markdown/markdown.hpp"
 #include "core/markdown/markdown_to_html.hpp"
 #include "core/style.hpp"
+#include "core/theme_color.hpp"
 #include "core/tree/dispatch.hpp"
 #include "core/tree/persistent.hpp"
 #include "core/tree/props.hpp"
@@ -588,9 +589,10 @@ std::string HtmlTreeBackend::containerCss(NativeNode &nn) {
       [&](const n8v_flex_options &o) { flexBox(o.direction, o.gap, &o.padding, o.h_align, o.v_align, o.clip_horizontal, o.clip_vertical); },
       [&](const n8v_panel_options &o) {
         flexBox(o.direction, o.gap, nullptr, o.h_align, o.v_align, o.clip_horizontal, o.clip_vertical);
-        if (o.accent.a > 0.0f) {
+        const n8v_color accent = resolveThemeColor(o.accent);
+        if (accent.a > 0.0f) {
           char bar[64];
-          std::snprintf(bar, sizeof(bar), "border-left:4px solid rgb(%d,%d,%d);", (int)o.accent.r, (int)o.accent.g, (int)o.accent.b);
+          std::snprintf(bar, sizeof(bar), "border-left:4px solid rgb(%d,%d,%d);", (int)accent.r, (int)accent.g, (int)accent.b);
           out += bar;
         }
       },
@@ -1055,7 +1057,8 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
         options.small = o.small;
         options.darken = o.darken;
         options.url = o.url ? o.url : "";
-        options.color = {o.color.r, o.color.g, o.color.b, o.color.a};
+        const n8v_color color = resolveThemeColor(o.color);
+        options.color = {color.r, color.g, color.b, color.a};
         if (o.on_click) options.onClick = [] {};
         setClass(nn.outer, classFor(css::textCss(paint, options)));
         nn.outer.set("textContent", label);
@@ -1174,7 +1177,9 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
         nn.widget.set("muted", o.muted);
         nn.widget.set("autoplay", o.autoplay);
       },
-      [&](const n8v_divider_options &o) {
+      [&](const n8v_divider_options &original) {
+        n8v_divider_options o = original;
+        o.color = resolveThemeColor(o.color);
         std::string css = "&{border:0;margin:0;width:100%;height:0;";
         if (o.color.a > 0.0f) {
           char line[96];

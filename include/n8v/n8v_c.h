@@ -433,17 +433,34 @@ typedef struct n8v_floating_options {
 N8V_API void n8v_open_floating(n8v_floating_options options);
 N8V_API void n8v_close_floating(void);
 
-/** Named colors resolved against the active toolkit's palette. */
-typedef enum n8v_badge_color {
-  N8V_BADGE_COLOR_DEFAULT,
-  N8V_BADGE_COLOR_RED,
-  N8V_BADGE_COLOR_ORANGE,
-  N8V_BADGE_COLOR_YELLOW,
-  N8V_BADGE_COLOR_GREEN,
-  N8V_BADGE_COLOR_BLUE,
-  N8V_BADGE_COLOR_PURPLE,
-  N8V_BADGE_COLOR_PINK,
-} n8v_badge_color;
+/** Named colors that follow the active theme where the toolkit has a palette. See n8v_color_theme. */
+typedef enum n8v_named_color {
+  N8V_NAMED_COLOR_DEFAULT,
+  N8V_NAMED_COLOR_RED,
+  N8V_NAMED_COLOR_ORANGE,
+  N8V_NAMED_COLOR_YELLOW,
+  N8V_NAMED_COLOR_GREEN,
+  N8V_NAMED_COLOR_BLUE,
+  N8V_NAMED_COLOR_PURPLE,
+  N8V_NAMED_COLOR_PINK,
+} n8v_named_color;
+
+/** The old name, from when only badges had them. */
+typedef n8v_named_color n8v_badge_color;
+#define N8V_BADGE_COLOR_DEFAULT N8V_NAMED_COLOR_DEFAULT
+#define N8V_BADGE_COLOR_RED N8V_NAMED_COLOR_RED
+#define N8V_BADGE_COLOR_ORANGE N8V_NAMED_COLOR_ORANGE
+#define N8V_BADGE_COLOR_YELLOW N8V_NAMED_COLOR_YELLOW
+#define N8V_BADGE_COLOR_GREEN N8V_NAMED_COLOR_GREEN
+#define N8V_BADGE_COLOR_BLUE N8V_NAMED_COLOR_BLUE
+#define N8V_BADGE_COLOR_PURPLE N8V_NAMED_COLOR_PURPLE
+#define N8V_BADGE_COLOR_PINK N8V_NAMED_COLOR_PINK
+
+/** A color that follows the theme, usable anywhere an n8v_color is: a negative alpha with the name in `r`. */
+static inline n8v_color n8v_color_theme(n8v_named_color name) {
+  n8v_color c = {(float)name, 0.0f, 0.0f, -1.0f};
+  return c;
+}
 
 typedef struct n8v_page_options {
   const char *name;

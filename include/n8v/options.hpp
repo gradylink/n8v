@@ -205,17 +205,8 @@ struct SidebarOptions {
   bool compact = false;
 };
 
-/** Named colors resolved against the active toolkit's palette where it has one. */
-enum class BadgeColor {
-  Default,
-  Red,
-  Orange,
-  Yellow,
-  Green,
-  Blue,
-  Purple,
-  Pink,
-};
+/** What badges called their named colors; they are the same as any other theme color now. */
+using BadgeColor = NamedColor;
 
 struct PageOptions {
   std::string_view name = {};

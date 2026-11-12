@@ -2,6 +2,7 @@
 
 #include "core/backend.hpp"
 #include "core/style.hpp"
+#include "core/theme_color.hpp"
 
 #include "core/clay_convert.hpp"
 #include "core/icon_loader.hpp"
@@ -49,6 +50,7 @@ void openUrlClickCallback(void *userdata) {
 }
 
 n8v::Color toTextColor(n8v_color c) {
+  c = n8v::detail::resolveThemeColor(c);
   if (c.a == 0.0f) return {0, 0, 0, 255};
   return toColor(c);
 }

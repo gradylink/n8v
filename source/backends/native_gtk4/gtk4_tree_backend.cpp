@@ -9,6 +9,7 @@
 #include "core/markdown/image_state.hpp"
 #include "core/open_url.hpp"
 #include "core/style.hpp"
+#include "core/theme_color.hpp"
 #include "core/tree/dispatch.hpp"
 #include "core/tree/persistent.hpp"
 #include "core/tree/props.hpp"
@@ -51,6 +52,50 @@ using tree::OwnedProps;
 using tree::PNode;
 namespace dispatch = tree::dispatch;
 namespace markup = gtk_markup;
+
+struct NamedColorCss {
+  const char *slug;
+  const char *foreground;
+  const char *fill;
+};
+
+#ifdef N8V_HAVE_ADWAITA
+constexpr NamedColorCss kNamedColorCss[] = {
+  {"red", "@error_color", "@error_bg_color"},
+  {"orange", "@orange_3", "@orange_3"},
+  {"yellow", "@warning_color", "@warning_bg_color"},
+  {"green", "@success_color", "@success_bg_color"},
+  {"blue", "@accent_color", "@accent_bg_color"},
+  {"purple", "@purple_3", "@purple_3"},
+  {"pink", "mix(@purple_3, @red_3, 0.5)", "mix(@purple_3, @red_3, 0.5)"},
+};
+#else
+constexpr NamedColorCss kNamedColorCss[] = {
+  {"red", "#e01b24", "#e01b24"},
+  {"orange", "#e66100", "#e66100"},
+  {"yellow", "#f5c211", "#f5c211"},
+  {"green", "#26a269", "#26a269"},
+  {"blue", "#3584e4", "#3584e4"},
+  {"purple", "#9141ac", "#9141ac"},
+  {"pink", "#d6428f", "#d6428f"},
+};
+#endif
+
+std::string namedColorCss() {
+  std::string css;
+  for (const NamedColorCss &c : kNamedColorCss) {
+    css += std::string(".n8v-fg-") + c.slug + " { color: " + c.foreground + "; }\n";
+    css += std::string(".n8v-divider.n8v-fill-") + c.slug + " { background-color: " + c.fill + "; }\n";
+    css += std::string(".n8v-accent-") + c.slug + " { border-left: 4px solid " + c.fill + "; }\n";
+  }
+  return css;
+}
+
+std::string themeClass(const char *prefix, const n8v_color &color) {
+  if (!isThemeColor(color)) return "";
+  const char *slug = themeColorSlug(themeColorName(color));
+  return slug ? std::string(prefix) + slug : "";
+}
 
 template <typename... Ts> struct Overloaded : Ts... {
   using Ts::operator()...;
@@ -227,6 +272,11 @@ public:
       ".n8v-notify-label, .n8v-notify-label label { font-weight: bold; }\n"
     );
     gtk_style_context_add_provider_for_display(gtk_widget_get_display(window_), GTK_STYLE_PROVIDER(cardCss_), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+    GtkCssProvider *namedCss = gtk_css_provider_new();
+    gtk_css_provider_load_from_string(namedCss, namedColorCss().c_str());
+    gtk_style_context_add_provider_for_display(gtk_widget_get_display(window_), GTK_STYLE_PROVIDER(namedCss), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+    g_object_unref(namedCss);
 
     multilineCss_ = gtk_css_provider_new();
     gtk_css_provider_load_from_string(
@@ -1510,6 +1560,8 @@ void Gtk4TreeBackend::setLabelFromText(GtkWidget *label, const n8v_text_options 
   if (o.small) m = "<span size=\"smaller\">" + m + "</span>";
   if (o.darken) gtk_widget_add_css_class(label, "dim-label");
   else gtk_widget_remove_css_class(label, "dim-label");
+  for (const NamedColorCss &c : kNamedColorCss) gtk_widget_remove_css_class(label, (std::string("n8v-fg-") + c.slug).c_str());
+  if (const std::string cls = themeClass("n8v-fg-", o.color); !cls.empty()) gtk_widget_add_css_class(label, cls.c_str());
   const bool isDefaultColor = o.color.a <= 0.0f || (o.color.r == 0.0f && o.color.g == 0.0f && o.color.b == 0.0f && o.color.a == 255.0f);
   if (!isDefaultColor) {
     char open[128];
@@ -1832,8 +1884,8 @@ void Gtk4TreeBackend::applyPanel(NativeNode &nn, const n8v_panel_options &o) {
   else gtk_widget_remove_css_class(nn.outer, "n8v-card");
 #endif
 
-  std::string wanted;
-  if (o.accent.a > 0.0f) {
+  std::string wanted = themeClass("n8v-accent-", o.accent);
+  if (wanted.empty() && o.accent.a > 0.0f) {
     char name[40];
     std::snprintf(name, sizeof(name), "n8v-accent-%02x%02x%02x", (int)o.accent.r & 255, (int)o.accent.g & 255, (int)o.accent.b & 255);
     wanted = name;
@@ -2240,8 +2292,8 @@ void Gtk4TreeBackend::apply(NativeNode &nn) {
       [&](const n8v_video_options &o) { applyVideo(nn, o); },
       [&](const n8v_audio_options &o) { applyAudio(nn, o); },
       [&](const n8v_divider_options &o) {
-        std::string wanted;
-        if (o.color.a > 0.0f) {
+        std::string wanted = themeClass("n8v-fill-", o.color);
+        if (wanted.empty() && o.color.a > 0.0f) {
           char name[40];
           std::snprintf(name, sizeof(name), "n8v-divider-%02x%02x%02x%02x", (int)o.color.r & 255, (int)o.color.g & 255, (int)o.color.b & 255, (int)o.color.a & 255);
           wanted = name;

@@ -12,6 +12,7 @@
 #include "core/markdown/markdown_to_html.hpp"
 #include "core/open_url.hpp"
 #include "core/style.hpp"
+#include "core/theme_color.hpp"
 #include "core/tree/dispatch.hpp"
 #include "core/tree/persistent.hpp"
 #include "core/tree/props.hpp"
@@ -79,6 +80,12 @@
 const char qt_version_tag = 0;
 
 namespace n8v::detail {
+namespace {
+
+bool onDarkBackground(const QWidget *widget) { return widget->palette().color(QPalette::Window).lightness() < 128; }
+
+} // namespace
+
 namespace {
 
 using tree::BoundValue;
@@ -1510,10 +1517,11 @@ void QtTreeBackend::applyPanel(NativeNode &nn, const n8v_panel_options &o) {
   const int vpad = card ? 10 : 6, hpad = card ? 12 : 10;
   nn.layout->setContentsMargins(hpad, vpad, hpad, vpad);
   frame->setFrameShape(card ? QFrame::StyledPanel : QFrame::NoFrame);
-  if (o.accent.a > 0.0f) {
+  const n8v_color accent = resolveThemeColor(o.accent, onDarkBackground(frame));
+  if (accent.a > 0.0f) {
     frame->setObjectName("n8vAccent");
     frame->setStyleSheet(
-      QString("QFrame#n8vAccent { border: 1px solid palette(mid); border-left: 4px solid rgb(%1, %2, %3); }").arg((int)o.accent.r).arg((int)o.accent.g).arg((int)o.accent.b)
+      QString("QFrame#n8vAccent { border: 1px solid palette(mid); border-left: 4px solid rgb(%1, %2, %3); }").arg((int)accent.r).arg((int)accent.g).arg((int)accent.b)
     );
   } else if (!frame->styleSheet().isEmpty()) {
     frame->setStyleSheet(QString());
@@ -1562,8 +1570,10 @@ void QtTreeBackend::applyButton(NativeNode &nn, const n8v_button_options &o) {
   button->setFont(font);
 }
 
-void QtTreeBackend::applyText(NativeNode &nn, const n8v_text_options &o) {
+void QtTreeBackend::applyText(NativeNode &nn, const n8v_text_options &original) {
   auto *label = static_cast<N8VLabel *>(nn.widget);
+  n8v_text_options o = original;
+  o.color = resolveThemeColor(o.color, onDarkBackground(label));
   QString html = escapeHtml(nn.node->current.label);
   if (o.strikethrough) html = "<s>" + html + "</s>";
   if (o.italic) html = "<i>" + html + "</i>";
@@ -1718,7 +1728,9 @@ void QtTreeBackend::apply(NativeNode &nn) {
           nn.pixmapSource = baked;
         }
       },
-      [&](const n8v_divider_options &o) {
+      [&](const n8v_divider_options &original) {
+        n8v_divider_options o = original;
+        o.color = resolveThemeColor(o.color, onDarkBackground(nn.widget));
         if (o.color.a > 0.0f) {
           static_cast<QFrame *>(nn.widget)->setStyleSheet(QString("QFrame { background-color: rgba(%1,%2,%3,%4); border: none; max-height: 1px; }")
                                                             .arg((int)o.color.r)
