@@ -208,6 +208,10 @@ typedef struct n8v_text_options {
   bool bold;
   bool italic;
   bool strikethrough;
+  /** Secondary text: smaller than normal, by whatever the style considers small. */
+  bool small;
+  /** Secondary text: fainter than normal, by whatever the style considers dimmed. */
+  bool darken;
   const char *url;
   n8v_color color;
   /** If set, the text is painted as a link and this fires on click instead of opening `url` -

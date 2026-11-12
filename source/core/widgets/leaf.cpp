@@ -218,6 +218,8 @@ void text(const n8v_text_options &opts, std::string_view labelView, int ordinal)
     textOptions.bold = opts.bold;
     textOptions.italic = opts.italic;
     textOptions.strikethrough = opts.strikethrough;
+    textOptions.small = opts.small;
+    textOptions.darken = opts.darken;
     textOptions.url = urlView;
     textOptions.color = toTextColor(opts.color);
     const n8v::TextPaint textPaint = n8v::activePaint().text(textOptions);
@@ -230,7 +232,7 @@ void text(const n8v_text_options &opts, std::string_view labelView, int ordinal)
 
     Clay_OnHover(dispatchClick, &meta);
 
-    textStyleStorage.push_back(n8v::detail::TextStyleFlags{textPaint.font, opts.bold, opts.italic, true, true, ordinal, opts.strikethrough});
+    textStyleStorage.push_back(n8v::detail::TextStyleFlags{textPaint.font, opts.bold, opts.italic, true, true, ordinal, opts.strikethrough, false, opts.small, opts.darken});
     Clay_TextElementConfig textConfig = {};
     textConfig.textColor = n8v::detail::toClay(textPaint.color);
     textConfig.fontSize = textPaint.fontSize;
@@ -245,9 +247,11 @@ void text(const n8v_text_options &opts, std::string_view labelView, int ordinal)
     textOptions.bold = opts.bold;
     textOptions.italic = opts.italic;
     textOptions.strikethrough = opts.strikethrough;
+    textOptions.small = opts.small;
+    textOptions.darken = opts.darken;
     textOptions.color = toTextColor(opts.color);
     const n8v::TextPaint textPaint = n8v::activePaint().text(textOptions);
-    textStyleStorage.push_back(n8v::detail::TextStyleFlags{textPaint.font, opts.bold, opts.italic, false, false, ordinal, opts.strikethrough});
+    textStyleStorage.push_back(n8v::detail::TextStyleFlags{textPaint.font, opts.bold, opts.italic, false, false, ordinal, opts.strikethrough, false, opts.small, opts.darken});
     Clay_TextElementConfig textConfig = {};
     textConfig.textColor = n8v::detail::toClay(textPaint.color);
     textConfig.fontSize = textPaint.fontSize;

@@ -3,6 +3,8 @@
 #include <n8v/options.hpp>
 #include <n8v/types.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 
 namespace n8v {
@@ -22,6 +24,11 @@ struct TextPaint {
   FontFamily font = FontFamily::DejaVuSans;
   uint16_t fontSize = 16;
 };
+
+inline void applyTextEmphasis(TextPaint &paint, const TextOptions &options) {
+  if (options.small) paint.fontSize = (uint16_t)std::max(1L, std::lround((double)paint.fontSize * 0.85));
+  if (options.darken) paint.color.a *= 0.6f;
+}
 
 struct CheckboxPaint {
   Color background = {0, 0, 0, 0};

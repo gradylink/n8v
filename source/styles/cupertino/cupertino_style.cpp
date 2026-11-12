@@ -30,6 +30,7 @@ public:
     paint.color = (options.url.empty() && !options.onClick) ? options.color : Color{0, 122, 255, 255};
     paint.font = FontFamily::Inter;
     paint.fontSize = 17;
+    applyTextEmphasis(paint, options);
     return paint;
   }
 

@@ -32,6 +32,7 @@ public:
     paint.color = (options.url.empty() && !options.onClick) ? options.color : Color{103, 80, 164, 255};
     paint.font = FontFamily::Roboto;
     paint.fontSize = 16;
+    applyTextEmphasis(paint, options);
     return paint;
   }
 

@@ -1411,14 +1411,15 @@ void Gtk4TreeBackend::applyVideo(NativeNode &nn, const n8v_video_options &o) {
   }
 
   GtkMediaStream *stream = withControls ? gtk_video_get_media_stream(GTK_VIDEO(nn.widget)) : GTK_MEDIA_STREAM(g_object_get_data(G_OBJECT(nn.widget), "n8v-video-stream"));
-  if (withControls) {
-    gtk_video_set_autoplay(GTK_VIDEO(nn.widget), o.autoplay);
-    gtk_video_set_loop(GTK_VIDEO(nn.widget), o.loop);
-  } else if (stream) {
-    gtk_media_stream_set_loop(stream, o.loop);
-    if (o.autoplay && !gtk_media_stream_get_playing(stream)) gtk_media_stream_play(stream);
+  if (withControls) gtk_video_set_loop(GTK_VIDEO(nn.widget), o.loop);
+  else if (stream) gtk_media_stream_set_loop(stream, o.loop);
+  if (stream) {
+    if (o.autoplay && !g_object_get_data(G_OBJECT(stream), "n8v-autoplayed")) {
+      g_object_set_data(G_OBJECT(stream), "n8v-autoplayed", GINT_TO_POINTER(1));
+      gtk_media_stream_play(stream);
+    }
+    setStreamMuted(stream, o.muted);
   }
-  if (stream) setStreamMuted(stream, o.muted);
 
   CornerRadius radius;
   switch (o.rounding.mode) {
@@ -1494,6 +1495,9 @@ void Gtk4TreeBackend::setLabelFromText(GtkWidget *label, const n8v_text_options 
   if (o.strikethrough) m = "<s>" + m + "</s>";
   if (o.italic) m = "<i>" + m + "</i>";
   if (o.bold) m = "<b>" + m + "</b>";
+  if (o.small) m = "<span size=\"smaller\">" + m + "</span>";
+  if (o.darken) gtk_widget_add_css_class(label, "dim-label");
+  else gtk_widget_remove_css_class(label, "dim-label");
   const bool isDefaultColor = o.color.a <= 0.0f || (o.color.r == 0.0f && o.color.g == 0.0f && o.color.b == 0.0f && o.color.a == 255.0f);
   if (!isDefaultColor) {
     char open[128];

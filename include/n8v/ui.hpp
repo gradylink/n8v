@@ -200,7 +200,7 @@ inline FontFamily fromC(n8v_font_family f) {
 inline std::string_view toView(const char *s) { return s ? std::string_view(s) : std::string_view{}; }
 
 inline TextOptions fromC(n8v_text_options options) {
-  return TextOptions{.bold = options.bold, .italic = options.italic, .strikethrough = options.strikethrough, .url = toView(options.url), .color = fromC(options.color)};
+  return TextOptions{.bold = options.bold, .italic = options.italic, .strikethrough = options.strikethrough, .small = options.small, .darken = options.darken, .url = toView(options.url), .color = fromC(options.color)};
 }
 
 inline n8v_text_options toC(const TextOptions &options) {
@@ -210,6 +210,8 @@ inline n8v_text_options toC(const TextOptions &options) {
   c.bold = options.bold;
   c.italic = options.italic;
   c.strikethrough = options.strikethrough;
+  c.small = options.small;
+  c.darken = options.darken;
   c.url = urlStorage.c_str();
   c.color = toC(options.color);
   return c;
@@ -659,6 +661,8 @@ struct LeafBuilder {
       c_opts.bold = textOptions.bold;
       c_opts.italic = textOptions.italic;
       c_opts.strikethrough = textOptions.strikethrough;
+      c_opts.small = textOptions.small;
+      c_opts.darken = textOptions.darken;
       c_opts.url = urlStorage.c_str();
       c_opts.color = toC(textOptions.color);
       if (textOptions.onClick) callback_bridge::bridge(callback_bridge::clickClosures, std::move(textOptions.onClick), c_opts.on_click, c_opts.on_click_userdata);

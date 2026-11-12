@@ -1044,6 +1044,8 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
         options.bold = o.bold;
         options.italic = o.italic;
         options.strikethrough = o.strikethrough;
+        options.small = o.small;
+        options.darken = o.darken;
         options.url = o.url ? o.url : "";
         options.color = {o.color.r, o.color.g, o.color.b, o.color.a};
         if (o.on_click) options.onClick = [] {};

@@ -1549,10 +1549,13 @@ void QtTreeBackend::applyText(NativeNode &nn, const n8v_text_options &o) {
   if (o.strikethrough) html = "<s>" + html + "</s>";
   if (o.italic) html = "<i>" + html + "</i>";
   if (o.bold) html = "<b>" + html + "</b>";
+  if (o.small) html = "<span style=\"font-size:smaller\">" + html + "</span>";
   const bool isDefaultColor = o.color.a <= 0.0f || (o.color.r == 0.0f && o.color.g == 0.0f && o.color.b == 0.0f && o.color.a == 255.0f);
-  if (!isDefaultColor)
-    html =
-      QString("<span style=\"color:rgba(%1,%2,%3,%4)\">").arg((int)o.color.r).arg((int)o.color.g).arg((int)o.color.b).arg(o.color.a / 255.0, 0, 'f', 3) + html + "</span>";
+  if (!isDefaultColor || o.darken) {
+    const QColor base = isDefaultColor ? label->palette().color(QPalette::WindowText) : QColor((int)o.color.r, (int)o.color.g, (int)o.color.b);
+    const double alpha = (isDefaultColor ? 1.0 : o.color.a / 255.0) * (o.darken ? 0.6 : 1.0);
+    html = QString("<span style=\"color:rgba(%1,%2,%3,%4)\">").arg(base.red()).arg(base.green()).arg(base.blue()).arg(alpha, 0, 'f', 3) + html + "</span>";
+  }
   const bool link = (o.url && *o.url) || o.on_click;
   if (link) html = "<a href=\"#\">" + html + "</a>";
   label->setText(html);

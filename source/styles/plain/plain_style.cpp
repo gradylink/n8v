@@ -32,6 +32,7 @@ public:
     paint.color = (options.url.empty() && !options.onClick) ? options.color : Color{40, 90, 200, 255};
     paint.font = FontFamily::DejaVuSans;
     paint.fontSize = 15;
+    applyTextEmphasis(paint, options);
     return paint;
   }
 
