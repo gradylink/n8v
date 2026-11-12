@@ -8,6 +8,7 @@
 #include "core/image_loader.hpp"
 #include "core/markdown/image_state.hpp"
 #include "core/open_url.hpp"
+#include "core/paste_file.hpp"
 #include "core/style.hpp"
 #include "core/theme_color.hpp"
 #include "core/tree/dispatch.hpp"
@@ -653,9 +654,61 @@ private:
   static void onTextBufferPlaceholder(GtkTextBuffer *buffer, gpointer placeholder) {
     gtk_widget_set_visible(GTK_WIDGET(placeholder), gtk_text_buffer_get_char_count(buffer) == 0);
   }
-  static gboolean onMultilineKey(GtkEventControllerKey *, guint keyval, guint, GdkModifierType state, gpointer userData) {
-    if (keyval != GDK_KEY_Return && keyval != GDK_KEY_KP_Enter && keyval != GDK_KEY_ISO_Enter) return FALSE;
+  static void onClipboardTexture(GObject *source, GAsyncResult *result, gpointer userData) {
+    GError *error = nullptr;
+    GdkTexture *texture = gdk_clipboard_read_texture_finish(GDK_CLIPBOARD(source), result, &error);
+    if (error) g_error_free(error);
+    if (!texture) return;
+    const std::string path = newPastedImagePath();
+    const bool saved = gdk_texture_save_to_png(texture, path.c_str());
+    g_object_unref(texture);
     PNode *node = liveNode(userData);
+    if (saved && node) dispatch::pasteFiles(*node, {path});
+  }
+  static void onClipboardFiles(GObject *source, GAsyncResult *result, gpointer userData) {
+    GError *error = nullptr;
+    const GValue *value = gdk_clipboard_read_value_finish(GDK_CLIPBOARD(source), result, &error);
+    if (error) g_error_free(error);
+    if (!value) return;
+    std::vector<std::string> paths;
+    if (auto *list = static_cast<GdkFileList *>(g_value_get_boxed(value))) {
+      for (GSList *item = gdk_file_list_get_files(list); item; item = item->next) {
+        char *path = g_file_get_path(G_FILE(item->data));
+        if (path) {
+          paths.emplace_back(path);
+          g_free(path);
+        }
+      }
+    }
+    PNode *node = liveNode(userData);
+    if (node && !paths.empty()) dispatch::pasteFiles(*node, paths);
+  }
+  static void onMultilinePaste(GtkTextView *view, gpointer userData) {
+    PNode *node = liveNode(userData);
+    const auto *o = node ? propsOf<n8v_entry_options>(*node) : nullptr;
+    if (!o || !o->on_paste_files) return;
+    GdkClipboard *clipboard = gtk_widget_get_clipboard(GTK_WIDGET(view));
+    GdkContentFormats *formats = gdk_clipboard_get_formats(clipboard);
+    if (gdk_content_formats_contain_gtype(formats, GDK_TYPE_FILE_LIST)) {
+      g_signal_stop_emission_by_name(view, "paste-clipboard");
+      gdk_clipboard_read_value_async(clipboard, GDK_TYPE_FILE_LIST, G_PRIORITY_DEFAULT, nullptr, &Gtk4TreeBackend::onClipboardFiles, node);
+    } else if (!gdk_content_formats_contain_gtype(formats, G_TYPE_STRING) && gdk_content_formats_contain_gtype(formats, GDK_TYPE_TEXTURE)) {
+      g_signal_stop_emission_by_name(view, "paste-clipboard");
+      gdk_clipboard_read_texture_async(clipboard, nullptr, &Gtk4TreeBackend::onClipboardTexture, node);
+    }
+  }
+  static gboolean onMultilineKey(GtkEventControllerKey *, guint keyval, guint, GdkModifierType state, gpointer userData) {
+    PNode *node = liveNode(userData);
+    if (!node) return FALSE;
+    int key = -1;
+    if (keyval == GDK_KEY_Up || keyval == GDK_KEY_KP_Up) key = N8V_KEY_UP;
+    else if (keyval == GDK_KEY_Down || keyval == GDK_KEY_KP_Down) key = N8V_KEY_DOWN;
+    else if (keyval == GDK_KEY_Escape) key = N8V_KEY_ESCAPE;
+    if (key >= 0) {
+      const unsigned mods = ((state & GDK_SHIFT_MASK) ? N8V_MOD_SHIFT : 0u) | ((state & GDK_CONTROL_MASK) ? N8V_MOD_CTRL : 0u) | ((state & GDK_ALT_MASK) ? N8V_MOD_ALT : 0u);
+      return dispatch::key(*node, (n8v_key)key, mods) ? TRUE : FALSE;
+    }
+    if (keyval != GDK_KEY_Return && keyval != GDK_KEY_KP_Enter && keyval != GDK_KEY_ISO_Enter) return FALSE;
     const auto *o = node ? propsOf<n8v_entry_options>(*node) : nullptr;
     if (!o || !enterSubmits(o->submit_mode, (state & GDK_CONTROL_MASK) != 0, (state & GDK_SHIFT_MASK) != 0)) return FALSE;
     dispatch::submit(*node);
@@ -1722,6 +1775,7 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
       gtk_event_controller_set_propagation_phase(keys, GTK_PHASE_CAPTURE);
       connect(keys, "key-pressed", &Gtk4TreeBackend::onMultilineKey, pn);
       gtk_widget_add_controller(nn.widget, keys);
+      connect(nn.widget, "paste-clipboard", &Gtk4TreeBackend::onMultilinePaste, pn);
     } else {
       nn.outer = nn.widget = gtk_entry_new();
       connect(nn.widget, "changed", &Gtk4TreeBackend::onEntryChanged, pn);

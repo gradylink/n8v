@@ -279,6 +279,22 @@ typedef enum n8v_submit_mode {
   N8V_SUBMIT_ON_CTRL_ENTER,
 } n8v_submit_mode;
 
+// TODO: support more keys
+typedef enum n8v_key {
+  N8V_KEY_UP,
+  N8V_KEY_DOWN,
+  N8V_KEY_ESCAPE,
+} n8v_key;
+
+#define N8V_MOD_SHIFT 1u
+#define N8V_MOD_CTRL 2u
+#define N8V_MOD_ALT 4u
+
+/** Return true if the key was handled, which stops the entry acting on it. `mods` is a combination of N8V_MOD_*. */
+typedef bool (*n8v_key_fn)(n8v_key key, unsigned mods, void *userdata);
+
+typedef void (*n8v_paste_files_fn)(const char *const *paths, size_t count, void *userdata);
+
 typedef struct n8v_entry_options {
   n8v_string_buf *value;
   const char *placeholder;
@@ -294,6 +310,12 @@ typedef struct n8v_entry_options {
   uint16_t max_lines;
   /** GTK4 Only. */
   bool match_entry_style;
+  /** Multiline entries only, so far, and not in every backend. */
+  n8v_key_fn on_key;
+  void *on_key_userdata;
+  /** Multiline entries only, so far, and not in every backend. */
+  n8v_paste_files_fn on_paste_files;
+  void *on_paste_files_userdata;
 } n8v_entry_options;
 
 typedef struct n8v_dropdown_options {

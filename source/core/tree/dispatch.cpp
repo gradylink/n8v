@@ -107,6 +107,20 @@ void submit(PNode &node) {
   if (o && o->on_submit) o->on_submit(o->on_submit_userdata);
 }
 
+bool key(PNode &node, n8v_key key, unsigned mods) {
+  auto *o = optionsOf<n8v_entry_options>(node);
+  return o && o->on_key && o->on_key(key, mods, o->on_key_userdata);
+}
+
+void pasteFiles(PNode &node, const std::vector<std::string> &paths) {
+  auto *o = optionsOf<n8v_entry_options>(node);
+  if (!o || !o->on_paste_files) return;
+  std::vector<const char *> pointers;
+  pointers.reserve(paths.size());
+  for (const std::string &p : paths) pointers.push_back(p.c_str());
+  o->on_paste_files(pointers.data(), pointers.size(), o->on_paste_files_userdata);
+}
+
 void hover(PNode &node, bool hovered) {
   auto *o = optionsOf<n8v_flex_options>(node);
   if (o && o->on_hover) o->on_hover(hovered, o->on_hover_userdata);

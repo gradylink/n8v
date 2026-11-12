@@ -47,6 +47,8 @@ if(N8V_BACKEND_GTK4)
         g_object_set_data_full
         g_object_get_data
         g_type_check_instance_cast
+        g_signal_stop_emission_by_name
+        g_value_get_boxed
         g_type_check_instance_is_a
     )
     target_include_directories(gobject_lazy PUBLIC ${_N8V_GTK4_INCLUDE_DIRS})

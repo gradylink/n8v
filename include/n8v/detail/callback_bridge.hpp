@@ -4,7 +4,9 @@
 
 #include <deque>
 #include <functional>
+#include <string>
 #include <string_view>
+#include <vector>
 #include <utility>
 
 namespace n8v::detail::callback_bridge {
@@ -35,6 +37,8 @@ inline std::deque<std::function<void(bool)>> boolChangeClosures;
 inline std::deque<std::function<void(int)>> intChangeClosures;
 inline std::deque<std::function<void(float)>> floatChangeClosures;
 inline std::deque<std::function<void(std::string_view)>> textChangeClosures;
+inline std::deque<std::function<bool(n8v_key, unsigned)>> keyClosures;
+inline std::deque<std::function<void(const std::vector<std::string> &)>> pasteFilesClosures;
 inline std::deque<std::function<bool(const char *, n8v_link_style *)>> linkStyleClosures;
 inline std::deque<std::function<const char *(const char *)>> imageResolveClosures;
 
@@ -44,6 +48,8 @@ inline void clearCallbackStorage() {
   intChangeClosures.clear();
   floatChangeClosures.clear();
   textChangeClosures.clear();
+  keyClosures.clear();
+  pasteFilesClosures.clear();
   linkStyleClosures.clear();
   imageResolveClosures.clear();
 }
@@ -70,6 +76,20 @@ inline void bridgeTextChange(std::function<void(std::string_view)> fn, n8v_text_
   textChangeClosures.push_back(std::move(fn));
   outFn = [](const char *text, size_t length, void *userdata) { (*static_cast<std::function<void(std::string_view)> *>(userdata))(std::string_view(text, length)); };
   outUserdata = &textChangeClosures.back();
+}
+
+inline void bridgePasteFiles(std::function<void(const std::vector<std::string> &)> fn, n8v_paste_files_fn &outFn, void *&outUserdata) {
+  if (!fn) {
+    outFn = nullptr;
+    outUserdata = nullptr;
+    return;
+  }
+  pasteFilesClosures.push_back(std::move(fn));
+  outFn = [](const char *const *paths, size_t count, void *userdata) {
+    const std::vector<std::string> list(paths, paths + count);
+    (*static_cast<std::function<void(const std::vector<std::string> &)> *>(userdata))(list);
+  };
+  outUserdata = &pasteFilesClosures.back();
 }
 
 } // namespace n8v::detail::callback_bridge

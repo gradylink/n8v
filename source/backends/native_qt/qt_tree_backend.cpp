@@ -11,6 +11,7 @@
 #include "core/markdown/markdown.hpp"
 #include "core/markdown/markdown_to_html.hpp"
 #include "core/open_url.hpp"
+#include "core/paste_file.hpp"
 #include "core/style.hpp"
 #include "core/theme_color.hpp"
 #include "core/tree/dispatch.hpp"
@@ -31,6 +32,7 @@
 #include <QDir>
 #include <QEvent>
 #include <QEventLoop>
+#include <QFile>
 #include <QFileDialog>
 #include <QFontMetrics>
 #include <QFrame>
@@ -43,6 +45,7 @@
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPixmap>
 #include <QPlainTextEdit>
@@ -54,6 +57,7 @@
 #include <QSlider>
 #include <QStyle>
 #include <QTextDocument>
+#include <QUrl>
 #include <QVBoxLayout>
 #ifdef N8V_HAVE_QT_MULTIMEDIA
 #include <QAudioOutput>
@@ -264,6 +268,20 @@ public:
 
 protected:
   void keyPressEvent(QKeyEvent *event) override {
+    if (node) {
+      int key = -1;
+      if (event->key() == Qt::Key_Up) key = N8V_KEY_UP;
+      else if (event->key() == Qt::Key_Down) key = N8V_KEY_DOWN;
+      else if (event->key() == Qt::Key_Escape) key = N8V_KEY_ESCAPE;
+      if (key >= 0) {
+        const Qt::KeyboardModifiers m = event->modifiers();
+        const unsigned mods = ((m & Qt::ShiftModifier) ? N8V_MOD_SHIFT : 0u) | ((m & Qt::ControlModifier) ? N8V_MOD_CTRL : 0u) | ((m & Qt::AltModifier) ? N8V_MOD_ALT : 0u);
+        if (dispatch::key(*node, (n8v_key)key, mods)) {
+          event->accept();
+          return;
+        }
+      }
+    }
     if (node && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)) {
       const auto *o = propsOf<n8v_entry_options>(*node);
       if (o && enterSubmits(o->submit_mode, event->modifiers() & Qt::ControlModifier, event->modifiers() & Qt::ShiftModifier)) {
@@ -273,6 +291,43 @@ protected:
       }
     }
     QPlainTextEdit::keyPressEvent(event);
+  }
+
+  bool wantsPastedFiles(const QMimeData *source) const {
+    const auto *o = node ? propsOf<n8v_entry_options>(*node) : nullptr;
+    if (!o || !o->on_paste_files || !source) return false;
+    if (source->hasUrls()) {
+      for (const QUrl &url : source->urls())
+        if (url.isLocalFile()) return true;
+    }
+    return !source->hasText() && pastedImageFormat(source) != nullptr;
+  }
+  static const char *pastedImageFormat(const QMimeData *source) {
+    for (const char *format : {"image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"})
+      if (source->hasFormat(QString::fromLatin1(format))) return format;
+    return nullptr;
+  }
+  bool canInsertFromMimeData(const QMimeData *source) const override { return wantsPastedFiles(source) || QPlainTextEdit::canInsertFromMimeData(source); }
+  void insertFromMimeData(const QMimeData *source) override {
+    if (wantsPastedFiles(source)) {
+      std::vector<std::string> paths;
+      if (source->hasUrls()) {
+        for (const QUrl &url : source->urls())
+          if (url.isLocalFile()) paths.push_back(url.toLocalFile().toStdString());
+      }
+      if (paths.empty()) {
+        const char *format = pastedImageFormat(source);
+        const QByteArray bytes = format ? source->data(QString::fromLatin1(format)) : QByteArray();
+        const std::string path = newPastedImagePath(format ? (std::strcmp(format, "image/jpeg") == 0 ? "jpg" : format + 6) : "png");
+        QFile file(QString::fromStdString(path));
+        if (!bytes.isEmpty() && file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size()) paths.push_back(path);
+      }
+      if (!paths.empty()) {
+        dispatch::pasteFiles(*node, paths);
+        return;
+      }
+    }
+    QPlainTextEdit::insertFromMimeData(source);
   }
 };
 

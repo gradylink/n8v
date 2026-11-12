@@ -111,6 +111,18 @@ struct RadioOptions {
   std::string_view id = {};
 };
 
+enum class Key {
+  Up,
+  Down,
+  Escape,
+};
+
+struct KeyMods {
+  bool shift = false;
+  bool ctrl = false;
+  bool alt = false;
+};
+
 struct EntryOptions {
   std::string *value = nullptr;
   std::string_view placeholder = {};
@@ -124,6 +136,8 @@ struct EntryOptions {
   uint16_t maxLines = 0;
   /** GTK4 Only. */
   bool matchEntryStyle = false;
+  std::function<bool(Key, KeyMods)> onKey = nullptr;
+  std::function<void(const std::vector<std::string> &)> onPasteFiles = nullptr;
 };
 
 struct DropdownOptions {

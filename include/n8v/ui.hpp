@@ -806,6 +806,13 @@ inline void entry(EntryOptions options) {
 
   if (options.onChange) callback_bridge::bridgeTextChange(std::move(options.onChange), c_opts.on_change, c_opts.on_change_userdata);
   if (options.onSubmit) callback_bridge::bridge(callback_bridge::clickClosures, std::move(options.onSubmit), c_opts.on_submit, c_opts.on_submit_userdata);
+  if (options.onKey) {
+    std::function<bool(n8v_key, unsigned)> keyFn = [fn = std::move(options.onKey)](n8v_key key, unsigned mods) {
+      return fn(static_cast<Key>(key), KeyMods{(mods & N8V_MOD_SHIFT) != 0, (mods & N8V_MOD_CTRL) != 0, (mods & N8V_MOD_ALT) != 0});
+    };
+    callback_bridge::bridge(callback_bridge::keyClosures, std::move(keyFn), c_opts.on_key, c_opts.on_key_userdata);
+  }
+  if (options.onPasteFiles) callback_bridge::bridgePasteFiles(std::move(options.onPasteFiles), c_opts.on_paste_files, c_opts.on_paste_files_userdata);
 
   n8v_entry(c_opts);
 
