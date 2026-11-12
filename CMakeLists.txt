@@ -54,7 +54,7 @@ function(n8v_export_dependency_closure TARGET_NAME)
   endif()
 
   n8v_restrict_to_build_interface(${TARGET_NAME})
-  install(TARGETS ${TARGET_NAME} EXPORT n8vTargets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  install(TARGETS ${TARGET_NAME} EXPORT n8vTargets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/n8v)
   set_property(GLOBAL APPEND PROPERTY N8V_EXPORTED_DEP_TARGETS "n8v::${TARGET_NAME}")
 
   foreach(_n8v_prop INTERFACE_LINK_LIBRARIES LINK_LIBRARIES)
@@ -532,7 +532,7 @@ if(N8V_INSTALL AND NOT EMSCRIPTEN)
     n8v_restrict_to_build_interface(${_n8v_lazy_target})
     install(TARGETS ${_n8v_lazy_target}
       EXPORT n8vTargets
-      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/n8v
     )
   endforeach()
 
