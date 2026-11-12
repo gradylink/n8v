@@ -186,6 +186,12 @@ struct AudioOptions {
   std::string id;
 };
 
+struct DividerOptions {
+  /** A zero alpha (the default) means the style's own divider color. */
+  Color color = {0, 0, 0, 0};
+  std::string_view id = {};
+};
+
 struct SidebarOptions {
   std::string_view title = {};
   int *selected = nullptr;
@@ -251,6 +257,7 @@ struct FloatingOptions {
   AttachPoint parentAttachPoint = AttachPoint::RightTop;
   float offsetX = 0.0f;
   float offsetY = 0.0f;
+  bool opaque = false;
   std::string_view id = {};
 };
 

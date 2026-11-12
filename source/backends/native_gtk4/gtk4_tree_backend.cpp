@@ -110,7 +110,8 @@ enum class NativeKind {
   SidebarSection,
   SidebarDivider,
   Video,
-  Audio
+  Audio,
+  Divider
 };
 
 struct NativeNode {
@@ -755,6 +756,7 @@ n8v_sizing sizingFor(const NativeNode &nn, bool horizontal) {
         if (o.width.mode == N8V_SIZING_FIT && o.width.min <= 0.0f && o.width.max <= 0.0f) return n8v_sizing_fixed(320.0f);
         return o.width;
       },
+      [&](const n8v_divider_options &) { return horizontal ? growSizing() : fitSizing(); },
       [&](const n8v_sidebar_options &) { return growSizing(); },
       [&](const n8v_entry_options &) { return horizontal ? growSizing() : fitSizing(); },
       [&](const n8v_dropdown_options &) { return horizontal ? growSizing() : fitSizing(); },
@@ -921,10 +923,20 @@ gboolean Gtk4TreeBackend::onOverlayChildPosition(GtkOverlay *overlay, GtkWidget 
 
   int minW = 0, natW = 0;
   gtk_widget_measure(child, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
-  int w = o->width.mode == N8V_SIZING_FIXED ? (int)o->width.value : o->width.mode == N8V_SIZING_GROW ? parentW : natW;
+  int w = o->width.mode == N8V_SIZING_FIXED     ? (int)o->width.value
+          : o->width.mode == N8V_SIZING_GROW    ? parentW
+          : o->width.mode == N8V_SIZING_PERCENT ? (int)(o->width.value * parentW)
+                                                : natW;
+  if (o->width.mode == N8V_SIZING_GROW) {
+    if (o->width.max > 0.0f) w = std::min(w, (int)o->width.max);
+    if (o->width.min > 0.0f) w = std::max(w, (int)o->width.min);
+  }
   int minH = 0, natH = 0;
   gtk_widget_measure(child, GTK_ORIENTATION_VERTICAL, w, &minH, &natH, nullptr, nullptr);
-  int h = o->height.mode == N8V_SIZING_FIXED ? (int)o->height.value : o->height.mode == N8V_SIZING_GROW ? parentH : natH;
+  int h = o->height.mode == N8V_SIZING_FIXED     ? (int)o->height.value
+          : o->height.mode == N8V_SIZING_GROW    ? parentH
+          : o->height.mode == N8V_SIZING_PERCENT ? (int)(o->height.value * parentH)
+                                                 : natH;
 
   double pfx = 0, pfy = 0, efx = 0, efy = 0;
   attachFraction(o->parent_attach_point, pfx, pfy);
@@ -1665,6 +1677,19 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
     nn.outer = nn.widget = gtk_image_new();
     break;
   }
+  case Kind::Divider: {
+    nn.outer = nn.widget = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    static bool made = false;
+    if (!made) {
+      made = true;
+      GtkCssProvider *provider = gtk_css_provider_new();
+      gtk_css_provider_load_from_string(provider, ".n8v-divider { min-height: 1px; background-color: alpha(currentColor, 0.15); }");
+      gtk_style_context_add_provider_for_display(gtk_widget_get_display(nn.outer), GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+      g_object_unref(provider);
+    }
+    gtk_widget_add_css_class(nn.outer, "n8v-divider");
+    break;
+  }
   case Kind::Audio:
     nn.outer = nn.widget = gtk_media_controls_new(nullptr);
     break;
@@ -2108,7 +2133,18 @@ void Gtk4TreeBackend::apply(NativeNode &nn) {
       [&](const std::monostate &) {},
       [&](const n8v_flex_options &o) { applyFlex(nn, o); },
       [&](const n8v_panel_options &o) { applyPanel(nn, o); },
-      [&](const n8v_floating_options &) {},
+      [&](const n8v_floating_options &o) {
+        static bool made = false;
+        if (o.opaque && !made) {
+          made = true;
+          GtkCssProvider *provider = gtk_css_provider_new();
+          gtk_css_provider_load_from_string(provider, ".n8v-opaque { background-color: @theme_bg_color; background-color: @window_bg_color; }");
+          gtk_style_context_add_provider_for_display(gtk_widget_get_display(nn.outer), GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+          g_object_unref(provider);
+        }
+        if (o.opaque) gtk_widget_add_css_class(nn.outer, "n8v-opaque");
+        else gtk_widget_remove_css_class(nn.outer, "n8v-opaque");
+      },
       [&](const n8v_sidebar_options &o) { applySidebar(nn, o); },
       [&](const n8v_page_options &o) { applyPage(nn, o); },
       [&](const n8v_button_options &o) { applyButton(nn, o); },
@@ -2203,6 +2239,37 @@ void Gtk4TreeBackend::apply(NativeNode &nn) {
       },
       [&](const n8v_video_options &o) { applyVideo(nn, o); },
       [&](const n8v_audio_options &o) { applyAudio(nn, o); },
+      [&](const n8v_divider_options &o) {
+        std::string wanted;
+        if (o.color.a > 0.0f) {
+          char name[40];
+          std::snprintf(name, sizeof(name), "n8v-divider-%02x%02x%02x%02x", (int)o.color.r & 255, (int)o.color.g & 255, (int)o.color.b & 255, (int)o.color.a & 255);
+          wanted = name;
+          static std::unordered_set<std::string> made;
+          if (made.insert(wanted).second) {
+            char rule[200];
+            std::snprintf(
+              rule,
+              sizeof(rule),
+              ".n8v-divider.%s { background-color: rgba(%d,%d,%d,%.3f); }",
+              name,
+              (int)o.color.r,
+              (int)o.color.g,
+              (int)o.color.b,
+              o.color.a / 255.0f
+            );
+            GtkCssProvider *provider = gtk_css_provider_new();
+            gtk_css_provider_load_from_string(provider, rule);
+            gtk_style_context_add_provider_for_display(gtk_widget_get_display(nn.outer), GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+            g_object_unref(provider);
+          }
+        }
+        if (wanted != nn.roundClass) {
+          if (!nn.roundClass.empty()) gtk_widget_remove_css_class(nn.outer, nn.roundClass.c_str());
+          if (!wanted.empty()) gtk_widget_add_css_class(nn.outer, wanted.c_str());
+          nn.roundClass = wanted;
+        }
+      },
       [&](const n8v_icon_options &o) {
         const int size = o.width.mode == N8V_SIZING_FIXED ? (int)o.width.value : kDefaultIconSize;
         setIconImage(nn, nn.widget, o.name, size);

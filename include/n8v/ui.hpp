@@ -873,6 +873,14 @@ inline void audio(AudioOptions options) {
   n8v_audio(c_opts);
 }
 
+inline void divider(DividerOptions options) {
+  std::string idStorage(options.id);
+  n8v_divider_options c_opts{};
+  c_opts.color = toC(options.color);
+  c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
+  n8v_divider(c_opts);
+}
+
 inline void icon(IconOptions options) {
   std::string nameStorage(options.name);
   n8v_icon_options c_opts{};
@@ -928,6 +936,7 @@ inline void openFloating(const FloatingOptions &options) {
   c_opts.parent_attach_point = toC(options.parentAttachPoint);
   c_opts.offset_x = options.offsetX;
   c_opts.offset_y = options.offsetY;
+  c_opts.opaque = options.opaque;
   c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
   n8v_open_floating(c_opts);
 }
@@ -965,6 +974,8 @@ inline void image(ImageOptions options) { detail::image(std::move(options)); }
 inline void video(VideoOptions options) { detail::video(std::move(options)); }
 
 inline void audio(AudioOptions options) { detail::audio(std::move(options)); }
+
+inline void divider(DividerOptions options) { detail::divider(std::move(options)); }
 
 inline void icon(IconOptions options) { detail::icon(std::move(options)); }
 

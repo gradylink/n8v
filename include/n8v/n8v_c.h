@@ -355,6 +355,12 @@ typedef struct n8v_audio_options {
   const char *id;
 } n8v_audio_options;
 
+typedef struct n8v_divider_options {
+  /** A zero alpha (the default) means the style's own divider color. */
+  n8v_color color;
+  const char *id;
+} n8v_divider_options;
+
 typedef bool (*n8v_image_bundle_lookup_fn)(const char *virtual_path, const void **out_data, size_t *out_size, void *userdata);
 
 typedef struct n8v_icon_options {
@@ -417,6 +423,7 @@ typedef struct n8v_floating_options {
   n8v_attach_point parent_attach_point;
   float offset_x;
   float offset_y;
+  bool opaque;
   const char *id;
 } n8v_floating_options;
 
@@ -740,6 +747,7 @@ N8V_API void n8v_slider(n8v_slider_options options);
 N8V_API void n8v_image(n8v_image_options options);
 N8V_API void n8v_video(n8v_video_options options);
 N8V_API void n8v_audio(n8v_audio_options options);
+N8V_API void n8v_divider(n8v_divider_options options);
 N8V_API void n8v_set_image_bundle_lookup(n8v_image_bundle_lookup_fn fn, void *userdata);
 N8V_API void n8v_icon(n8v_icon_options options);
 N8V_API void n8v_document(n8v_document_options options);
@@ -834,6 +842,7 @@ inline void n8v_text(const char *label) {
 #define image n8v_image
 #define video n8v_video
 #define audio n8v_audio
+#define divider n8v_divider
 #define set_image_bundle_lookup n8v_set_image_bundle_lookup
 
 #define set_style_family n8v_set_style_family
@@ -881,6 +890,7 @@ inline void n8v_text(const char *label) {
 #define image_options n8v_image_options
 #define video_options n8v_video_options
 #define audio_options n8v_audio_options
+#define divider_options n8v_divider_options
 #define image_source_kind n8v_image_source_kind
 #define icon_options n8v_icon_options
 

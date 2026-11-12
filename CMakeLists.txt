@@ -352,6 +352,7 @@ set(N8V_SOURCES
   source/core/widgets/slider.cpp
   source/core/widgets/image.cpp
   source/core/widgets/video.cpp
+  source/core/widgets/divider.cpp
   source/core/widgets/icon.cpp
   source/core/widgets/sidebar.cpp
   source/core/widgets/panel.cpp

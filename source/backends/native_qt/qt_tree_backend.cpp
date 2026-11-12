@@ -304,7 +304,8 @@ enum class NativeKind {
   SidebarSection,
   SidebarDivider,
   Video,
-  Audio
+  Audio,
+  Divider
 };
 
 struct NativeNode {
@@ -383,6 +384,7 @@ n8v_sizing sizingFor(const NativeNode &nn, bool horizontal) {
         if (o.width.mode == N8V_SIZING_FIT && o.width.min <= 0.0f && o.width.max <= 0.0f) return n8v_sizing_fixed(320.0f);
         return o.width;
       },
+      [&](const n8v_divider_options &) { return horizontal ? growSizing() : fitSizing(); },
       [&](const n8v_sidebar_options &) { return growSizing(); },
       [&](const n8v_entry_options &o) {
         if (horizontal) return growSizing();
@@ -1141,8 +1143,18 @@ void QtTreeBackend::updateFloating() {
     }
 
     const QSize hint = nn.outer->sizeHint();
-    int w = o->width.mode == N8V_SIZING_FIXED ? (int)o->width.value : o->width.mode == N8V_SIZING_GROW ? hostRect.width() : hint.width();
-    int h = o->height.mode == N8V_SIZING_FIXED ? (int)o->height.value : o->height.mode == N8V_SIZING_GROW ? hostRect.height() : hint.height();
+    int w = o->width.mode == N8V_SIZING_FIXED     ? (int)o->width.value
+            : o->width.mode == N8V_SIZING_GROW    ? hostRect.width()
+            : o->width.mode == N8V_SIZING_PERCENT ? (int)(o->width.value * hostRect.width())
+                                                  : hint.width();
+    if (o->width.mode == N8V_SIZING_GROW) {
+      if (o->width.max > 0.0f) w = std::min(w, (int)o->width.max);
+      if (o->width.min > 0.0f) w = std::max(w, (int)o->width.min);
+    }
+    int h = o->height.mode == N8V_SIZING_FIXED     ? (int)o->height.value
+            : o->height.mode == N8V_SIZING_GROW    ? hostRect.height()
+            : o->height.mode == N8V_SIZING_PERCENT ? (int)(o->height.value * hostRect.height())
+                                                   : hint.height();
     if (nn.outer->layout() && nn.outer->layout()->hasHeightForWidth() && o->height.mode != N8V_SIZING_FIXED) h = nn.outer->layout()->heightForWidth(w);
 
     double pfx = 0, pfy = 0, efx = 0, efy = 0;
@@ -1344,6 +1356,13 @@ void QtTreeBackend::build(NativeNode &nn) {
     auto *label = new QLabel();
     label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     nn.outer = nn.widget = label;
+    break;
+  }
+  case Kind::Divider: {
+    auto *line = new QFrame();
+    line->setFrameShape(QFrame::HLine);
+    line->setFrameShadow(QFrame::Sunken);
+    nn.outer = nn.widget = line;
     break;
   }
   case Kind::Audio: {
@@ -1604,7 +1623,9 @@ void QtTreeBackend::apply(NativeNode &nn) {
       [&](const std::monostate &) {},
       [&](const n8v_flex_options &o) { applyFlex(nn, o); },
       [&](const n8v_panel_options &o) { applyPanel(nn, o); },
-      [&](const n8v_floating_options &) {},
+      [&](const n8v_floating_options &o) {
+        if (nn.outer) nn.outer->setAutoFillBackground(o.opaque);
+      },
       [&](const n8v_sidebar_options &o) { applySidebar(nn, o); },
       [&](const n8v_page_options &o) { applyPage(nn, o); },
       [&](const n8v_button_options &o) { applyButton(nn, o); },
@@ -1695,6 +1716,17 @@ void QtTreeBackend::apply(NativeNode &nn) {
         if (nn.pixmapSource != baked) {
           labelWidget->setPixmap(pixmapFromDecoded(baked));
           nn.pixmapSource = baked;
+        }
+      },
+      [&](const n8v_divider_options &o) {
+        if (o.color.a > 0.0f) {
+          static_cast<QFrame *>(nn.widget)->setStyleSheet(QString("QFrame { background-color: rgba(%1,%2,%3,%4); border: none; max-height: 1px; }")
+                                                            .arg((int)o.color.r)
+                                                            .arg((int)o.color.g)
+                                                            .arg((int)o.color.b)
+                                                            .arg(o.color.a / 255.0, 0, 'f', 3));
+        } else {
+          static_cast<QFrame *>(nn.widget)->setStyleSheet(QString());
         }
       },
       [&](const n8v_audio_options &o) {

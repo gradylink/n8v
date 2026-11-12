@@ -35,6 +35,7 @@ void n8v_ffi_slider(const n8v_slider_options *options) { n8v_slider(*options); }
 void n8v_ffi_image(const n8v_image_options *options) { n8v_image(*options); }
 void n8v_ffi_video(const n8v_video_options *options) { n8v_video(*options); }
 void n8v_ffi_audio(const n8v_audio_options *options) { n8v_audio(*options); }
+void n8v_ffi_divider(const n8v_divider_options *options) { n8v_divider(*options); }
 void n8v_ffi_icon(const n8v_icon_options *options) { n8v_icon(*options); }
 void n8v_ffi_document(const n8v_document_options *options) { n8v_document(*options); }
 void n8v_ffi_open_floating(const n8v_floating_options *options) { n8v_open_floating(*options); }

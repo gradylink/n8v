@@ -90,7 +90,8 @@ enum class NativeKind {
   SidebarSection,
   SidebarDivider,
   Video,
-  Audio
+  Audio,
+  Divider
 };
 
 struct NativeNode {
@@ -146,6 +147,7 @@ n8v_sizing sizingFor(const NativeNode &nn, bool horizontal) {
         if (o.width.mode == N8V_SIZING_FIT && o.width.min <= 0.0f && o.width.max <= 0.0f) return n8v_sizing_fixed(320.0f);
         return o.width;
       },
+      [&](const n8v_divider_options &) { return horizontal ? growSizing() : fitSizing(); },
       [&](const n8v_sidebar_options &) { return growSizing(); },
       [&](const n8v_entry_options &) { return horizontal ? growSizing() : fitSizing(); },
       [&](const n8v_dropdown_options &) { return horizontal ? growSizing() : fitSizing(); },
@@ -592,7 +594,10 @@ std::string HtmlTreeBackend::containerCss(NativeNode &nn) {
           out += bar;
         }
       },
-      [&](const n8v_floating_options &) { out += "display:flex;flex-direction:column;align-items:flex-start;"; },
+      [&](const n8v_floating_options &o) {
+        out += "display:flex;flex-direction:column;align-items:flex-start;";
+        if (o.opaque) out += "background:Canvas;";
+      },
       [&](const n8v_sidebar_options &) { out += "display:flex;flex-direction:row;min-width:0;min-height:0;"; },
       [](const auto &) {},
     },
@@ -875,6 +880,9 @@ void HtmlTreeBackend::build(NativeNode &nn) {
   case Kind::Image:
   case Kind::Icon:
     nn.outer = nn.widget = createEl("img");
+    break;
+  case Kind::Divider:
+    nn.outer = nn.widget = createEl("hr");
     break;
   case Kind::Audio:
     nn.outer = nn.widget = createEl("audio");
@@ -1165,6 +1173,17 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
         nn.widget.set("loop", o.loop);
         nn.widget.set("muted", o.muted);
         nn.widget.set("autoplay", o.autoplay);
+      },
+      [&](const n8v_divider_options &o) {
+        std::string css = "&{border:0;margin:0;width:100%;height:0;";
+        if (o.color.a > 0.0f) {
+          char line[96];
+          std::snprintf(line, sizeof(line), "border-top:1px solid rgba(%d,%d,%d,%.3f);}\n", (int)o.color.r, (int)o.color.g, (int)o.color.b, o.color.a / 255.0f);
+          css += line;
+        } else {
+          css += "border-top:1px solid currentColor;opacity:.3;}\n";
+        }
+        setClass(nn.outer, classFor(css));
       },
       [&](const n8v_audio_options &o) {
         const std::string source = o.source ? o.source : "";

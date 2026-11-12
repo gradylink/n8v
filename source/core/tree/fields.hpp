@@ -45,6 +45,7 @@ template <typename V> void visitFields(n8v_floating_options &o, V &v) {
   v.num(o.parent_attach_point);
   v.num(o.offset_x);
   v.num(o.offset_y);
+  v.num(o.opaque);
   v.str(o.id);
 }
 
@@ -162,6 +163,11 @@ template <typename V> void visitFields(n8v_video_options &o, V &v) {
   v.num(o.loop);
   v.num(o.muted);
   v.num(o.controls);
+  v.str(o.id);
+}
+
+template <typename V> void visitFields(n8v_divider_options &o, V &v) {
+  v.num(o.color);
   v.str(o.id);
 }
 
