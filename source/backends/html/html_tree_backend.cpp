@@ -1025,7 +1025,11 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
     Overloaded{
       [&](const std::monostate &) {},
       [&](const n8v_flex_options &o) { nn.stickyBottom = o.stick_to_bottom && o.clip_vertical; },
-      [&](const n8v_panel_options &o) { setClass(nn.outer, classFor(css::panelCss(paint, (o.role == N8V_PANEL_ROLE_LIST_ITEM ? PanelRole::ListItem : PanelRole::Card)))); },
+      [&](const n8v_panel_options &o) {
+        std::string css = css::panelCss(paint, (o.role == N8V_PANEL_ROLE_LIST_ITEM ? PanelRole::ListItem : PanelRole::Card));
+        if (o.has_padding) css += "&{padding:" + std::to_string(o.padding.top) + "px " + std::to_string(o.padding.right) + "px " + std::to_string(o.padding.bottom) + "px " + std::to_string(o.padding.left) + "px}\n";
+        setClass(nn.outer, classFor(css));
+      },
       [&](const n8v_floating_options &) {},
       [&](const n8v_sidebar_options &o) {
         float listWidth = o.width.mode == N8V_SIZING_FIXED ? o.width.value : 0.0f;

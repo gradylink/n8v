@@ -202,6 +202,9 @@ typedef struct n8v_panel_options {
   const char *id;
   /** A colored bar down the panel's left edge (like a Discord embed). Alpha 0 means none. */
   n8v_color accent;
+  /** Overrides the style's padding for this panel, if `has_padding`. */
+  bool has_padding;
+  n8v_padding padding;
 } n8v_panel_options;
 
 typedef struct n8v_text_options {

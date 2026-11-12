@@ -1872,10 +1872,10 @@ void Gtk4TreeBackend::applyPanel(NativeNode &nn, const n8v_panel_options &o) {
   gtk_box_set_spacing(GTK_BOX(nn.content), o.gap);
   const bool card = o.role == N8V_PANEL_ROLE_CARD;
   const int vpad = card ? 10 : 6, hpad = card ? 12 : 10;
-  gtk_widget_set_margin_start(nn.content, hpad);
-  gtk_widget_set_margin_end(nn.content, hpad);
-  gtk_widget_set_margin_top(nn.content, vpad);
-  gtk_widget_set_margin_bottom(nn.content, vpad);
+  gtk_widget_set_margin_start(nn.content, o.has_padding ? o.padding.left : hpad);
+  gtk_widget_set_margin_end(nn.content, o.has_padding ? o.padding.right : hpad);
+  gtk_widget_set_margin_top(nn.content, o.has_padding ? o.padding.top : vpad);
+  gtk_widget_set_margin_bottom(nn.content, o.has_padding ? o.padding.bottom : vpad);
 #ifdef N8V_HAVE_ADWAITA
   if (card) gtk_widget_add_css_class(nn.outer, "card");
   else gtk_widget_remove_css_class(nn.outer, "card");

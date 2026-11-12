@@ -36,6 +36,8 @@ template <typename V> void visitFields(n8v_panel_options &o, V &v) {
   v.num(o.clip_vertical);
   v.str(o.id);
   v.num(o.accent);
+  v.num(o.has_padding);
+  v.num(o.padding);
 }
 
 template <typename V> void visitFields(n8v_floating_options &o, V &v) {

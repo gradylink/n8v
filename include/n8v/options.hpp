@@ -41,6 +41,8 @@ struct PanelOptions {
   std::string_view id = {};
   /** A colored bar down the left edge, like a chat embed's. A zero alpha (the default) means none. */
   Color accent = {0, 0, 0, 0};
+  /** The space between the panel's edge and its contents. Unset means the style's own padding for the role. */
+  std::optional<Padding> padding = std::nullopt;
 };
 
 struct TextOptions {

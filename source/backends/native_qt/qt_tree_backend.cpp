@@ -1515,7 +1515,8 @@ void QtTreeBackend::applyPanel(NativeNode &nn, const n8v_panel_options &o) {
   nn.layout->setSpacing(o.gap);
   const bool card = o.role == N8V_PANEL_ROLE_CARD;
   const int vpad = card ? 10 : 6, hpad = card ? 12 : 10;
-  nn.layout->setContentsMargins(hpad, vpad, hpad, vpad);
+  if (o.has_padding) nn.layout->setContentsMargins(o.padding.left, o.padding.top, o.padding.right, o.padding.bottom);
+  else nn.layout->setContentsMargins(hpad, vpad, hpad, vpad);
   frame->setFrameShape(card ? QFrame::StyledPanel : QFrame::NoFrame);
   const n8v_color accent = resolveThemeColor(o.accent, onDarkBackground(frame));
   if (accent.a > 0.0f) {

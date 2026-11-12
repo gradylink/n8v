@@ -591,6 +591,10 @@ inline void openPanel(const PanelOptions &options) {
   c_opts.clip_vertical = options.clipVertical;
   c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
   c_opts.accent = toC(options.accent);
+  if (options.padding) {
+    c_opts.has_padding = true;
+    c_opts.padding = n8v_padding{options.padding->left, options.padding->right, options.padding->top, options.padding->bottom};
+  }
   n8v_open_panel(c_opts);
 }
 

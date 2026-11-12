@@ -40,7 +40,7 @@ void openPanel(const n8v_panel_options &opts, int ordinal) {
   const bool pressed = hovered && n8v::activeBackend().pointerDown();
   const n8v::PanelPaint paint = n8v::activePaint().panel(role, hovered, pressed);
 
-  n8v::Padding pad = paint.padding;
+  n8v::Padding pad = opts.has_padding ? n8v::Padding{opts.padding.left, opts.padding.right, opts.padding.top, opts.padding.bottom} : paint.padding;
   uint16_t gap = opts.gap;
   Clay_Dimensions cell = n8v::activeBackend().cellSize();
   if (cell.width > 0.0f && cell.height > 0.0f) {
