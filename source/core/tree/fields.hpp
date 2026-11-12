@@ -93,6 +93,7 @@ template <typename V> void visitFields(n8v_text_options &o, V &v) {
   v.num(o.strikethrough);
   v.num(o.small);
   v.num(o.darken);
+  v.num(o.large);
   v.str(o.url);
   v.num(o.color);
   v.ptr(o.on_click);

@@ -27,6 +27,7 @@ struct TextPaint {
 
 inline void applyTextEmphasis(TextPaint &paint, const TextOptions &options) {
   if (options.small) paint.fontSize = (uint16_t)std::max(1L, std::lround((double)paint.fontSize * 0.85));
+  if (options.large) paint.fontSize = (uint16_t)std::lround((double)paint.fontSize * 2.6);
   if (options.darken) paint.color.a *= 0.6f;
 }
 

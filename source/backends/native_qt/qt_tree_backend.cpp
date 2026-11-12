@@ -1580,6 +1580,7 @@ void QtTreeBackend::applyText(NativeNode &nn, const n8v_text_options &original) 
   if (o.italic) html = "<i>" + html + "</i>";
   if (o.bold) html = "<b>" + html + "</b>";
   if (o.small) html = "<span style=\"font-size:smaller\">" + html + "</span>";
+  if (o.large) html = QString("<span style=\"font-size:%1px\">").arg((int)std::lround(label->fontInfo().pixelSize() * 2.6)) + html + "</span>";
   const bool isDefaultColor = o.color.a <= 0.0f || (o.color.r == 0.0f && o.color.g == 0.0f && o.color.b == 0.0f && o.color.a == 255.0f);
   if (!isDefaultColor || o.darken) {
     const QColor base = isDefaultColor ? label->palette().color(QPalette::WindowText) : QColor((int)o.color.r, (int)o.color.g, (int)o.color.b);

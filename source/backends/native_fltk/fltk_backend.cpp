@@ -325,9 +325,9 @@ public:
         std::string displayText = (flags && flags->strikethrough) ? withCombiningStrikethrough(text) : text;
         label->copy_label(displayText.c_str());
         label->labelfont(FL_HELVETICA + ((flags && flags->bold) ? 1 : 0) + ((flags && flags->italic) ? 2 : 0));
-        if (flags && (flags->small || flags->darken)) {
+        if (flags && (flags->small || flags->large || flags->darken)) {
           const Clay_TextRenderData &textData = command->renderData.text;
-          if (flags->small) label->labelsize((Fl_Fontsize)textData.fontSize);
+          if (flags->small || flags->large) label->labelsize((Fl_Fontsize)textData.fontSize);
           if (flags->darken) {
             const Fl_Color foreground = fl_rgb_color((uchar)textData.textColor.r, (uchar)textData.textColor.g, (uchar)textData.textColor.b);
             label->labelcolor(fl_color_average(foreground, FL_BACKGROUND_COLOR, textData.textColor.a / 255.0f));

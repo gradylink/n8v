@@ -1060,6 +1060,7 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
         options.strikethrough = o.strikethrough;
         options.small = o.small;
         options.darken = o.darken;
+        options.large = o.large;
         options.url = o.url ? o.url : "";
         const n8v_color color = resolveThemeColor(o.color);
         options.color = {color.r, color.g, color.b, color.a};

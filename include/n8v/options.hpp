@@ -53,6 +53,8 @@ struct TextOptions {
   bool small = false;
   /** Secondary text: fainter than normal, by whatever the style considers dimmed. Combine with `small` for captions. */
   bool darken = false;
+  /** Jumbo text, a few times the normal size, for things like a message that is only emoji. */
+  bool large = false;
   /** If non-empty, the text is painted as a link (color + underline) to this URL and opens it on
       click - ignored if onClick is set. */
   std::string_view url = {};

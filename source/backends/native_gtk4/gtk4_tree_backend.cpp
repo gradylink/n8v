@@ -1558,6 +1558,7 @@ void Gtk4TreeBackend::setLabelFromText(GtkWidget *label, const n8v_text_options 
   if (o.italic) m = "<i>" + m + "</i>";
   if (o.bold) m = "<b>" + m + "</b>";
   if (o.small) m = "<span size=\"smaller\">" + m + "</span>";
+  if (o.large) m = "<span size=\"260%\">" + m + "</span>";
   if (o.darken) gtk_widget_add_css_class(label, "dim-label");
   else gtk_widget_remove_css_class(label, "dim-label");
   for (const NamedColorCss &c : kNamedColorCss) gtk_widget_remove_css_class(label, (std::string("n8v-fg-") + c.slug).c_str());
