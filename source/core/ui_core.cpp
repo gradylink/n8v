@@ -398,6 +398,14 @@ void n8v_scroll_to_offset(const char *container_id, float x, float y) {
   pendingScrollTargets.push_back(PendingScrollTarget{container_id, PendingScrollTarget::Kind::Offset, {}, x, y, 0.0f, 0.0f, 0});
 }
 
+bool n8v_visible_children(const char *container_id, float margin, n8v_visible_child_fn visit, void *userdata) {
+  if (!container_id || !*container_id || !visit) return false;
+  return n8v::activeBackend().visibleChildren(container_id, margin, [&](std::string_view id, float top, float height) {
+    const std::string idStorage(id);
+    visit(idStorage.c_str(), top, height, userdata);
+  });
+}
+
 void n8v_scroll_to_element(const char *container_id, const char *element_id, float padding_left, float padding_top) {
   if (!container_id || !*container_id || !element_id || !*element_id) return;
   if (forwardScrollToNative(n8v::NativeScrollRequest::Kind::Element, container_id, element_id, 0.0f, 0.0f, padding_left, padding_top)) return;

@@ -8,6 +8,7 @@
 #include <clay.h>
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <string_view>
 
@@ -89,6 +90,10 @@ struct Backend {
   virtual bool isHovered(std::string_view /*id*/) const { return false; }
 
   virtual void requestScroll(const NativeScrollRequest & /*request*/) {}
+
+  virtual bool visibleChildren(std::string_view /*containerId*/, float /*margin*/, const std::function<void(std::string_view, float, float)> & /*visit*/) const {
+    return false;
+  }
 
   virtual void requestFocus(std::string_view /*id*/) {}
 

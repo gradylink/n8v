@@ -522,6 +522,24 @@ public:
 
   bool isHovered(std::string_view id) const override { return hovered_.count(std::string(id)) != 0; }
 
+  bool visibleChildren(std::string_view containerId, float margin, const std::function<void(std::string_view, float, float)> &visit) const override {
+    auto container = byId_.find(std::string(containerId));
+    if (container == byId_.end() || !container->second->scroll || !container->second->content) return false;
+    const NativeNode &c = *container->second;
+    const double viewTop = c.scroll->verticalScrollBar()->value();
+    const double viewHeight = c.scroll->viewport()->height();
+    if (viewHeight <= 0.0) return false;
+    for (const NativeNode *kid : c.kids) {
+      if (kid->floating || !kid->outer) continue;
+      const char *id = tree::idOf(kid->node->current.props);
+      if (!id || !*id) continue;
+      const double top = (double)kid->outer->mapTo(c.content, QPoint(0, 0)).y() - viewTop;
+      const double height = kid->outer->height();
+      if (top + height >= -margin && top <= viewHeight + margin) visit(id, (float)top, (float)height);
+    }
+    return true;
+  }
+
   void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back(PendingScroll{request, std::chrono::steady_clock::now()}); }
 
   void requestFocus(std::string_view id) override { pendingFocus_.push_back(PendingFocus{std::string(id), 0}); }

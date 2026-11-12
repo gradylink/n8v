@@ -709,6 +709,10 @@ N8V_API void n8v_scroll_to_offset(const char *container_id, float x, float y);
 /** Scrolls the container so the element tagged with `element_id` is visible at the top-left of the container's viewport, offset by `padding_left`/`padding_top` pixels. */
 N8V_API void n8v_scroll_to_element(const char *container_id, const char *element_id, float padding_left, float padding_top);
 
+typedef void (*n8v_visible_child_fn)(const char *id, float top, float height, void *userdata);
+
+N8V_API bool n8v_visible_children(const char *container_id, float margin, n8v_visible_child_fn visit, void *userdata);
+
 #define N8V_UI() for (uint8_t n8v_c_uiLatch = (n8v_begin_frame(), 0); n8v_c_uiLatch < 1; n8v_c_uiLatch = 1, n8v_end_frame())
 
 #define n8v_flex(...) for (uint8_t n8v_c_flexLatch = (n8v_open_flex(__VA_ARGS__), 0); n8v_c_flexLatch < 1; n8v_c_flexLatch = 1, n8v_close_flex())

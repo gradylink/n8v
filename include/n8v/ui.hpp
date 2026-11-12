@@ -10,6 +10,7 @@
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -200,7 +201,16 @@ inline FontFamily fromC(n8v_font_family f) {
 inline std::string_view toView(const char *s) { return s ? std::string_view(s) : std::string_view{}; }
 
 inline TextOptions fromC(n8v_text_options options) {
-  return TextOptions{.bold = options.bold, .italic = options.italic, .strikethrough = options.strikethrough, .small = options.small, .darken = options.darken, .large = options.large, .url = toView(options.url), .color = fromC(options.color)};
+  return TextOptions{
+    .bold = options.bold,
+    .italic = options.italic,
+    .strikethrough = options.strikethrough,
+    .small = options.small,
+    .darken = options.darken,
+    .large = options.large,
+    .url = toView(options.url),
+    .color = fromC(options.color)
+  };
 }
 
 inline n8v_text_options toC(const TextOptions &options) {
@@ -1087,6 +1097,25 @@ inline void setScrollOffset(std::string_view containerId, float x, float y) {
   std::string storage(containerId);
   n8v_scroll_to_offset(storage.c_str(), x, y);
 }
+struct VisibleChild {
+  std::string id;
+  float top = 0.0f;
+  float height = 0.0f;
+};
+
+inline std::optional<std::vector<VisibleChild>> visibleChildren(std::string_view containerId, float margin = 0.0f) {
+  const std::string containerStorage(containerId);
+  std::vector<VisibleChild> children;
+  const bool known = n8v_visible_children(
+    containerStorage.c_str(),
+    margin,
+    [](const char *id, float top, float height, void *userdata) { static_cast<std::vector<VisibleChild> *>(userdata)->push_back({id, top, height}); },
+    &children
+  );
+  if (!known) return std::nullopt;
+  return children;
+}
+
 inline void scrollToElement(std::string_view containerId, std::string_view elementId, float paddingLeft = 0.0f, float paddingTop = 0.0f) {
   std::string containerStorage(containerId);
   std::string elementStorage(elementId);
