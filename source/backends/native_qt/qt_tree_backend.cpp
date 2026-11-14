@@ -28,6 +28,7 @@
 #include <chrono>
 #include <cmath>
 
+#include <QAbstractTextDocumentLayout>
 #include <QApplication>
 #include <QBoxLayout>
 #include <QCheckBox>
@@ -213,6 +214,34 @@ protected:
     const bool wasDown = isDown();
     QPushButton::keyReleaseEvent(event);
     if (wasDown && node && event->key() == Qt::Key_Space) dispatch::activate(*node);
+  }
+};
+
+class N8VDocumentLabel final : public QLabel {
+public:
+  using QLabel::QLabel;
+
+protected:
+  void mouseReleaseEvent(QMouseEvent *event) override {
+    if (event->button() == Qt::LeftButton) {
+      const QString href = linkAt(event->position().toPoint());
+      if (!href.isEmpty()) {
+        openUrl(href.toStdString());
+        event->accept();
+        return;
+      }
+    }
+    QLabel::mouseReleaseEvent(event);
+  }
+
+private:
+  QString linkAt(const QPoint &point) const {
+    QTextDocument doc;
+    doc.setDefaultFont(font());
+    doc.setTextWidth(contentsRect().width());
+    if (textFormat() == Qt::MarkdownText) doc.setMarkdown(text());
+    else doc.setHtml(text());
+    return doc.documentLayout()->anchorAt(QPointF(point - contentsRect().topLeft()));
   }
 };
 
@@ -1559,11 +1588,11 @@ void QtTreeBackend::build(NativeNode &nn) {
     break;
   }
   case Kind::Document: {
-    auto *label = new QLabel();
+    auto *label = new N8VDocumentLabel();
     label->setTextFormat(Qt::MarkdownText);
     label->setWordWrap(true);
     label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-    label->setOpenExternalLinks(true);
+    label->setOpenExternalLinks(false);
     nn.outer = nn.widget = label;
     break;
   }

@@ -413,6 +413,8 @@ typedef struct n8v_link_style {
   n8v_color foreground;
   n8v_color background;
   bool bold;
+  /** Keeps the link clickable (a styled link is otherwise plain text). */
+  bool clickable;
 } n8v_link_style;
 
 typedef bool (*n8v_link_style_fn)(const char *url, n8v_link_style *out, void *userdata);
@@ -730,6 +732,10 @@ N8V_API void n8v_scroll_to_right(const char *container_id);
 N8V_API void n8v_scroll_to_offset(const char *container_id, float x, float y);
 /** Scrolls the container so the element tagged with `element_id` is visible at the top-left of the container's viewport, offset by `padding_left`/`padding_top` pixels. */
 N8V_API void n8v_scroll_to_element(const char *container_id, const char *element_id, float padding_left, float padding_top);
+
+typedef bool (*n8v_url_handler_fn)(const char *url, void *userdata);
+
+N8V_API void n8v_set_url_handler(n8v_url_handler_fn handler, void *userdata);
 
 typedef void (*n8v_visible_child_fn)(const char *id, float top, float height, void *userdata);
 

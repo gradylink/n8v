@@ -156,6 +156,11 @@ void appendInlines(std::string &out, const std::vector<InlineRun> &runs, const H
     bool link = !run.linkUrl.empty();
     n8v_link_style style{};
     if (link && options.linkStyler && options.linkStyler(run.linkUrl, style)) {
+      if (style.clickable) {
+        out += "<a href=\"";
+        escapeAttrInto(out, run.linkUrl);
+        out += "\">";
+      }
       const std::string closing = openStyledLink(out, style, options);
       if (run.bold) out += "<b>";
       if (run.italic) out += "<i>";
@@ -163,6 +168,7 @@ void appendInlines(std::string &out, const std::vector<InlineRun> &runs, const H
       if (run.italic) out += "</i>";
       if (run.bold) out += "</b>";
       out += closing;
+      if (style.clickable) out += "</a>";
       continue;
     }
     if (link) {

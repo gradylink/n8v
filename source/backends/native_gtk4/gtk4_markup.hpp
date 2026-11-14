@@ -62,7 +62,8 @@ inline void appendInlineRunsMarkup(std::string &out, const std::vector<markdown:
       if (style.bold) out += " weight=\"bold\"";
       out += ">";
       if (style.background.a > 0.0f) out += "\u2009";
-      link = false;
+      link = style.clickable;
+      if (link) out += "<a href=\"" + escapeMarkup(run.linkUrl) + "\">";
     } else if (link) {
       out += "<a href=\"" + escapeMarkup(run.linkUrl) + "\">";
     }

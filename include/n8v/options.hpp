@@ -245,6 +245,8 @@ struct LinkStyle {
   Color foreground = {0, 0, 0, 0};
   Color background = {0, 0, 0, 0};
   bool bold = false;
+  /** Keeps the link clickable. A styled link is otherwise plain text, which suits mentions. */
+  bool clickable = false;
 };
 
 struct DocumentOptions {

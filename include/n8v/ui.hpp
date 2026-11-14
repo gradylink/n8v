@@ -930,7 +930,7 @@ inline void document(DocumentOptions options) {
       std::function<bool(const char *, n8v_link_style *)>([style = std::move(options.linkStyle)](const char *url, n8v_link_style *out) {
         std::optional<LinkStyle> result = style(url ? url : "");
         if (!result) return false;
-        *out = n8v_link_style{toC(result->foreground), toC(result->background), result->bold};
+        *out = n8v_link_style{toC(result->foreground), toC(result->background), result->bold, result->clickable};
         return true;
       }),
       c_opts.link_style,
@@ -1104,6 +1104,16 @@ inline void setScrollOffset(std::string_view containerId, float x, float y) {
   std::string storage(containerId);
   n8v_scroll_to_offset(storage.c_str(), x, y);
 }
+inline void setUrlHandler(std::function<bool(std::string_view)> handler) {
+  static std::function<bool(std::string_view)> stored; // lives as long as the program
+  stored = std::move(handler);
+  if (!stored) {
+    n8v_set_url_handler(nullptr, nullptr);
+    return;
+  }
+  n8v_set_url_handler([](const char *url, void *userdata) { return (*static_cast<std::function<bool(std::string_view)> *>(userdata))(url); }, &stored);
+}
+
 struct VisibleChild {
   std::string id;
   float top = 0.0f;
