@@ -84,6 +84,43 @@ void n8v_open_floating(n8v_floating_options options) {
 }
 void n8v_close_floating(void) { closeContainer(); }
 
+void n8v_open_popover(n8v_popover_options options) {
+  n8v_floating_options floating{};
+  floating.width = options.width;
+  floating.height = options.height;
+  floating.opaque = true;
+  floating.keep_on_screen = true;
+  floating.screen_margin = options.screen_margin;
+  floating.on_dismiss = options.on_dismiss;
+  floating.on_dismiss_userdata = options.on_dismiss_userdata;
+  floating.id = options.id;
+  const bool end = options.align_end;
+  switch (options.side) {
+  case N8V_POPOVER_SIDE_BELOW:
+    floating.parent_attach_point = end ? N8V_ATTACH_POINT_RIGHT_BOTTOM : N8V_ATTACH_POINT_LEFT_BOTTOM;
+    floating.element_attach_point = end ? N8V_ATTACH_POINT_RIGHT_TOP : N8V_ATTACH_POINT_LEFT_TOP;
+    floating.offset_y = options.gap;
+    break;
+  case N8V_POPOVER_SIDE_ABOVE:
+    floating.parent_attach_point = end ? N8V_ATTACH_POINT_RIGHT_TOP : N8V_ATTACH_POINT_LEFT_TOP;
+    floating.element_attach_point = end ? N8V_ATTACH_POINT_RIGHT_BOTTOM : N8V_ATTACH_POINT_LEFT_BOTTOM;
+    floating.offset_y = -options.gap;
+    break;
+  case N8V_POPOVER_SIDE_RIGHT:
+    floating.parent_attach_point = end ? N8V_ATTACH_POINT_RIGHT_BOTTOM : N8V_ATTACH_POINT_RIGHT_TOP;
+    floating.element_attach_point = end ? N8V_ATTACH_POINT_LEFT_BOTTOM : N8V_ATTACH_POINT_LEFT_TOP;
+    floating.offset_x = options.gap;
+    break;
+  case N8V_POPOVER_SIDE_LEFT:
+    floating.parent_attach_point = end ? N8V_ATTACH_POINT_LEFT_BOTTOM : N8V_ATTACH_POINT_LEFT_TOP;
+    floating.element_attach_point = end ? N8V_ATTACH_POINT_RIGHT_BOTTOM : N8V_ATTACH_POINT_RIGHT_TOP;
+    floating.offset_x = -options.gap;
+    break;
+  }
+  n8v_open_floating(floating);
+}
+void n8v_close_popover(void) { n8v_close_floating(); }
+
 void n8v_open_panel(n8v_panel_options options) {
   options.id = own(options.id);
   appendContainer(options);

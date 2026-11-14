@@ -39,3 +39,4 @@ void n8v_ffi_divider(const n8v_divider_options *options) { n8v_divider(*options)
 void n8v_ffi_icon(const n8v_icon_options *options) { n8v_icon(*options); }
 void n8v_ffi_document(const n8v_document_options *options) { n8v_document(*options); }
 void n8v_ffi_open_floating(const n8v_floating_options *options) { n8v_open_floating(*options); }
+void n8v_ffi_open_popover(const n8v_popover_options *options) { n8v_open_popover(*options); }

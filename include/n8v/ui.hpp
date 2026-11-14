@@ -961,10 +961,28 @@ inline void openFloating(const FloatingOptions &options) {
   c_opts.offset_y = options.offsetY;
   c_opts.opaque = options.opaque;
   c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
+  c_opts.keep_on_screen = options.keepOnScreen;
+  c_opts.screen_margin = options.screenMargin;
+  if (options.onDismiss) callback_bridge::bridge(callback_bridge::clickClosures, std::move(options.onDismiss), c_opts.on_dismiss, c_opts.on_dismiss_userdata);
   n8v_open_floating(c_opts);
 }
 
+inline void openPopover(PopoverOptions options) {
+  std::string idStorage(options.id);
+  n8v_popover_options c_opts{};
+  c_opts.side = static_cast<n8v_popover_side>(options.side);
+  c_opts.align_end = options.alignEnd;
+  c_opts.width = toC(options.width);
+  c_opts.height = toC(options.height);
+  c_opts.gap = options.gap;
+  c_opts.screen_margin = options.screenMargin;
+  c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
+  if (options.onDismiss) callback_bridge::bridge(callback_bridge::clickClosures, std::move(options.onDismiss), c_opts.on_dismiss, c_opts.on_dismiss_userdata);
+  n8v_open_popover(c_opts);
+}
+
 inline void closeFloating() { n8v_close_floating(); }
+inline void closePopover() { n8v_close_popover(); }
 
 } // namespace n8v::detail
 
@@ -1213,6 +1231,7 @@ inline void setCustomPaint(Paint &paint) {
 
 #define panel(...) for (uint8_t n8v_panelLatch = (n8v::detail::openPanel(__VA_ARGS__), 0); n8v_panelLatch < 1; n8v_panelLatch = 1, n8v::detail::closePanel())
 
+#define popover(...) for (uint8_t n8v_popoverLatch = (n8v::detail::openPopover(__VA_ARGS__), 0); n8v_popoverLatch < 1; n8v_popoverLatch = 1, n8v::detail::closePopover())
 #define floating(...) for (uint8_t n8v_floatingLatch = (n8v::detail::openFloating(__VA_ARGS__), 0); n8v_floatingLatch < 1; n8v_floatingLatch = 1, n8v::detail::closeFloating())
 
 #define sidebar(...) for (uint8_t n8v_sidebarLatch = (n8v::detail::openSidebar(__VA_ARGS__), 0); n8v_sidebarLatch < 1; n8v_sidebarLatch = 1, n8v::detail::closeSidebar())

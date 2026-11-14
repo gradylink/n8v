@@ -413,8 +413,28 @@ class N8VRootWidget final : public QWidget {
 public:
   using QWidget::QWidget;
   std::function<void(QObject *, bool)> onHover;
+  std::function<void(QWidget *, bool)> onClickAway;
 
+private:
+  ulong lastPress_ = 0;
+
+public:
   bool eventFilter(QObject *object, QEvent *event) override {
+    if (onClickAway) {
+      if (event->type() == QEvent::MouseButtonPress) {
+        auto *mouse = static_cast<QMouseEvent *>(event);
+        if (mouse->timestamp() != lastPress_) {
+          lastPress_ = mouse->timestamp();
+          onClickAway(QApplication::widgetAt(mouse->globalPosition().toPoint()), false);
+        }
+      } else if (event->type() == QEvent::KeyPress && static_cast<QKeyEvent *>(event)->key() == Qt::Key_Escape) {
+        auto *key = static_cast<QKeyEvent *>(event);
+        if (key->timestamp() != lastPress_) {
+          lastPress_ = key->timestamp();
+          onClickAway(nullptr, true);
+        }
+      }
+    }
     if (onHover) {
       if (event->type() == QEvent::Enter) onHover(object, true);
       else if (event->type() == QEvent::Leave) onHover(object, false);
@@ -619,6 +639,7 @@ public:
       auto it = watched_.find(object);
       if (it != watched_.end()) setHover(*it->second, entered);
     };
+    window_->onClickAway = [this](QWidget *under, bool escape) { dismissFloating(under, escape); };
     app_->installEventFilter(window_);
 
     root_.outer = window_;
@@ -853,6 +874,23 @@ private:
   void updateMultilineHeight(NativeNode &nn);
   void updatePercentSizes();
   void updateFloating();
+  void dismissFloating(QWidget *under, bool escape) {
+    std::vector<PNode *> dismissed;
+    for (PNode *pn : live_) {
+      const auto *o = propsOf<n8v_floating_options>(*pn);
+      if (!o || !o->on_dismiss) continue;
+      NativeNode &nn = *native(*pn);
+      if (!nn.outer) continue;
+      if (!escape) {
+        auto inside = [&](QWidget *w) { return w && under && (under == w || w->isAncestorOf(under)); };
+        QWidget *host = nn.parentNode ? (nn.parentNode->outer ? nn.parentNode->outer : nn.parentNode->content) : nullptr;
+        if (inside(nn.outer) || inside(host)) continue;
+      }
+      dismissed.push_back(pn);
+    }
+    for (PNode *pn : dismissed)
+      if (live_.count(pn)) dispatch::dismiss(*pn);
+  }
   void applyStickyBottom();
   void resolvePendingScrolls();
   void resolvePendingFocus();
@@ -1300,8 +1338,9 @@ void QtTreeBackend::updateFloating() {
     NativeNode &host = *nn.parentNode;
     QWidget *hostWidget = host.outer ? host.outer : host.content;
     QWidget *container = hostWidget == window_ ? window_ : hostWidget->parentWidget();
+    if (o->keep_on_screen && hostWidget != window_) container = window_;
     if (!container) container = window_;
-    const QRect hostRect = hostWidget == window_ ? window_->rect() : hostWidget->geometry();
+    const QRect hostRect = hostWidget == window_ ? window_->rect() : QRect(hostWidget->mapTo(container, QPoint(0, 0)), hostWidget->size());
     if (nn.outer->parentWidget() != container) {
       nn.outer->setParent(container);
       nn.outer->show();
@@ -1327,7 +1366,13 @@ void QtTreeBackend::updateFloating() {
     attachFraction(o->element_attach_point, efx, efy);
     const int x = hostRect.x() + (int)(pfx * hostRect.width() - efx * w + o->offset_x);
     const int y = hostRect.y() + (int)(pfy * hostRect.height() - efy * h + o->offset_y);
-    nn.outer->setGeometry(x, y, w, h);
+    int placedX = x, placedY = y;
+    if (o->keep_on_screen) {
+      const int margin = (int)o->screen_margin;
+      placedX = std::max(margin, std::min(x, window_->width() - w - margin));
+      placedY = std::max(margin, std::min(y, window_->height() - h - margin));
+    }
+    nn.outer->setGeometry(placedX, placedY, w, h);
     nn.outer->raise();
   }
 }

@@ -454,6 +454,10 @@ typedef struct n8v_floating_options {
   float offset_y;
   bool opaque;
   const char *id;
+  n8v_click_fn on_dismiss;
+  void *on_dismiss_userdata;
+  bool keep_on_screen;
+  float screen_margin;
 } n8v_floating_options;
 
 /** Opens a floating child of the currently-open element; it layers on top without affecting
@@ -461,6 +465,28 @@ typedef struct n8v_floating_options {
     n8v_close_floating(). */
 N8V_API void n8v_open_floating(n8v_floating_options options);
 N8V_API void n8v_close_floating(void);
+
+typedef enum n8v_popover_side {
+  N8V_POPOVER_SIDE_BELOW,
+  N8V_POPOVER_SIDE_ABOVE,
+  N8V_POPOVER_SIDE_RIGHT,
+  N8V_POPOVER_SIDE_LEFT,
+} n8v_popover_side;
+
+typedef struct n8v_popover_options {
+  n8v_popover_side side;
+  bool align_end;
+  n8v_sizing width;
+  n8v_sizing height;
+  float gap;
+  float screen_margin;
+  n8v_click_fn on_dismiss;
+  void *on_dismiss_userdata;
+  const char *id;
+} n8v_popover_options;
+
+N8V_API void n8v_open_popover(n8v_popover_options options);
+N8V_API void n8v_close_popover(void);
 
 /** Named colors that follow the active theme where the toolkit has a palette. See n8v_color_theme. */
 typedef enum n8v_named_color {

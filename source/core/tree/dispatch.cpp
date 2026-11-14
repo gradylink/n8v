@@ -33,6 +33,10 @@ void activate(PNode &node) {
   }
 }
 
+void dismiss(PNode &node) {
+  if (auto *floating = optionsOf<n8v_floating_options>(node); floating && floating->on_dismiss) floating->on_dismiss(floating->on_dismiss_userdata);
+}
+
 void setChecked(PNode &node, bool checked) {
   bool *target = nullptr;
   n8v_bool_change_fn onChange = nullptr;

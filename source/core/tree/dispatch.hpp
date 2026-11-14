@@ -12,6 +12,8 @@ namespace n8v::detail::tree::dispatch {
 
 void activate(PNode &node);
 
+void dismiss(PNode &node);
+
 void setChecked(PNode &node, bool checked);
 
 void select(PNode &node, int index);

@@ -49,6 +49,10 @@ template <typename V> void visitFields(n8v_floating_options &o, V &v) {
   v.num(o.offset_y);
   v.num(o.opaque);
   v.str(o.id);
+  v.ptr(o.on_dismiss);
+  v.ptr(o.on_dismiss_userdata);
+  v.num(o.keep_on_screen);
+  v.num(o.screen_margin);
 }
 
 template <typename V> void visitFields(n8v_sidebar_options &o, V &v) {

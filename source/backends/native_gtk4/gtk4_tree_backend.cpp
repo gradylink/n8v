@@ -243,6 +243,16 @@ public:
     root_.outer = rootBox_;
     root_.content = rootBox_;
 
+    GtkGesture *clickAway = gtk_gesture_click_new();
+    gtk_event_controller_set_propagation_phase(GTK_EVENT_CONTROLLER(clickAway), GTK_PHASE_CAPTURE);
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(clickAway), 0);
+    g_signal_connect_data(clickAway, "pressed", G_CALLBACK(&Gtk4TreeBackend::onClickAway), nullptr, nullptr, (GConnectFlags)0);
+    gtk_widget_add_controller(window_, GTK_EVENT_CONTROLLER(clickAway));
+    GtkEventController *escapeKey = gtk_event_controller_key_new();
+    gtk_event_controller_set_propagation_phase(escapeKey, GTK_PHASE_CAPTURE);
+    g_signal_connect_data(escapeKey, "key-pressed", G_CALLBACK(&Gtk4TreeBackend::onEscapeKey), nullptr, nullptr, (GConnectFlags)0);
+    gtk_widget_add_controller(window_, escapeKey);
+
     cardCss_ = gtk_css_provider_new();
     gtk_css_provider_load_from_string(
       cardCss_,
@@ -605,6 +615,33 @@ private:
     return TRUE;
   }
 
+  static void onClickAway(GtkGestureClick *gesture, int, double x, double y, gpointer) {
+    if (!self_) return;
+    GtkWidget *picked = gtk_widget_pick(self_->window_, x, y, GTK_PICK_DEFAULT);
+    self_->dismissFloating(picked);
+    (void)gesture;
+  }
+  static gboolean onEscapeKey(GtkEventControllerKey *, guint keyval, guint, GdkModifierType, gpointer) {
+    if (keyval == GDK_KEY_Escape && self_) self_->dismissFloating(nullptr);
+    return FALSE;
+  }
+  void dismissFloating(GtkWidget *picked) {
+    std::vector<PNode *> dismissed;
+    for (PNode *pn : live_) {
+      const auto *o = propsOf<n8v_floating_options>(*pn);
+      if (!o || !o->on_dismiss) continue;
+      NativeNode *nn = native(*pn);
+      if (!nn || !nn->outer) continue;
+      if (picked) {
+        auto inside = [&](GtkWidget *w) { return w && (picked == w || gtk_widget_is_ancestor(picked, w)); };
+        NativeNode *host = pn->parent ? native(*pn->parent) : nullptr;
+        if (inside(nn->outer) || (host && inside(host->outer))) continue;
+      }
+      dismissed.push_back(pn);
+    }
+    for (PNode *pn : dismissed)
+      if (live_.count(pn)) dispatch::dismiss(*pn);
+  }
   static void onButtonClicked(GtkButton *, gpointer userData) {
     if (PNode *node = liveNode(userData)) dispatch::activate(*node);
   }
@@ -1067,6 +1104,18 @@ gboolean Gtk4TreeBackend::onOverlayChildPosition(GtkOverlay *overlay, GtkWidget 
   attachFraction(o->element_attach_point, efx, efy);
   allocation->x = (int)(pfx * parentW - efx * w + o->offset_x);
   allocation->y = (int)(pfy * parentH - efy * h + o->offset_y);
+  if (o->keep_on_screen) {
+    GtkWidget *window = GTK_WIDGET(gtk_widget_get_root(GTK_WIDGET(overlay)));
+    graphene_point_t origin{0, 0}, inWindow{0, 0};
+    if (window && gtk_widget_compute_point(GTK_WIDGET(overlay), window, &origin, &inWindow)) {
+      const int windowW = gtk_widget_get_width(window), windowH = gtk_widget_get_height(window);
+      const int margin = (int)o->screen_margin;
+      const int x = std::max(margin, std::min((int)inWindow.x + allocation->x, windowW - w - margin));
+      const int y = std::max(margin, std::min((int)inWindow.y + allocation->y, windowH - h - margin));
+      allocation->x = x - (int)inWindow.x;
+      allocation->y = y - (int)inWindow.y;
+    }
+  }
   allocation->width = w;
   allocation->height = h;
   return TRUE;

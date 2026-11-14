@@ -269,6 +269,22 @@ struct FloatingOptions {
   float offsetX = 0.0f;
   float offsetY = 0.0f;
   bool opaque = false;
+  std::function<void()> onDismiss = nullptr;
+  bool keepOnScreen = false;
+  float screenMargin = 0.0f;
+  std::string_view id = {};
+};
+
+enum class PopoverSide { Below, Above, Right, Left };
+
+struct PopoverOptions {
+  PopoverSide side = PopoverSide::Below;
+  bool alignEnd = false;
+  Sizing width = Sizing::fit();
+  Sizing height = Sizing::fit();
+  float gap = 8.0f;
+  float screenMargin = 12.0f;
+  std::function<void()> onDismiss = nullptr;
   std::string_view id = {};
 };
 
