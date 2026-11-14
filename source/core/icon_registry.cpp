@@ -55,6 +55,8 @@ constexpr IconEntry icons[] = {
   {"arrow-down", "go-down-symbolic"},
   {"external-link", "external-link-symbolic"},
   {"user", "avatar-default-symbolic"},
+  {"pin", "view-pin-symbolic"},
+  {"mention", "mail-unread-symbolic"},
 };
 
 const IconEntry *findEntry(std::string_view name) {

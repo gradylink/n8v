@@ -238,7 +238,10 @@ public:
     rootBox_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_widget_set_hexpand(rootBox_, TRUE);
     gtk_widget_set_vexpand(rootBox_, TRUE);
-    gtk_window_set_child(GTK_WINDOW(window_), rootBox_);
+    rootOverlay_ = gtk_overlay_new();
+    gtk_overlay_set_child(GTK_OVERLAY(rootOverlay_), rootBox_);
+    g_signal_connect_data(rootOverlay_, "get-child-position", G_CALLBACK(&Gtk4TreeBackend::onOverlayChildPosition), nullptr, nullptr, (GConnectFlags)0);
+    gtk_window_set_child(GTK_WINDOW(window_), rootOverlay_);
 
     root_.outer = rootBox_;
     root_.content = rootBox_;
@@ -578,6 +581,7 @@ private:
   void apply(NativeNode &nn);
 
   void attach(NativeNode &parent, NativeNode &child, size_t index);
+  static bool isPopover(NativeNode &node);
   void detach(NativeNode &parent, NativeNode &child);
   GtkWidget *siblingBefore(NativeNode &parent, size_t index);
   size_t pageIndex(NativeNode &sidebar, NativeNode &page);
@@ -861,6 +865,7 @@ private:
 #endif
 
   GtkWidget *window_ = nullptr;
+  GtkWidget *rootOverlay_ = nullptr;
   GtkWidget *rootBox_ = nullptr;
   GtkCssProvider *cardCss_ = nullptr;
   GtkCssProvider *multilineCss_ = nullptr;
@@ -1079,8 +1084,20 @@ gboolean Gtk4TreeBackend::onOverlayChildPosition(GtkOverlay *overlay, GtkWidget 
   const auto *o = propsOf<n8v_floating_options>(*nn->node);
   if (!o) return FALSE;
 
-  const int parentW = gtk_widget_get_width(GTK_WIDGET(overlay));
-  const int parentH = gtk_widget_get_height(GTK_WIDGET(overlay));
+  int originX = 0, originY = 0;
+  int parentW = gtk_widget_get_width(GTK_WIDGET(overlay));
+  int parentH = gtk_widget_get_height(GTK_WIDGET(overlay));
+  const int windowW = parentW, windowH = parentH;
+  if (o->keep_on_screen && nn->node->parent) {
+    NativeNode *host = self_ ? self_->native(*nn->node->parent) : nullptr;
+    graphene_rect_t bounds;
+    if (host && host->outer && gtk_widget_compute_bounds(host->outer, GTK_WIDGET(overlay), &bounds)) {
+      originX = (int)bounds.origin.x;
+      originY = (int)bounds.origin.y;
+      parentW = (int)bounds.size.width;
+      parentH = (int)bounds.size.height;
+    }
+  }
 
   int minW = 0, natW = 0;
   gtk_widget_measure(child, GTK_ORIENTATION_HORIZONTAL, -1, &minW, &natW, nullptr, nullptr);
@@ -1102,19 +1119,12 @@ gboolean Gtk4TreeBackend::onOverlayChildPosition(GtkOverlay *overlay, GtkWidget 
   double pfx = 0, pfy = 0, efx = 0, efy = 0;
   attachFraction(o->parent_attach_point, pfx, pfy);
   attachFraction(o->element_attach_point, efx, efy);
-  allocation->x = (int)(pfx * parentW - efx * w + o->offset_x);
-  allocation->y = (int)(pfy * parentH - efy * h + o->offset_y);
+  allocation->x = originX + (int)(pfx * parentW - efx * w + o->offset_x);
+  allocation->y = originY + (int)(pfy * parentH - efy * h + o->offset_y);
   if (o->keep_on_screen) {
-    GtkWidget *window = GTK_WIDGET(gtk_widget_get_root(GTK_WIDGET(overlay)));
-    graphene_point_t origin{0, 0}, inWindow{0, 0};
-    if (window && gtk_widget_compute_point(GTK_WIDGET(overlay), window, &origin, &inWindow)) {
-      const int windowW = gtk_widget_get_width(window), windowH = gtk_widget_get_height(window);
-      const int margin = (int)o->screen_margin;
-      const int x = std::max(margin, std::min((int)inWindow.x + allocation->x, windowW - w - margin));
-      const int y = std::max(margin, std::min((int)inWindow.y + allocation->y, windowH - h - margin));
-      allocation->x = x - (int)inWindow.x;
-      allocation->y = y - (int)inWindow.y;
-    }
+    const int margin = (int)o->screen_margin;
+    allocation->x = std::max(margin, std::min(allocation->x, windowW - w - margin));
+    allocation->y = std::max(margin, std::min(allocation->y, windowH - h - margin));
   }
   allocation->width = w;
   allocation->height = h;
@@ -1248,6 +1258,11 @@ size_t Gtk4TreeBackend::rowIndex(NativeNode &sidebar, NativeNode &child) {
   return index;
 }
 
+bool Gtk4TreeBackend::isPopover(NativeNode &node) {
+  const auto *o = node.node ? propsOf<n8v_floating_options>(*node.node) : nullptr;
+  return o && o->keep_on_screen;
+}
+
 void Gtk4TreeBackend::attach(NativeNode &parent, NativeNode &child, size_t index) {
   if (parent.kind() == Kind::Sidebar && child.kind() == Kind::Page) {
     gtk_list_box_insert(GTK_LIST_BOX(parent.listBox), child.outer, (int)rowIndex(parent, child));
@@ -1256,6 +1271,10 @@ void Gtk4TreeBackend::attach(NativeNode &parent, NativeNode &child, size_t index
   }
   if (parent.kind() == Kind::Sidebar && isSidebarDecoration(child.kind())) {
     gtk_list_box_insert(GTK_LIST_BOX(parent.listBox), child.outer, (int)rowIndex(parent, child));
+    return;
+  }
+  if (child.floating && isPopover(child)) {
+    gtk_overlay_add_overlay(GTK_OVERLAY(rootOverlay_), child.outer);
     return;
   }
   if (child.floating && parent.kind() != Kind::Page) {
@@ -1275,6 +1294,10 @@ void Gtk4TreeBackend::detach(NativeNode &parent, NativeNode &child) {
   }
   if (parent.kind() == Kind::Sidebar && isSidebarDecoration(child.kind())) {
     gtk_list_box_remove(GTK_LIST_BOX(parent.listBox), child.outer);
+    return;
+  }
+  if (child.floating && gtk_widget_get_parent(child.outer) == rootOverlay_) {
+    gtk_overlay_remove_overlay(GTK_OVERLAY(rootOverlay_), child.outer);
     return;
   }
   if (child.floating && parent.overlay) {

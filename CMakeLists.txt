@@ -254,7 +254,7 @@ set(_N8V_PLAIN_ICONS
   "volume:volume-2" "mute:volume-x" "chevron-left:chevron-left" "chevron-right:chevron-right"
   "chevron-up:chevron-up" "chevron-down:chevron-down" "arrow-left:arrow-left"
   "arrow-right:arrow-right" "arrow-up:arrow-up" "arrow-down:arrow-down"
-  "external-link:external-link" "user:user"
+  "external-link:external-link" "user:user" "pin:pin" "mention:at-sign"
 )
 set(_files "")
 foreach(_pair ${_N8V_PLAIN_ICONS})
@@ -281,7 +281,7 @@ set(_N8V_CUPERTINO_ICONS
   "volume:volume-2" "mute:volume-off" "chevron-left:chevron-left" "chevron-right:chevron-right"
   "chevron-up:chevron-up" "chevron-down:chevron-down" "arrow-left:arrow-left"
   "arrow-right:arrow-right" "arrow-up:arrow-up" "arrow-down:arrow-down"
-  "external-link:external-link" "user:user"
+  "external-link:external-link" "user:user" "pin:pin" "mention:at"
 )
 set(_files "")
 foreach(_pair ${_N8V_CUPERTINO_ICONS})
@@ -308,7 +308,7 @@ set(_N8V_MATERIAL_ICONS
   "volume:volume_up" "mute:volume_off" "chevron-left:chevron_left" "chevron-right:chevron_right"
   "chevron-up:expand_less" "chevron-down:expand_more" "arrow-left:arrow_back"
   "arrow-right:arrow_forward" "arrow-up:arrow_upward" "arrow-down:arrow_downward"
-  "external-link:open_in_new" "user:person"
+  "external-link:open_in_new" "user:person" "pin:keep" "mention:alternate_email"
 )
 set(_files "")
 foreach(_pair ${_N8V_MATERIAL_ICONS})
@@ -344,7 +344,7 @@ set(_N8V_FLUENT_ICONS
   "chevron-up:Chevron Up:chevron_up" "chevron-down:Chevron Down:chevron_down"
   "arrow-left:Arrow Left:arrow_left" "arrow-right:Arrow Right:arrow_right"
   "arrow-up:Arrow Up:arrow_up" "arrow-down:Arrow Down:arrow_down" "external-link:Open:open"
-  "user:Person:person"
+  "user:Person:person" "pin:Pin:pin" "mention:Mention:mention"
 )
 set(_files "")
 foreach(_triple ${_N8V_FLUENT_ICONS})
