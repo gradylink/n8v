@@ -322,6 +322,7 @@ public:
   void setCursor(CursorKind) override {}
 
   void commitFrame() override {
+    updatePopoverVisibility();
     updateMultilineHeights();
     applyStickyBottom();
     resolvePendingScrolls();
@@ -553,6 +554,7 @@ public:
     if (!nn) return;
     unregisterId(*nn);
     live_.erase(&node);
+    if (nn->floating && nn->outer && rootOverlay_ && gtk_widget_get_parent(nn->outer) == rootOverlay_) gtk_overlay_remove_overlay(GTK_OVERLAY(rootOverlay_), nn->outer);
     if (nn->kind() == Kind::Radio && nn->widget) gtk_check_button_set_group(GTK_CHECK_BUTTON(nn->widget), nullptr);
     for (GtkWidget *w : nn->owned) g_object_unref(w);
     delete nn;
@@ -611,6 +613,15 @@ private:
   void applyMultilineEntry(NativeNode &nn, const n8v_entry_options &o);
   void updateMultilineHeight(NativeNode &nn);
   void updateMultilineHeights();
+  void updatePopoverVisibility() {
+    for (PNode *pn : live_) {
+      if (!pn->handle || !pn->parent) continue;
+      NativeNode &nn = *native(*pn);
+      if (!nn.floating || !nn.outer || gtk_widget_get_parent(nn.outer) != rootOverlay_) continue;
+      NativeNode *host = native(*pn->parent);
+      if (host && host->outer) gtk_widget_set_visible(nn.outer, gtk_widget_is_visible(host->outer));
+    }
+  }
   void applySidebar(NativeNode &nn, const n8v_sidebar_options &o);
   void applyPage(NativeNode &nn, const n8v_page_options &o);
 

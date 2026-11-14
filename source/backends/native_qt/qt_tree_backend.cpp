@@ -1373,6 +1373,7 @@ void QtTreeBackend::updateFloating() {
       placedY = std::max(margin, std::min(y, window_->height() - h - margin));
     }
     nn.outer->setGeometry(placedX, placedY, w, h);
+    if (o->keep_on_screen && window_->isVisible()) nn.outer->setVisible(hostWidget->isVisible());
     nn.outer->raise();
   }
 }
