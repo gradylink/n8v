@@ -671,6 +671,20 @@ if(N8V_INSTALL AND NOT EMSCRIPTEN)
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/n8v
   )
 
+  set(_N8V_PC_LIBS_PRIVATE "")
+  if(N8V_BUILD_STATIC)
+    set(_n8v_pc_archives ${_n8v_lazy_export_targets} n8v_fonts n8v_icons)
+    if(TARGET n8v_emoji)
+      list(APPEND _n8v_pc_archives n8v_emoji)
+    endif()
+    list(APPEND _n8v_pc_archives bundle_runtime)
+    set(_N8V_PC_LIBS_PRIVATE "-L\${libdir}/n8v")
+    foreach(_n8v_pc_archive ${_n8v_pc_archives})
+      string(APPEND _N8V_PC_LIBS_PRIVATE " -l${_n8v_pc_archive}")
+    endforeach()
+    string(APPEND _N8V_PC_LIBS_PRIVATE " -ldl")
+  endif()
+
   configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/cmake/packaging/n8v.pc.in
     ${CMAKE_CURRENT_BINARY_DIR}/n8v.pc

@@ -6,5 +6,7 @@ includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 Name: n8v
 Description: n8v, an immediate-mode native UI library.
 Version: @PROJECT_VERSION@
+Requires.private: plutosvg miniz
 Libs: -L${libdir} -ln8v
+Libs.private: @_N8V_PC_LIBS_PRIVATE@
 Cflags: -I${includedir}
