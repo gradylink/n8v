@@ -179,12 +179,70 @@ bundle_add(n8v_fonts
 
 set(_N8V_ICON_STAGE "${CMAKE_CURRENT_BINARY_DIR}/n8v_icons")
 
-cl_import_source(
-  NAME lucide_icons
-  DOWNLOAD_ONLY
-  REPO https://github.com/lucide-icons/lucide.git
-  REF main
-)
+function(_n8v_sparse_import name repo ref out_var)
+  set(_dir "${CMAKE_CURRENT_BINARY_DIR}/n8v_icon_src/${name}")
+  string(SHA256 _stamp "${repo}\n${ref}\n${ARGN}")
+  set(_old "")
+  if(EXISTS "${_dir}/.n8v-stamp")
+    file(READ "${_dir}/.n8v-stamp" _old)
+  endif()
+  if(NOT "${_old}" STREQUAL "${_stamp}")
+    find_program(_N8V_GIT git REQUIRED)
+    file(REMOVE_RECURSE "${_dir}")
+    file(MAKE_DIRECTORY "${_dir}")
+    set(_patterns "")
+    foreach(_f ${ARGN})
+      string(APPEND _patterns "/${_f}\n")
+    endforeach()
+    file(WRITE "${_dir}/.n8v-patterns" "${_patterns}")
+    foreach(_step
+      "init"
+      "remote;add;origin;${repo}"
+      "sparse-checkout;set;--no-cone;--stdin"
+      "fetch;--depth;1;--filter=blob:none;origin;${ref}"
+      "checkout;FETCH_HEAD"
+    )
+      set(_input "")
+      if(_step MATCHES "^sparse-checkout")
+        set(_input INPUT_FILE "${_dir}/.n8v-patterns")
+      endif()
+      execute_process(
+        COMMAND "${_N8V_GIT}" ${_step}
+        WORKING_DIRECTORY "${_dir}"
+        RESULT_VARIABLE _rc
+        OUTPUT_QUIET ERROR_VARIABLE _err
+        ${_input}
+      )
+      if(NOT _rc EQUAL 0)
+        file(REMOVE_RECURSE "${_dir}")
+        message(FATAL_ERROR "[n8v] git ${_step} failed for ${repo}: ${_err}")
+      endif()
+    endforeach()
+    file(WRITE "${_dir}/.n8v-stamp" "${_stamp}")
+  endif()
+  set(${out_var} "${_dir}" PARENT_SCOPE)
+endfunction()
+
+function(_n8v_raw_import name slug ref out_var)
+  set(_dir "${CMAKE_CURRENT_BINARY_DIR}/n8v_icon_src/${name}")
+  foreach(_f ${ARGN})
+    if(NOT EXISTS "${_dir}/${_f}")
+      string(REPLACE " " "%20" _url_path "${_f}")
+      file(
+        DOWNLOAD "https://raw.githubusercontent.com/${slug}/${ref}/${_url_path}" "${_dir}/${_f}"
+        TLS_VERIFY ON
+        STATUS _status
+      )
+      list(GET _status 0 _rc)
+      if(NOT _rc EQUAL 0)
+        file(REMOVE "${_dir}/${_f}")
+        message(FATAL_ERROR "[n8v] Could not fetch ${_f} from ${slug}: ${_status}")
+      endif()
+    endif()
+  endforeach()
+  set(${out_var} "${_dir}" PARENT_SCOPE)
+endfunction()
+
 set(_N8V_PLAIN_ICONS
   "settings:settings" "search:search" "check:check" "close:x" "menu:menu"
   "add:plus" "remove:minus" "delete:trash" "edit:pencil" "copy:copy"
@@ -198,19 +256,20 @@ set(_N8V_PLAIN_ICONS
   "arrow-right:arrow-right" "arrow-up:arrow-up" "arrow-down:arrow-down"
   "external-link:external-link" "user:user"
 )
+set(_files "")
+foreach(_pair ${_N8V_PLAIN_ICONS})
+  string(REPLACE ":" ";" _pair "${_pair}")
+  list(GET _pair 1 _src)
+  list(APPEND _files "icons/${_src}.svg")
+endforeach()
+_n8v_sparse_import(lucide_icons https://github.com/lucide-icons/lucide.git main _src_dir ${_files})
 foreach(_pair ${_N8V_PLAIN_ICONS})
   string(REPLACE ":" ";" _pair "${_pair}")
   list(GET _pair 0 _name)
   list(GET _pair 1 _src)
-  configure_file("${CL_SOURCE_DIR}/icons/${_src}.svg" "${_N8V_ICON_STAGE}/plain/${_name}.svg" COPYONLY)
+  configure_file("${_src_dir}/icons/${_src}.svg" "${_N8V_ICON_STAGE}/plain/${_name}.svg" COPYONLY)
 endforeach()
 
-cl_import_source(
-  NAME tabler_icons
-  DOWNLOAD_ONLY
-  REPO https://github.com/tabler/tabler-icons.git
-  REF main
-)
 set(_N8V_CUPERTINO_ICONS
   "settings:settings" "search:search" "check:check" "close:x" "menu:menu"
   "add:plus" "remove:minus" "delete:trash" "edit:pencil" "copy:copy"
@@ -224,19 +283,20 @@ set(_N8V_CUPERTINO_ICONS
   "arrow-right:arrow-right" "arrow-up:arrow-up" "arrow-down:arrow-down"
   "external-link:external-link" "user:user"
 )
+set(_files "")
+foreach(_pair ${_N8V_CUPERTINO_ICONS})
+  string(REPLACE ":" ";" _pair "${_pair}")
+  list(GET _pair 1 _src)
+  list(APPEND _files "icons/outline/${_src}.svg")
+endforeach()
+_n8v_sparse_import(tabler_icons https://github.com/tabler/tabler-icons.git main _src_dir ${_files})
 foreach(_pair ${_N8V_CUPERTINO_ICONS})
   string(REPLACE ":" ";" _pair "${_pair}")
   list(GET _pair 0 _name)
   list(GET _pair 1 _src)
-  configure_file("${CL_SOURCE_DIR}/icons/outline/${_src}.svg" "${_N8V_ICON_STAGE}/cupertino/${_name}.svg" COPYONLY)
+  configure_file("${_src_dir}/icons/outline/${_src}.svg" "${_N8V_ICON_STAGE}/cupertino/${_name}.svg" COPYONLY)
 endforeach()
 
-cl_import_source(
-  NAME material_icons
-  DOWNLOAD_ONLY
-  REPO https://github.com/google/material-design-icons.git
-  REF master
-)
 set(_N8V_MATERIAL_ICONS
   "settings:settings" "search:search" "check:check" "close:close" "menu:menu"
   "add:add" "remove:remove" "delete:delete" "edit:edit" "copy:content_copy"
@@ -250,23 +310,25 @@ set(_N8V_MATERIAL_ICONS
   "arrow-right:arrow_forward" "arrow-up:arrow_upward" "arrow-down:arrow_downward"
   "external-link:open_in_new" "user:person"
 )
+set(_files "")
+foreach(_pair ${_N8V_MATERIAL_ICONS})
+  string(REPLACE ":" ";" _pair "${_pair}")
+  list(GET _pair 1 _src)
+  list(APPEND _files "symbols/web/${_src}/materialsymbolsoutlined/${_src}_24px.svg")
+endforeach()
+# The material repo's tree alone is several hundred MB, so fetch its files individually instead
+_n8v_raw_import(material_icons google/material-design-icons master _src_dir ${_files})
 foreach(_pair ${_N8V_MATERIAL_ICONS})
   string(REPLACE ":" ";" _pair "${_pair}")
   list(GET _pair 0 _name)
   list(GET _pair 1 _src)
   configure_file(
-    "${CL_SOURCE_DIR}/symbols/web/${_src}/materialsymbolsoutlined/${_src}_24px.svg"
+    "${_src_dir}/symbols/web/${_src}/materialsymbolsoutlined/${_src}_24px.svg"
     "${_N8V_ICON_STAGE}/material/${_name}.svg"
     COPYONLY
   )
 endforeach()
 
-cl_import_source(
-  NAME fluent_icons
-  DOWNLOAD_ONLY
-  REPO https://github.com/microsoft/fluentui-system-icons.git
-  REF main
-)
 set(_N8V_FLUENT_ICONS
   "settings:Settings:settings" "search:Search:search" "check:Checkmark:checkmark"
   "close:Dismiss:dismiss" "menu:Line Horizontal 3:line_horizontal_3" "add:Add:add"
@@ -284,13 +346,21 @@ set(_N8V_FLUENT_ICONS
   "arrow-up:Arrow Up:arrow_up" "arrow-down:Arrow Down:arrow_down" "external-link:Open:open"
   "user:Person:person"
 )
+set(_files "")
+foreach(_triple ${_N8V_FLUENT_ICONS})
+  string(REPLACE ":" ";" _triple "${_triple}")
+  list(GET _triple 1 _dir)
+  list(GET _triple 2 _src)
+  list(APPEND _files "assets/${_dir}/SVG/ic_fluent_${_src}_24_regular.svg")
+endforeach()
+_n8v_sparse_import(fluent_icons https://github.com/microsoft/fluentui-system-icons.git main _src_dir ${_files})
 foreach(_triple ${_N8V_FLUENT_ICONS})
   string(REPLACE ":" ";" _triple "${_triple}")
   list(GET _triple 0 _name)
   list(GET _triple 1 _dir)
   list(GET _triple 2 _src)
   configure_file(
-    "${CL_SOURCE_DIR}/assets/${_dir}/SVG/ic_fluent_${_src}_24_regular.svg"
+    "${_src_dir}/assets/${_dir}/SVG/ic_fluent_${_src}_24_regular.svg"
     "${_N8V_ICON_STAGE}/fluent/${_name}.svg"
     COPYONLY
   )
