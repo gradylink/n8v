@@ -14,6 +14,10 @@
 #include "core/paste_file.hpp"
 #include "core/style.hpp"
 #include "core/theme_color.hpp"
+#ifdef N8V_HAVE_BUNDLED_EMOJI
+#include "bundle.hpp"
+#include "bundle_n8v_emoji.h"
+#endif
 #include "core/tree/dispatch.hpp"
 #include "core/tree/persistent.hpp"
 #include "core/tree/props.hpp"
@@ -34,6 +38,8 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QFileDialog>
+#include <QFontDatabase>
+#include <QFontInfo>
 #include <QFontMetrics>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -51,6 +57,7 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QRawFont>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QSizePolicy>
@@ -85,6 +92,48 @@ const char qt_version_tag = 0;
 
 namespace n8v::detail {
 namespace {
+
+bool drawsColorEmoji(const QRawFont &font) { return !font.fontTable("COLR").isEmpty() || !font.fontTable("CBDT").isEmpty() || !font.fontTable("sbix").isEmpty(); }
+
+QString installedEmojiFamily() {
+  const QStringList families = QFontDatabase::families();
+  for (const QString &family : families) {
+    if (!family.contains(QLatin1String("emoji"), Qt::CaseInsensitive)) continue;
+    QFont font(family);
+    font.setPixelSize(16);
+    if (drawsColorEmoji(QRawFont::fromFont(font))) return family;
+  }
+  return QString();
+}
+
+QString bundledEmojiFamily() {
+#ifdef N8V_HAVE_BUNDLED_EMOJI
+  static const bundle::archive archive(bundle_n8v_emoji_archive());
+  const auto entry = archive.find("Twemoji.Mozilla.ttf");
+  if (!entry) return QString();
+  const std::vector<std::byte> bytes = archive.load(*entry);
+  const int id = QFontDatabase::addApplicationFontFromData(QByteArray(reinterpret_cast<const char *>(bytes.data()), (qsizetype)bytes.size()));
+  if (id < 0) return QString();
+  const QStringList families = QFontDatabase::applicationFontFamilies(id);
+  return families.isEmpty() ? QString() : families.first();
+#else
+  return QString();
+#endif
+}
+
+void installEmojiFallback() {
+  QString family = installedEmojiFamily();
+  if (family.isEmpty()) family = bundledEmojiFamily();
+  if (family.isEmpty()) return;
+  QFont font = QApplication::font();
+  QStringList families = font.families();
+  if (families.isEmpty()) families << font.family();
+  const QString real = QFontInfo(font).family();
+  if (!families.contains(real)) families << real;
+  families << family;
+  font.setFamilies(families);
+  QApplication::setFont(font);
+}
 
 bool onDarkBackground(const QWidget *widget) { return widget->palette().color(QPalette::Window).lightness() < 128; }
 
@@ -529,6 +578,7 @@ public:
     static int argc = 0;
     static char *argv[] = {nullptr};
     app_ = std::make_unique<QApplication>(argc, argv);
+    installEmojiFallback();
 
     window_ = new N8VRootWidget();
     window_->setWindowTitle(qstr(title));
@@ -840,7 +890,13 @@ void QtTreeBackend::attach(NativeNode &parent, NativeNode &child, size_t index) 
       parent.list->setItemWidget(child.item, line);
     } else {
       auto *heading = new QLabel(child.item->data(Qt::UserRole).toString());
-      heading->setStyleSheet("font-weight: bold; color: palette(mid); padding: 12px 12px 4px 12px; background: transparent;");
+      QColor faint = parent.list->palette().color(QPalette::Text);
+      faint.setAlphaF(0.6);
+      heading->setStyleSheet(QString("font-weight: bold; color: rgba(%1,%2,%3,%4); padding: 12px 12px 4px 12px; background: transparent;")
+                               .arg(faint.red())
+                               .arg(faint.green())
+                               .arg(faint.blue())
+                               .arg(faint.alphaF(), 0, 'f', 3));
       heading->setAttribute(Qt::WA_TransparentForMouseEvents);
       parent.list->setItemWidget(child.item, heading);
     }

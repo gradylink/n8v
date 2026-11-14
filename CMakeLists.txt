@@ -309,6 +309,31 @@ if(NOT EMSCRIPTEN)
 endif()
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/backends/html.cmake")
 
+# Qt can't draw the SVG-in-OpenType emoji fonts which have become the standard on some systems
+if(N8V_HAVE_QT)
+  set(_N8V_EMOJI_STAGE "${CMAKE_CURRENT_BINARY_DIR}/n8v_emoji")
+  set(_N8V_EMOJI_FONT "${_N8V_EMOJI_STAGE}/Twemoji.Mozilla.ttf")
+  if(NOT EXISTS "${_N8V_EMOJI_FONT}")
+    file(
+      DOWNLOAD "https://github.com/mozilla/twemoji-colr/releases/download/v0.7.0/Twemoji.Mozilla.ttf" "${_N8V_EMOJI_FONT}"
+      EXPECTED_HASH SHA256=6d90152ee0d29e82fe2a87793af5aa4b7ad13e6538360889e141e81ed299ee8e
+      TLS_VERIFY ON
+      STATUS _N8V_EMOJI_STATUS
+    )
+    list(GET _N8V_EMOJI_STATUS 0 _N8V_EMOJI_CODE)
+    if(NOT _N8V_EMOJI_CODE EQUAL 0)
+      file(REMOVE "${_N8V_EMOJI_FONT}")
+      message(WARNING "[n8v] Could not fetch the Twemoji font (${_N8V_EMOJI_STATUS}); the Qt backend will only show emoji the system can draw.")
+    endif()
+  endif()
+  if(EXISTS "${_N8V_EMOJI_FONT}")
+    bundle_add(n8v_emoji
+      BASE_DIR "${_N8V_EMOJI_STAGE}"
+      DIRECTORIES "${_N8V_EMOJI_STAGE}"
+    )
+  endif()
+endif()
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
   option(N8V_SANITIZE "Build with AddressSanitizer + UndefinedBehaviorSanitizer" ON)
 else()
@@ -463,6 +488,10 @@ foreach(_n8v_target ${_n8v_targets})
     target_sources(${_n8v_target} PRIVATE source/backends/native_qt/qt_tree_backend.cpp)
     target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_QT_BACKEND)
     target_link_libraries(${_n8v_target} PUBLIC qt6widgets_lazy qt6gui_lazy qt6core_lazy)
+    if(TARGET n8v_emoji)
+      target_compile_definitions(${_n8v_target} PRIVATE N8V_HAVE_BUNDLED_EMOJI)
+      target_link_libraries(${_n8v_target} PUBLIC n8v_emoji)
+    endif()
     if(N8V_HAVE_QT_MULTIMEDIA)
       target_compile_definitions(${_n8v_target} PRIVATE N8V_HAVE_QT_MULTIMEDIA)
       target_link_libraries(${_n8v_target} PUBLIC qt6multimedia_lazy qt6multimediawidgets_lazy)
@@ -538,6 +567,7 @@ if(N8V_INSTALL AND NOT EMSCRIPTEN)
 
   if(N8V_BUILD_STATIC)
     n8v_export_dependency_closure(n8v_fonts)
+    n8v_export_dependency_closure(n8v_emoji)
     n8v_export_dependency_closure(n8v_icons)
     n8v_export_dependency_closure(deps::plutosvg)
   endif()
