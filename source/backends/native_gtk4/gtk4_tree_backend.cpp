@@ -250,6 +250,7 @@ public:
     gtk_event_controller_set_propagation_phase(GTK_EVENT_CONTROLLER(clickAway), GTK_PHASE_CAPTURE);
     gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(clickAway), 0);
     g_signal_connect_data(clickAway, "pressed", G_CALLBACK(&Gtk4TreeBackend::onClickAway), nullptr, nullptr, (GConnectFlags)0);
+    g_signal_connect_data(clickAway, "released", G_CALLBACK(&Gtk4TreeBackend::onClickReleased), nullptr, nullptr, (GConnectFlags)0);
     gtk_widget_add_controller(window_, GTK_EVENT_CONTROLLER(clickAway));
     GtkEventController *escapeKey = gtk_event_controller_key_new();
     gtk_event_controller_set_propagation_phase(escapeKey, GTK_PHASE_CAPTURE);
@@ -300,6 +301,7 @@ public:
     );
     gtk_style_context_add_provider_for_display(gtk_widget_get_display(window_), GTK_STYLE_PROVIDER(multilineCss_), GTK_STYLE_PROVIDER_PRIORITY_USER + 100);
 
+    gtk_widget_add_tick_callback(window_, &Gtk4TreeBackend::onFrameTick, nullptr, nullptr);
     gtk_window_present(GTK_WINDOW(window_));
     return true;
   }
@@ -572,7 +574,10 @@ public:
     if (!nn) return;
     unregisterId(*nn);
     live_.erase(&node);
-    if (nn->floating && nn->outer && rootOverlay_ && gtk_widget_get_parent(nn->outer) == rootOverlay_) gtk_overlay_remove_overlay(GTK_OVERLAY(rootOverlay_), nn->outer);
+    if (nn->floating && nn->outer && rootOverlay_ && gtk_widget_get_parent(nn->outer) == rootOverlay_) {
+      gtk_overlay_remove_overlay(GTK_OVERLAY(rootOverlay_), nn->outer);
+      --rootOverlayChildren_;
+    }
     if (nn->kind() == Kind::Radio && nn->widget) gtk_check_button_set_group(GTK_CHECK_BUTTON(nn->widget), nullptr);
     for (GtkWidget *w : nn->owned) g_object_unref(w);
     delete nn;
@@ -648,9 +653,28 @@ private:
     return TRUE;
   }
 
+  static void onClickReleased(GtkGestureClick *gesture, int, double x, double y, gpointer) {
+    if (!self_ || gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(gesture)) != 1) return;
+    GtkWidget *picked = gtk_widget_pick(self_->window_, x, y, GTK_PICK_DEFAULT);
+    const GtkWidget *pressed = self_->pressedWidget_;
+    self_->pressedWidget_ = nullptr;
+    if (!picked || picked != pressed) return;
+    for (PNode *pn : self_->live_) {
+      NativeNode *nn = self_->native(*pn);
+      if (!nn || nn->widget != picked) continue;
+      const auto *text = propsOf<n8v_text_options>(*pn);
+      const auto *image = propsOf<n8v_image_options>(*pn);
+      if ((text && text->on_click && text->click_unstyled) || (image && image->on_click)) {
+        dispatch::activate(*pn);
+        return;
+      }
+    }
+  }
+
   static void onClickAway(GtkGestureClick *gesture, int, double x, double y, gpointer) {
     if (!self_) return;
     GtkWidget *picked = gtk_widget_pick(self_->window_, x, y, GTK_PICK_DEFAULT);
+    self_->pressedWidget_ = picked;
     self_->dismissFloating(picked);
     (void)gesture;
   }
@@ -912,6 +936,12 @@ private:
     return G_SOURCE_REMOVE;
   }
   int settleFrames_ = 0;
+  int rootOverlayChildren_ = 0;
+  static gboolean onFrameTick(GtkWidget *, GdkFrameClock *, gpointer) {
+    if (self_ && self_->rootOverlayChildren_ > 0) gtk_widget_queue_allocate(self_->rootOverlay_);
+    return G_SOURCE_CONTINUE;
+  }
+  const GtkWidget *pressedWidget_ = nullptr;
   std::vector<PendingFocus> pendingFocus_;
   std::unordered_set<std::string> hovered_;
   std::vector<PendingScroll> pendingScrolls_;
@@ -1311,6 +1341,7 @@ void Gtk4TreeBackend::attach(NativeNode &parent, NativeNode &child, size_t index
   }
   if (child.floating && isPopover(child)) {
     gtk_overlay_add_overlay(GTK_OVERLAY(rootOverlay_), child.outer);
+    ++rootOverlayChildren_;
     return;
   }
   if (child.floating && parent.kind() != Kind::Page) {
@@ -1334,6 +1365,7 @@ void Gtk4TreeBackend::detach(NativeNode &parent, NativeNode &child) {
   }
   if (child.floating && gtk_widget_get_parent(child.outer) == rootOverlay_) {
     gtk_overlay_remove_overlay(GTK_OVERLAY(rootOverlay_), child.outer);
+    --rootOverlayChildren_;
     return;
   }
   if (child.floating && parent.overlay) {
@@ -1751,9 +1783,9 @@ void Gtk4TreeBackend::setLabelFromText(GtkWidget *label, const n8v_text_options 
     std::snprintf(open, sizeof open, "<span foreground=\"#%02x%02x%02x\" alpha=\"%d%%\">", (int)o.color.r, (int)o.color.g, (int)o.color.b, (int)(o.color.a / 255.0f * 100.0f));
     m = open + m + "</span>";
   }
-  const bool link = (o.url && *o.url) || o.on_click;
+  const bool link = (o.url && *o.url) || (o.on_click && !o.click_unstyled);
   if (link) m = "<a href=\"" + markup::escapeMarkup(o.url && *o.url ? o.url : "about:blank") + "\">" + m + "</a>";
-  gtk_label_set_markup(GTK_LABEL(label), m.c_str());
+  if (const char *current = gtk_label_get_label(GTK_LABEL(label)); !current || m != current) gtk_label_set_markup(GTK_LABEL(label), m.c_str());
 }
 
 void Gtk4TreeBackend::build(NativeNode &nn) {

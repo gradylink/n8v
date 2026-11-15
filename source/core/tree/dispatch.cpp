@@ -24,6 +24,8 @@ void activate(PNode &node) {
       if (button->on_change) button->on_change(checked, button->on_change_userdata);
     }
     if (button->on_click) button->on_click(button->on_click_userdata);
+  } else if (auto *image = optionsOf<n8v_image_options>(node)) {
+    if (image->on_click) image->on_click(image->on_click_userdata);
   } else if (auto *text = optionsOf<n8v_text_options>(node)) {
     if (text->on_click) {
       text->on_click(text->on_click_userdata);

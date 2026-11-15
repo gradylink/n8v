@@ -681,6 +681,7 @@ struct LeafBuilder {
       c_opts.large = textOptions.large;
       c_opts.url = urlStorage.c_str();
       c_opts.color = toC(textOptions.color);
+      c_opts.click_unstyled = textOptions.clickUnstyled;
       if (textOptions.onClick) callback_bridge::bridge(callback_bridge::clickClosures, std::move(textOptions.onClick), c_opts.on_click, c_opts.on_click_userdata);
       _n8v_set_text_opts(c_opts);
       _n8v_text_commit(labelStorage.c_str());
@@ -865,6 +866,7 @@ inline void image(ImageOptions options) {
   c_opts.width = toC(options.width);
   c_opts.height = toC(options.height);
   c_opts.rounding = toC(options.rounding);
+  if (options.onClick) callback_bridge::bridge(callback_bridge::clickClosures, std::move(options.onClick), c_opts.on_click, c_opts.on_click_userdata);
 
   n8v_image(c_opts);
 }

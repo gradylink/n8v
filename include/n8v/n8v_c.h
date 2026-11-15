@@ -223,6 +223,8 @@ typedef struct n8v_text_options {
       takes priority over `url` if both are set. */
   n8v_click_fn on_click;
   void *on_click_userdata;
+  /** With `on_click`, the text stays clickable but keeps its own look instead of being painted as a link. */
+  bool click_unstyled;
 } n8v_text_options;
 
 typedef enum n8v_icon_variant {
@@ -355,6 +357,9 @@ typedef struct n8v_image_options {
   n8v_sizing width;
   n8v_sizing height;
   n8v_rounding rounding;
+  /** Makes the image clickable when set. */
+  n8v_click_fn on_click;
+  void *on_click_userdata;
 } n8v_image_options;
 
 typedef struct n8v_video_options {

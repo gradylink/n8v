@@ -783,7 +783,7 @@ public:
   }
 
   bool pumpEvents() override {
-    const bool busy = settleFrames_ > 0 || !pendingScrolls_.empty() || !pendingFocus_.empty();
+    const bool busy = settleFrames_ > 0 || popoverOpen_ || !pendingScrolls_.empty() || !pendingFocus_.empty();
     idleTicker_->arm(busy ? kBusyFrameMs : kIdleFrameMs);
     QCoreApplication::processEvents(QEventLoop::WaitForMoreEvents);
     const bool timedOut = idleTicker_->disarm();
@@ -1045,6 +1045,7 @@ private:
   std::unique_ptr<IdleTicker> idleTicker_;
   static constexpr int kBusyFrameMs = 16, kIdleFrameMs = 250, kSettleFrames = 4;
   int settleFrames_ = 0;
+  bool popoverOpen_ = false;
   N8VRootWidget *window_ = nullptr;
   QVBoxLayout *rootLayout_ = nullptr;
   NativeNode root_;
@@ -1474,11 +1475,13 @@ void QtTreeBackend::updatePercentSizes() {
 }
 
 void QtTreeBackend::updateFloating() {
+  popoverOpen_ = false;
   for (PNode *pn : live_) {
     NativeNode &nn = *native(*pn);
     if (!nn.floating || !nn.parentNode || !nn.outer) continue;
     const auto *o = propsOf<n8v_floating_options>(*pn);
     if (!o) continue;
+    if (o->keep_on_screen) popoverOpen_ = true;
 
     NativeNode &host = *nn.parentNode;
     QWidget *hostWidget = host.outer ? host.outer : host.content;
@@ -1709,7 +1712,8 @@ void QtTreeBackend::build(NativeNode &nn) {
   }
   case Kind::Image:
   case Kind::Icon: {
-    auto *label = new QLabel();
+    auto *label = new N8VLabel();
+    label->node = &pn;
     label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     nn.outer = nn.widget = label;
     break;
@@ -1938,12 +1942,12 @@ void QtTreeBackend::applyText(NativeNode &nn, const n8v_text_options &original) 
     const double alpha = (isDefaultColor ? 1.0 : o.color.a / 255.0) * (o.darken ? 0.6 : 1.0);
     html = QString("<span style=\"color:rgba(%1,%2,%3,%4)\">").arg(base.red()).arg(base.green()).arg(base.blue()).arg(alpha, 0, 'f', 3) + html + "</span>";
   }
-  const bool link = (o.url && *o.url) || o.on_click;
+  const bool link = (o.url && *o.url) || (o.on_click && !o.click_unstyled);
   if (link) html = "<a href=\"#\">" + html + "</a>";
   label->setText(html);
   label->invalidateHint();
-  label->clickable = link;
-  label->setCursor(link ? Qt::PointingHandCursor : Qt::ArrowCursor);
+  label->clickable = link || o.on_click;
+  label->setCursor(label->clickable ? Qt::PointingHandCursor : Qt::ArrowCursor);
 }
 
 void QtTreeBackend::applySidebar(NativeNode &nn, const n8v_sidebar_options &o) {
@@ -2054,7 +2058,9 @@ void QtTreeBackend::apply(NativeNode &nn) {
         }
       },
       [&](const n8v_image_options &o) {
-        auto *labelWidget = static_cast<QLabel *>(nn.widget);
+        auto *labelWidget = static_cast<N8VLabel *>(nn.widget);
+        labelWidget->clickable = o.on_click != nullptr;
+        labelWidget->setCursor(o.on_click ? Qt::PointingHandCursor : Qt::ArrowCursor);
         const DecodedImage *decoded = getOrDecodeImage(o);
         if (!decoded) {
           labelWidget->clear();

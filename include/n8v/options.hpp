@@ -61,6 +61,8 @@ struct TextOptions {
   /** If set, the text is painted as a link (color + underline) and this fires on click instead of
       opening `url`. Takes priority over `url` if both are set. */
   std::function<void()> onClick = nullptr;
+  /** With onClick, the text stays clickable but keeps its own look (color, no underline) instead of being painted as a link. */
+  bool clickUnstyled = false;
   /** Ignored by style families that pick their own color (e.g. links). */
   Color color = {0, 0, 0, 255};
 };
@@ -175,6 +177,8 @@ struct ImageOptions {
   Sizing width = Sizing::fit();
   Sizing height = Sizing::fit();
   Rounding rounding = Rounding::styleDefault();
+  /** Makes the image clickable when set. */
+  std::function<void()> onClick = nullptr;
 };
 
 struct VideoOptions {

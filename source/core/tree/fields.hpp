@@ -102,6 +102,7 @@ template <typename V> void visitFields(n8v_text_options &o, V &v) {
   v.num(o.color);
   v.ptr(o.on_click);
   v.ptr(o.on_click_userdata);
+  v.num(o.click_unstyled);
 }
 
 template <typename V> void visitFields(n8v_checkbox_options &o, V &v) {
@@ -202,6 +203,8 @@ template <typename V> void visitFields(n8v_image_options &o, V &v) {
   v.num(o.width);
   v.num(o.height);
   v.num(o.rounding);
+  v.ptr(o.on_click);
+  v.ptr(o.on_click_userdata);
 }
 
 template <typename V> void visitFields(n8v_icon_options &o, V &v) {

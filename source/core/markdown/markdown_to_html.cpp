@@ -102,8 +102,8 @@ std::string openStyledLink(std::string &out, const n8v_link_style &style, const 
     }
     if (style.bold) out += "font-weight:bold;";
     out += "\">";
-    if (hasBackground) out += "\u2009";
-    return hasBackground ? "\u2009</span>" : "</span>";
+    if (hasBackground) out += "\u2002";
+    return hasBackground ? "\u2002</span>" : "</span>";
   }
   case HtmlFlavor::Basic: {
     const n8v_color text = hasForeground ? style.foreground : style.background;
