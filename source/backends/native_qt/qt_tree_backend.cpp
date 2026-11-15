@@ -250,6 +250,23 @@ protected:
   }
 };
 
+class N8VRule final : public QFrame {
+public:
+  explicit N8VRule(QWidget *parent = nullptr) : QFrame(parent) { setFixedHeight(3); }
+  QColor color;
+
+protected:
+  void paintEvent(QPaintEvent *) override {
+    QColor line = color;
+    if (!line.isValid()) {
+      line = palette().color(QPalette::Text);
+      line.setAlphaF(0.25);
+    }
+    QPainter painter(this);
+    painter.fillRect(0, height() / 2, width(), 1, line);
+  }
+};
+
 class N8VDocumentLabel final : public QLabel {
 public:
   using QLabel::QLabel;
@@ -1011,9 +1028,7 @@ void QtTreeBackend::attach(NativeNode &parent, NativeNode &child, size_t index) 
   if (parent.kind() == Kind::Sidebar && isSidebarDecoration(child.kind())) {
     parent.list->insertItem((int)rowIndex(parent, child), child.item);
     if (child.kind() == Kind::SidebarDivider) {
-      auto *line = new QFrame();
-      line->setFrameShape(QFrame::HLine);
-      line->setFrameShadow(QFrame::Sunken);
+      auto *line = new N8VRule();
       parent.list->setItemWidget(child.item, line);
     } else {
       auto *heading = new QLabel(child.item->data(Qt::UserRole).toString());
@@ -1630,9 +1645,7 @@ void QtTreeBackend::build(NativeNode &nn) {
     break;
   }
   case Kind::Divider: {
-    auto *line = new QFrame();
-    line->setFrameShape(QFrame::HLine);
-    line->setFrameShadow(QFrame::Sunken);
+    auto *line = new N8VRule();
     nn.outer = nn.widget = line;
     break;
   }
@@ -2001,15 +2014,9 @@ void QtTreeBackend::apply(NativeNode &nn) {
       [&](const n8v_divider_options &original) {
         n8v_divider_options o = original;
         o.color = resolveThemeColor(o.color, onDarkBackground(nn.widget));
-        if (o.color.a > 0.0f) {
-          static_cast<QFrame *>(nn.widget)->setStyleSheet(QString("QFrame { background-color: rgba(%1,%2,%3,%4); border: none; max-height: 1px; }")
-                                                            .arg((int)o.color.r)
-                                                            .arg((int)o.color.g)
-                                                            .arg((int)o.color.b)
-                                                            .arg(o.color.a / 255.0, 0, 'f', 3));
-        } else {
-          static_cast<QFrame *>(nn.widget)->setStyleSheet(QString());
-        }
+        auto *rule = static_cast<N8VRule *>(nn.widget);
+        rule->color = o.color.a > 0.0f ? QColor((int)o.color.r, (int)o.color.g, (int)o.color.b, (int)o.color.a) : QColor();
+        rule->update();
       },
       [&](const n8v_audio_options &o) {
 #ifdef N8V_HAVE_QT_MULTIMEDIA
