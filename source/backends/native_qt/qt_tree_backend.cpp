@@ -54,6 +54,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QPixmap>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -204,6 +205,16 @@ public:
   using QPushButton::QPushButton;
   PNode *node = nullptr;
 
+  QSize sizeHint() const override {
+    const QSize styled = QPushButton::sizeHint();
+    const QFontMetrics metrics(font());
+    int width = text().isEmpty() ? 0 : metrics.horizontalAdvance(text());
+    if (!icon().isNull()) width += iconSize().width() + (text().isEmpty() ? 0 : 6);
+    const int padding = isFlat() ? 16 : 24;
+    return QSize(std::min(styled.width(), width + padding), styled.height());
+  }
+  QSize minimumSizeHint() const override { return sizeHint(); }
+
 protected:
   void mouseReleaseEvent(QMouseEvent *event) override {
     const bool wasDown = isDown();
@@ -217,11 +228,57 @@ protected:
   }
 };
 
+class N8VPanel final : public QFrame {
+public:
+  using QFrame::QFrame;
+  bool card = false;
+
+protected:
+  void paintEvent(QPaintEvent *event) override {
+    if (card) {
+      QPainter painter(this);
+      painter.setRenderHint(QPainter::Antialiasing);
+      QColor fill = palette().color(QPalette::Base);
+      QColor edge = palette().color(QPalette::Mid);
+      const QColor window = palette().color(QPalette::Window);
+      if (fill == window) fill = window.lightness() < 128 ? window.lighter(115) : window.darker(103);
+      painter.setBrush(fill);
+      painter.setPen(QPen(edge, 1));
+      painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 4, 4);
+    }
+    QFrame::paintEvent(event);
+  }
+};
+
 class N8VDocumentLabel final : public QLabel {
 public:
   using QLabel::QLabel;
 
+  void invalidateHint() {
+    hintDirty_ = true;
+    updateGeometry();
+  }
+
+  QSize sizeHint() const override {
+    if (!wordWrap()) return QLabel::sizeHint();
+    if (hintDirty_) {
+      QTextDocument doc;
+      doc.setDefaultFont(font());
+      if (textFormat() == Qt::MarkdownText) doc.setMarkdown(text());
+      else doc.setHtml(text());
+      doc.setTextWidth(-1);
+      idealHint_ = QSize((int)std::ceil(doc.idealWidth()), (int)std::ceil(doc.size().height()));
+      hintDirty_ = false;
+    }
+    const QMargins m = contentsMargins();
+    return idealHint_ + QSize(m.left() + m.right() + 2 * frameWidth(), m.top() + m.bottom() + 2 * frameWidth());
+  }
+
 protected:
+  void changeEvent(QEvent *event) override {
+    QLabel::changeEvent(event);
+    if (event->type() == QEvent::FontChange) hintDirty_ = true;
+  }
   void mouseReleaseEvent(QMouseEvent *event) override {
     if (event->button() == Qt::LeftButton) {
       const QString href = linkAt(event->position().toPoint());
@@ -243,6 +300,9 @@ private:
     else doc.setHtml(text());
     return doc.documentLayout()->anchorAt(QPointF(point - contentsRect().topLeft()));
   }
+
+  mutable bool hintDirty_ = true;
+  mutable QSize idealHint_;
 };
 
 class N8VLabel final : public QLabel {
@@ -1504,7 +1564,7 @@ void QtTreeBackend::build(NativeNode &nn) {
     break;
   }
   case Kind::Panel: {
-    auto *frame = new QFrame();
+    auto *frame = new N8VPanel();
     nn.layout = new QBoxLayout(QBoxLayout::TopToBottom, frame);
     nn.outer = nn.content = frame;
     break;
@@ -1721,7 +1781,11 @@ void QtTreeBackend::applyPanel(NativeNode &nn, const n8v_panel_options &o) {
   const int vpad = card ? 10 : 6, hpad = card ? 12 : 10;
   if (o.has_padding) nn.layout->setContentsMargins(o.padding.left, o.padding.top, o.padding.right, o.padding.bottom);
   else nn.layout->setContentsMargins(hpad, vpad, hpad, vpad);
-  frame->setFrameShape(card ? QFrame::StyledPanel : QFrame::NoFrame);
+  frame->setFrameShape(QFrame::NoFrame);
+  if (static_cast<N8VPanel *>(frame)->card != card) {
+    static_cast<N8VPanel *>(frame)->card = card;
+    frame->update();
+  }
   const n8v_color accent = resolveThemeColor(o.accent, onDarkBackground(frame));
   if (accent.a > 0.0f) {
     frame->setObjectName("n8vAccent");
@@ -2012,6 +2076,7 @@ void QtTreeBackend::apply(NativeNode &nn) {
         auto *label = static_cast<QLabel *>(nn.widget);
         if (!o.link_style && !o.image_resolver) {
           label->setText(qstr(o.markdown));
+          static_cast<N8VDocumentLabel *>(label)->invalidateHint();
           return;
         }
         const n8v::detail::markdown::CachedDocument cached = n8v::detail::markdown::getOrParse(o.markdown ? o.markdown : "");
@@ -2026,6 +2091,7 @@ void QtTreeBackend::apply(NativeNode &nn) {
         htmlOptions.backdrop = {(float)backdrop.red(), (float)backdrop.green(), (float)backdrop.blue(), 255.0f};
         label->setTextFormat(Qt::RichText);
         label->setText(QString::fromStdString(n8v::detail::markdown::toHtml(*cached.document, htmlOptions)));
+        static_cast<N8VDocumentLabel *>(label)->invalidateHint();
       },
     },
     pn.current.props
