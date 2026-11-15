@@ -412,6 +412,12 @@ typedef struct n8v_sidebar_options {
   float min_width;
   float max_width;
   bool compact;
+  /** If non-NULL the sidebar is collapsible: an arrow button next to the title folds it to a narrow strip showing only each page's
+      icon or image (names become tooltips, badges are hidden). The initial state is read from *collapsed and every toggle is
+      written back to it, so the caller can persist it. */
+  bool *collapsed;
+  n8v_bool_change_fn on_collapse;
+  void *on_collapse_userdata;
 } n8v_sidebar_options;
 
 typedef struct n8v_link_style {

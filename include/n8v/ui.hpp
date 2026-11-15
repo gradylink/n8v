@@ -621,6 +621,8 @@ inline void openSidebar(const SidebarOptions &options) {
   c_opts.min_width = options.minWidth;
   c_opts.max_width = options.maxWidth;
   c_opts.compact = options.compact;
+  c_opts.collapsed = options.collapsed;
+  if (options.onCollapse) callback_bridge::bridge(callback_bridge::boolChangeClosures, options.onCollapse, c_opts.on_collapse, c_opts.on_collapse_userdata);
   n8v_open_sidebar(c_opts);
 }
 

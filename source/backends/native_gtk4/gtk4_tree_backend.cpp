@@ -181,6 +181,10 @@ struct NativeNode {
   GtkWidget *panelRoot = nullptr;
   GtkWidget *listBox = nullptr;
   GtkWidget *titleLabel = nullptr;
+  GtkWidget *collapseButton = nullptr;
+  GtkWidget *collapseButtonBottom = nullptr;
+  bool collapsedRow = false;
+  GtkWidget *titleRow = nullptr;
   GtkWidget *contentArea = nullptr;
   GtkWidget *rowLabel = nullptr;
   GtkWidget *badge = nullptr;
@@ -261,6 +265,7 @@ public:
     gtk_css_provider_load_from_string(
       cardCss_,
       ".n8v-card { border: 1px solid alpha(currentColor, 0.2); border-radius: 6px; }\n"
+      "list.navigation-sidebar > row.n8v-collapsed-row, list.navigation-sidebar > row.n8v-collapsed-row:selected { padding: 0; }\n"
       ".n8v-badge { background: alpha(currentColor, 0.18); border-radius: 999px; padding: 0 7px; font-size: smaller; font-weight: bold; min-height: 16px; }\n"
 #ifdef N8V_HAVE_ADWAITA
       ".n8v-badge-red { background: @error_bg_color; color: @error_fg_color; }\n"
@@ -651,6 +656,16 @@ private:
   static gboolean onCloseRequest(GtkWindow *, gpointer userData) {
     static_cast<Gtk4TreeBackend *>(userData)->closeRequested_ = true;
     return TRUE;
+  }
+
+  static void onCollapseClicked(GtkButton *, gpointer userData) {
+    PNode *node = liveNode(userData);
+    if (!node || !self_) return;
+    const auto *o = propsOf<n8v_sidebar_options>(*node);
+    if (!o || !o->collapsed) return;
+    *o->collapsed = !*o->collapsed;
+    if (o->on_collapse) o->on_collapse(*o->collapsed, o->on_collapse_userdata);
+    self_->applySidebar(*self_->native(*node), *o);
   }
 
   static void onClickReleased(GtkGestureClick *gesture, int, double x, double y, gpointer) {
@@ -1992,6 +2007,19 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
     gtk_widget_set_margin_top(nn.titleLabel, 12);
     gtk_widget_set_margin_bottom(nn.titleLabel, 12);
 
+    nn.collapseButton = gtk_button_new_from_icon_name("pan-start-symbolic");
+    gtk_widget_add_css_class(nn.collapseButton, "flat");
+    gtk_widget_set_valign(nn.collapseButton, GTK_ALIGN_CENTER);
+    gtk_widget_set_margin_end(nn.collapseButton, 6);
+    gtk_widget_set_margin_start(nn.collapseButton, 6);
+    gtk_widget_set_visible(nn.collapseButton, FALSE);
+    connect(nn.collapseButton, "clicked", &Gtk4TreeBackend::onCollapseClicked, pn);
+    gtk_widget_set_hexpand(nn.titleLabel, TRUE);
+    nn.titleRow = gtk_overlay_new();
+    gtk_overlay_set_child(GTK_OVERLAY(nn.titleRow), nn.titleLabel);
+    gtk_widget_set_halign(nn.collapseButton, GTK_ALIGN_END);
+    gtk_overlay_add_overlay(GTK_OVERLAY(nn.titleRow), nn.collapseButton);
+
     nn.listBox = gtk_list_box_new();
     gtk_widget_add_css_class(nn.listBox, "navigation-sidebar");
     gtk_list_box_set_selection_mode(GTK_LIST_BOX(nn.listBox), GTK_SELECTION_SINGLE);
@@ -2003,8 +2031,17 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
     gtk_widget_set_vexpand(scroll, TRUE);
 
     nn.panelRoot = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_box_append(GTK_BOX(nn.panelRoot), nn.titleLabel);
+    nn.collapseButtonBottom = gtk_button_new_from_icon_name("pan-end-symbolic");
+    gtk_widget_add_css_class(nn.collapseButtonBottom, "flat");
+    gtk_widget_set_halign(nn.collapseButtonBottom, GTK_ALIGN_CENTER);
+    gtk_widget_set_margin_top(nn.collapseButtonBottom, 10);
+    gtk_widget_set_margin_bottom(nn.collapseButtonBottom, 10);
+    gtk_widget_set_tooltip_text(nn.collapseButtonBottom, "Expand");
+    gtk_widget_set_visible(nn.collapseButtonBottom, FALSE);
+    connect(nn.collapseButtonBottom, "clicked", &Gtk4TreeBackend::onCollapseClicked, pn);
+    gtk_box_append(GTK_BOX(nn.panelRoot), nn.titleRow);
     gtk_box_append(GTK_BOX(nn.panelRoot), scroll);
+    gtk_box_append(GTK_BOX(nn.panelRoot), nn.collapseButtonBottom);
 
     nn.contentArea = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_widget_set_hexpand(nn.contentArea, TRUE);
@@ -2196,11 +2233,25 @@ void Gtk4TreeBackend::applyButton(NativeNode &nn, const n8v_button_options &o) {
   }
 }
 
+constexpr float kCollapsedSidebarWidth = 72.0f;
+constexpr int kCollapsedRowHeight = 60;
+constexpr int kCollapsedImageSize = 40;
+
 void Gtk4TreeBackend::applySidebar(NativeNode &nn, const n8v_sidebar_options &o) {
   const std::string title = o.title ? o.title : "";
+  const bool collapsed = o.collapsed && *o.collapsed;
   gtk_label_set_text(GTK_LABEL(nn.titleLabel), title.c_str());
-  gtk_widget_set_visible(nn.titleLabel, !title.empty());
-  const float width = o.width.mode == N8V_SIZING_FIXED ? o.width.value : 0.0f;
+  gtk_widget_set_visible(nn.titleLabel, !title.empty() && !collapsed);
+  gtk_widget_set_visible(nn.titleRow, !collapsed);
+  gtk_widget_set_visible(nn.collapseButton, o.collapsed != nullptr && !collapsed);
+  gtk_widget_set_visible(nn.collapseButtonBottom, o.collapsed != nullptr && collapsed);
+  gtk_widget_set_tooltip_text(nn.collapseButton, "Collapse");
+  gtk_widget_set_margin_top(nn.titleRow, title.empty() ? 6 : 0);
+  const float width = collapsed ? kCollapsedSidebarWidth : o.width.mode == N8V_SIZING_FIXED ? o.width.value : 0.0f;
+  for (NativeNode *kid : nn.kids)
+    if (kid->kind() == Kind::Page && kid->widget)
+      if (const auto *pageOptions = propsOf<n8v_page_options>(*kid->node)) applyPage(*kid, *pageOptions);
+  syncSidebarSelection(nn);
 #ifdef N8V_HAVE_ADWAITA
   if (ADW_IS_NAVIGATION_SPLIT_VIEW(nn.outer)) {
     if (width > 0.0f) {
@@ -2217,13 +2268,14 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   NativeNode &sidebar = *native(*nn.node->parent);
   const auto *sidebarProps = propsOf<n8v_sidebar_options>(*sidebar.node);
   const bool compact = sidebarProps && sidebarProps->compact;
+  const bool collapsed = sidebarProps && sidebarProps->collapsed && *sidebarProps->collapsed;
 #ifdef N8V_HAVE_ADWAITA
-  const bool wantAdw = !compact;
+  const bool wantAdw = !compact && !collapsed;
 #else
   const bool wantAdw = false;
 #endif
 
-  const bool needsBuild = !nn.widget || nn.adwRow != wantAdw;
+  const bool needsBuild = !nn.widget || nn.adwRow != wantAdw || nn.collapsedRow != collapsed;
   if (needsBuild) {
     GtkWidget *oldRow = nn.outer;
     const bool attached = gtk_widget_get_parent(oldRow) != nullptr;
@@ -2261,12 +2313,35 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
       nn.image = gtk_image_new();
       nn.rowLabel = gtk_label_new("");
       gtk_widget_set_halign(nn.rowLabel, GTK_ALIGN_START);
-      gtk_box_append(GTK_BOX(hbox), nn.notifyBar);
-      gtk_box_append(GTK_BOX(hbox), nn.image);
-      gtk_widget_set_hexpand(nn.rowLabel, TRUE);
-      gtk_box_append(GTK_BOX(hbox), nn.rowLabel);
-      gtk_box_append(GTK_BOX(hbox), nn.badge);
-      gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), hbox);
+      if (collapsed) {
+        gtk_widget_set_margin_start(hbox, 0);
+        gtk_widget_set_margin_end(hbox, 0);
+        gtk_widget_set_halign(hbox, GTK_ALIGN_FILL);
+        gtk_widget_set_hexpand(hbox, TRUE);
+        gtk_widget_set_valign(hbox, GTK_ALIGN_CENTER);
+        gtk_widget_set_halign(nn.image, GTK_ALIGN_CENTER);
+        gtk_widget_set_hexpand(nn.image, TRUE);
+        gtk_widget_set_size_request(row, -1, kCollapsedRowHeight);
+        gtk_widget_add_css_class(row, "n8v-collapsed-row");
+        gtk_box_append(GTK_BOX(hbox), nn.image);
+        gtk_box_append(GTK_BOX(hbox), nn.rowLabel);
+        gtk_box_append(GTK_BOX(hbox), nn.badge);
+        GtkWidget *overlay = gtk_overlay_new();
+        gtk_overlay_set_child(GTK_OVERLAY(overlay), hbox);
+        gtk_widget_set_margin_start(overlay, -8);
+        gtk_widget_set_margin_end(overlay, -8);
+        gtk_widget_set_halign(nn.notifyBar, GTK_ALIGN_START);
+        gtk_widget_set_margin_start(nn.notifyBar, 0);
+        gtk_overlay_add_overlay(GTK_OVERLAY(overlay), nn.notifyBar);
+        gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), overlay);
+      } else {
+        gtk_box_append(GTK_BOX(hbox), nn.notifyBar);
+        gtk_box_append(GTK_BOX(hbox), nn.image);
+        gtk_widget_set_hexpand(nn.rowLabel, TRUE);
+        gtk_box_append(GTK_BOX(hbox), nn.rowLabel);
+        gtk_box_append(GTK_BOX(hbox), nn.badge);
+        gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), hbox);
+      }
     }
     gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(row), TRUE);
     g_object_set_data(G_OBJECT(row), "n8v-node", &nn);
@@ -2275,6 +2350,7 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
     nn.outer = row;
     nn.widget = row;
     nn.adwRow = wantAdw;
+    nn.collapsedRow = collapsed;
     nn.textureSource = nullptr;
     if (attached) gtk_list_box_insert(GTK_LIST_BOX(sidebar.listBox), row, position);
     g_object_unref(oldRow);
@@ -2283,16 +2359,20 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
 
   const std::string name = o.name ? o.name : "";
 #ifdef N8V_HAVE_ADWAITA
-  if (nn.adwRow) adw_preferences_row_set_title(ADW_PREFERENCES_ROW(nn.outer), name.c_str());
+  if (nn.adwRow) adw_preferences_row_set_title(ADW_PREFERENCES_ROW(nn.outer), collapsed ? "" : name.c_str());
 #endif
-  if (nn.rowLabel) gtk_label_set_text(GTK_LABEL(nn.rowLabel), name.c_str());
+  if (nn.rowLabel) {
+    gtk_label_set_text(GTK_LABEL(nn.rowLabel), name.c_str());
+    gtk_widget_set_visible(nn.rowLabel, !collapsed);
+  }
+  gtk_widget_set_tooltip_text(nn.outer, collapsed ? name.c_str() : nullptr);
 
   const bool hasIcon = o.icon && *o.icon;
   const bool hasImage = !hasIcon && o.image && *o.image;
   gtk_widget_set_visible(nn.image, hasIcon || hasImage);
   if (hasIcon) setIconImage(nn, nn.image, o.icon, kDefaultIconSize);
   if (hasImage) {
-    constexpr int kPageImageSize = 28;
+    const int kPageImageSize = collapsed ? kCollapsedImageSize : 28;
     n8v_image_options imageOptions{};
     imageOptions.source_kind = N8V_IMAGE_SOURCE_PATH;
     imageOptions.path = o.image;
@@ -2333,7 +2413,7 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   else gtk_widget_remove_css_class(nameWidget, notifyLabelClass.c_str());
 
   const bool hasBadge = o.badge && *o.badge;
-  gtk_widget_set_visible(nn.badge, hasBadge);
+  gtk_widget_set_visible(nn.badge, hasBadge && !collapsed);
   gtk_label_set_text(GTK_LABEL(nn.badge), hasBadge ? o.badge : "");
   static const char *const colorClasses[] =
     {nullptr, "n8v-badge-red", "n8v-badge-orange", "n8v-badge-yellow", "n8v-badge-green", "n8v-badge-blue", "n8v-badge-purple", "n8v-badge-pink"};

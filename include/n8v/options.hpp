@@ -225,6 +225,13 @@ struct SidebarOptions {
   float maxWidth = 0.0f;
   /** Only affects backends with a native sidebar list (e.g. GTK4/Adwaita). */
   bool compact = false;
+  /**
+   * Makes the sidebar collapsible: an arrow button beside the title folds it to a narrow strip showing only each page's icon or
+   * image (names become tooltips, badges are hidden). The initial state is read from this variable and every toggle is written
+   * back to it, so it can be saved and restored. Backends with a native sidebar list (GTK4, Qt) only.
+   */
+  bool *collapsed = nullptr;
+  std::function<void(bool)> onCollapse = nullptr;
 };
 
 /** What badges called their named colors; they are the same as any other theme color now. */

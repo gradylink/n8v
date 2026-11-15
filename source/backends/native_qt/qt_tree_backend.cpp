@@ -68,6 +68,7 @@
 #include <QSizePolicy>
 #include <QSlider>
 #include <QStyle>
+#include <QStyledItemDelegate>
 #include <QTextDocument>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -319,6 +320,31 @@ protected:
     }
     QPainter painter(this);
     painter.fillRect(0, height() / 2, width(), 1, line);
+  }
+};
+
+class N8VCollapseButton final : public QPushButton {
+public:
+  using QPushButton::QPushButton;
+  std::function<void()> onClick;
+
+protected:
+  void mouseReleaseEvent(QMouseEvent *event) override {
+    const bool wasDown = isDown();
+    QPushButton::mouseReleaseEvent(event);
+    if (wasDown && onClick && rect().contains(event->position().toPoint())) onClick();
+  }
+};
+
+class N8VSidebarDelegate final : public QStyledItemDelegate {
+public:
+  using QStyledItemDelegate::QStyledItemDelegate;
+  bool centered = false;
+
+protected:
+  void initStyleOption(QStyleOptionViewItem *option, const QModelIndex &index) const override {
+    QStyledItemDelegate::initStyleOption(option, index);
+    if (centered) option->decorationAlignment = Qt::AlignCenter;
   }
 };
 
@@ -615,6 +641,11 @@ struct NativeNode {
   // sidebar
   QWidget *panelRoot = nullptr;
   QLabel *titleLabel = nullptr;
+  N8VCollapseButton *collapseButton = nullptr;
+  N8VCollapseButton *collapseButtonBottom = nullptr;
+  N8VSidebarDelegate *sidebarDelegate = nullptr;
+  QWidget *titleRow = nullptr;
+  QWidget *titleSpacer = nullptr;
   QListWidget *list = nullptr;
   QWidget *contentArea = nullptr;
   QBoxLayout *contentLayout = nullptr;
@@ -1813,8 +1844,39 @@ void QtTreeBackend::build(NativeNode &nn) {
     nn.list->setFrameShape(QFrame::NoFrame);
     nn.list->setSelectionMode(QAbstractItemView::SingleSelection);
     nn.list->setIconSize(QSize(kDefaultIconSize, kDefaultIconSize));
-    panelLayout->addWidget(nn.titleLabel);
+    nn.collapseButton = new N8VCollapseButton();
+    nn.collapseButton->setFlat(true);
+    nn.collapseButton->setFixedSize(28, 28);
+    nn.collapseButton->setVisible(false);
+    nn.collapseButton->onClick = [this, node = &pn] {
+      const auto *o = propsOf<n8v_sidebar_options>(*node);
+      NativeNode *self = native(*node);
+      if (!o || !o->collapsed || !self) return;
+      *o->collapsed = !*o->collapsed;
+      if (o->on_collapse) o->on_collapse(*o->collapsed, o->on_collapse_userdata);
+      applySidebar(*self, *o);
+    };
+    nn.collapseButtonBottom = new N8VCollapseButton();
+    nn.collapseButtonBottom->setFlat(true);
+    nn.collapseButtonBottom->setFixedSize(28, 28);
+    nn.collapseButtonBottom->setVisible(false);
+    nn.collapseButtonBottom->onClick = nn.collapseButton->onClick;
+    nn.titleRow = new QWidget();
+    auto *titleLayout = new QHBoxLayout(nn.titleRow);
+    titleLayout->setContentsMargins(0, 0, 0, 0);
+    titleLayout->setSpacing(0);
+    nn.titleSpacer = new QWidget(); // as wide as the button, so the title stays centred
+    nn.titleSpacer->setFixedWidth(28);
+    titleLayout->addWidget(nn.titleSpacer);
+    titleLayout->addWidget(nn.titleLabel, 1);
+    titleLayout->addWidget(nn.collapseButton, 0, Qt::AlignVCenter);
+    nn.sidebarDelegate = new N8VSidebarDelegate(nn.list);
+    nn.list->setItemDelegate(nn.sidebarDelegate);
+    panelLayout->addWidget(nn.titleRow);
     panelLayout->addWidget(nn.list, 1);
+    panelLayout->addSpacing(10);
+    panelLayout->addWidget(nn.collapseButtonBottom, 0, Qt::AlignHCenter);
+    panelLayout->addSpacing(10);
 
     nn.contentArea = new QWidget();
     nn.contentLayout = new QVBoxLayout(nn.contentArea);
@@ -1952,9 +2014,25 @@ void QtTreeBackend::applyText(NativeNode &nn, const n8v_text_options &original) 
 
 void QtTreeBackend::applySidebar(NativeNode &nn, const n8v_sidebar_options &o) {
   const std::string title = o.title ? o.title : "";
+  const bool collapsed = o.collapsed && *o.collapsed;
   nn.titleLabel->setText(qstr(title));
-  nn.titleLabel->setVisible(!title.empty());
-  const int width = o.width.mode == N8V_SIZING_FIXED ? (int)o.width.value : 0;
+  nn.titleLabel->setVisible(!title.empty() && !collapsed);
+  nn.titleRow->setVisible(!collapsed);
+  nn.titleSpacer->setVisible(o.collapsed != nullptr);
+  nn.collapseButton->setVisible(o.collapsed != nullptr && !collapsed);
+  nn.collapseButtonBottom->setVisible(o.collapsed != nullptr && collapsed);
+  nn.collapseButton->setIcon(iconFor("chevron-left", kDefaultIconSize, nn.collapseButton, n8v::Color{0, 0, 0, 0}));
+  nn.collapseButton->setToolTip("Collapse");
+  nn.collapseButtonBottom->setIcon(iconFor("chevron-right", kDefaultIconSize, nn.collapseButtonBottom, n8v::Color{0, 0, 0, 0}));
+  nn.collapseButtonBottom->setToolTip("Expand");
+  nn.titleRow->layout()->setAlignment(nn.collapseButton, Qt::AlignRight | Qt::AlignVCenter);
+  static_cast<QBoxLayout *>(nn.titleRow->layout())->setContentsMargins(0, title.empty() ? 6 : 0, 0, 0);
+  nn.sidebarDelegate->centered = collapsed;
+  nn.list->viewport()->update();
+  const int width = collapsed ? 72 : o.width.mode == N8V_SIZING_FIXED ? (int)o.width.value : 0;
+  for (NativeNode *kid : nn.kids)
+    if (kid->kind() == Kind::Page)
+      if (const auto *pageOptions = propsOf<n8v_page_options>(*kid->node)) applyPage(*kid, *pageOptions);
   if (width > 0) nn.panelRoot->setFixedWidth(width);
   else {
     nn.panelRoot->setMinimumWidth(0);
@@ -1969,9 +2047,39 @@ void QtTreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   NativeNode *sidebar = nn.node->parent ? native(*nn.node->parent) : nullptr;
   const auto *sidebarProps = sidebar && sidebar->node ? propsOf<n8v_sidebar_options>(*sidebar->node) : nullptr;
   const bool compact = sidebarProps && sidebarProps->compact;
-  nn.item->setText(qstr(n8v::detail::pageLabelWithBadges(o.name ? o.name : "", o.notify, o.badge)));
-  nn.item->setSizeHint(QSize(0, compact ? 26 : 38));
-  if (o.icon && *o.icon) {
+  const bool collapsed = sidebarProps && sidebarProps->collapsed && *sidebarProps->collapsed;
+  const QString shown = qstr(n8v::detail::pageLabelWithBadges(o.name ? o.name : "", o.notify, o.badge));
+  nn.item->setText(collapsed ? QString() : shown);
+  nn.item->setToolTip(collapsed ? shown : QString());
+  nn.item->setSizeHint(QSize(0, collapsed ? 60 : compact ? 26 : 38));
+  if (o.image && *o.image && !(o.icon && *o.icon)) {
+    const int kPageImageSize = collapsed ? 40 : 28;
+    n8v_image_options imageOptions{};
+    imageOptions.source_kind = N8V_IMAGE_SOURCE_PATH;
+    imageOptions.path = o.image;
+    const DecodedImage *decoded = getOrFitImageInSquare(getOrDecodeImage(imageOptions), kPageImageSize);
+    if (decoded) {
+      CornerRadius radius;
+      switch (o.image_rounding.mode) {
+      case N8V_ROUNDING_STYLE_DEFAULT:
+        radius = activePaint().image().cornerRadius;
+        break;
+      case N8V_ROUNDING_NONE:
+        radius = {};
+        break;
+      case N8V_ROUNDING_FIXED:
+        radius = {o.image_rounding.radius.top_left, o.image_rounding.radius.top_right, o.image_rounding.radius.bottom_left, o.image_rounding.radius.bottom_right};
+        break;
+      }
+      const DecodedImage *baked = getOrBakeRoundedImage(decoded, decoded->width, decoded->height, radius.topLeft, radius.topRight, radius.bottomLeft, radius.bottomRight);
+      const std::string key = std::string("page-image:") + o.image + "@" + std::to_string(kPageImageSize) + "@" + std::to_string(reinterpret_cast<uintptr_t>(baked));
+      if (nn.iconKey != key) {
+        nn.item->setIcon(QIcon(pixmapFromDecoded(baked)));
+        nn.iconKey = key;
+        if (sidebar && sidebar->list) sidebar->list->setIconSize(QSize(kPageImageSize, kPageImageSize));
+      }
+    }
+  } else if (o.icon && *o.icon) {
     if (nn.iconKey != o.icon) {
       nn.item->setIcon(iconFor(o.icon, kDefaultIconSize, sidebar && sidebar->list ? static_cast<QWidget *>(sidebar->list) : window_, n8v::Color{0, 0, 0, 0}));
       nn.iconKey = o.icon;

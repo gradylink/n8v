@@ -64,6 +64,9 @@ template <typename V> void visitFields(n8v_sidebar_options &o, V &v) {
   v.num(o.min_width);
   v.num(o.max_width);
   v.num(o.compact);
+  v.ptr(o.collapsed);
+  v.ptr(o.on_collapse);
+  v.ptr(o.on_collapse_userdata);
 }
 
 template <typename V> void visitFields(n8v_page_options &o, V &v) {
