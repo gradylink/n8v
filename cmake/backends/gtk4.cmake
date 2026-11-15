@@ -64,6 +64,9 @@ if(N8V_BACKEND_GTK4)
         g_main_context_default
         g_main_context_iteration
         g_main_context_pending
+        g_main_context_wakeup
+        g_timeout_add
+        g_source_remove
         g_markup_escape_text
         g_free
         g_free_sized

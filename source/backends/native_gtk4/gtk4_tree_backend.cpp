@@ -306,9 +306,27 @@ public:
 
   bool pumpEvents() override {
     GMainContext *context = g_main_context_default();
-    while (g_main_context_pending(context)) g_main_context_iteration(context, FALSE);
+    bool activity = false;
+    if (!g_main_context_pending(context)) {
+      const bool busy = settleFrames_ > 0 || !pendingScrolls_.empty() || !pendingFocus_.empty();
+      bool timedOut = false;
+      const guint timer = g_timeout_add(busy ? kBusyFrameMs : kIdleFrameMs, onIdleTimeout, &timedOut);
+      g_main_context_iteration(context, TRUE);
+      if (!timedOut) {
+        g_source_remove(timer);
+        activity = true;
+      }
+    }
+    while (g_main_context_pending(context)) {
+      g_main_context_iteration(context, FALSE);
+      activity = true;
+    }
+    if (activity) settleFrames_ = kSettleFrames;
+    else if (settleFrames_ > 0) --settleFrames_;
     return !closeRequested_;
   }
+
+  void wake() override { g_main_context_wakeup(g_main_context_default()); }
 
   bool pointerDown() const override { return false; }
   Clay_Dimensions windowSize() const override { return {(float)gtk_widget_get_width(window_), (float)gtk_widget_get_height(window_)}; }
@@ -887,6 +905,13 @@ private:
     std::string id;
     int framesWaited;
   };
+  static constexpr guint kBusyFrameMs = 16, kIdleFrameMs = 250;
+  static constexpr int kSettleFrames = 4;
+  static gboolean onIdleTimeout(gpointer timedOut) {
+    *static_cast<bool *>(timedOut) = true;
+    return G_SOURCE_REMOVE;
+  }
+  int settleFrames_ = 0;
   std::vector<PendingFocus> pendingFocus_;
   std::unordered_set<std::string> hovered_;
   std::vector<PendingScroll> pendingScrolls_;

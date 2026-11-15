@@ -39,8 +39,13 @@ struct Backend {
    */
   virtual bool initialize(int width, int height, std::string_view title) = 0;
 
-  /** @return Whether the window should stay open. */
+  /**
+   * @return Whether the window should stay open.
+   */
   virtual bool pumpEvents() = 0;
+
+  /** Makes a `pumpEvents` that is waiting return promptly. Safe to call from any thread. */
+  virtual void wake() {}
 
   /** @return Whether the primary pointer button is held this frame. */
   virtual bool pointerDown() const = 0;

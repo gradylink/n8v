@@ -27,6 +27,9 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 
 #include <QAbstractTextDocumentLayout>
 #include <QApplication>
@@ -198,6 +201,58 @@ struct ChildContext {
   Qt::Orientation orientation = Qt::Vertical;
   n8v_align hAlign = N8V_ALIGN_START;
   n8v_align vAlign = N8V_ALIGN_START;
+};
+
+class IdleTicker {
+public:
+  explicit IdleTicker(std::function<void()> onTimeout) : onTimeout_(std::move(onTimeout)), thread_([this] { run(); }) {}
+  ~IdleTicker() {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      quit_ = true;
+    }
+    cv_.notify_all();
+    thread_.join();
+  }
+
+  void arm(int ms) {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      deadline_ = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
+      armed_ = true;
+      fired_ = false;
+    }
+    cv_.notify_all();
+  }
+
+  bool disarm() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    armed_ = false;
+    return fired_;
+  }
+
+private:
+  void run() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    while (!quit_) {
+      if (!armed_) {
+        cv_.wait(lock);
+      } else if (cv_.wait_until(lock, deadline_) == std::cv_status::timeout && armed_ && std::chrono::steady_clock::now() >= deadline_) {
+        armed_ = false;
+        fired_ = true;
+        lock.unlock();
+        onTimeout_();
+        lock.lock();
+      }
+    }
+  }
+
+  std::function<void()> onTimeout_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  std::chrono::steady_clock::time_point deadline_;
+  bool armed_ = false, fired_ = false, quit_ = false;
+  std::thread thread_;
 };
 
 class N8VButton final : public QPushButton {
@@ -704,6 +759,7 @@ public:
     static int argc = 0;
     static char *argv[] = {nullptr};
     app_ = std::make_unique<QApplication>(argc, argv);
+    idleTicker_ = std::make_unique<IdleTicker>([this] { wake(); });
     installEmojiFallback();
 
     window_ = new N8VRootWidget();
@@ -727,8 +783,19 @@ public:
   }
 
   bool pumpEvents() override {
+    const bool busy = settleFrames_ > 0 || !pendingScrolls_.empty() || !pendingFocus_.empty();
+    idleTicker_->arm(busy ? kBusyFrameMs : kIdleFrameMs);
+    QCoreApplication::processEvents(QEventLoop::WaitForMoreEvents);
+    const bool timedOut = idleTicker_->disarm();
     QCoreApplication::processEvents(QEventLoop::AllEvents);
+    bool activity = !timedOut;
+    if (activity) settleFrames_ = kSettleFrames;
+    else if (settleFrames_ > 0) --settleFrames_;
     return window_->isVisible();
+  }
+
+  void wake() override {
+    if (app_) QMetaObject::invokeMethod(app_.get(), [] {}, Qt::QueuedConnection);
   }
 
   bool pointerDown() const override { return false; }
@@ -975,6 +1042,9 @@ private:
   QIcon iconFor(const char *name, int pixelSize, QWidget *reference, n8v::Color tint);
 
   std::unique_ptr<QApplication> app_;
+  std::unique_ptr<IdleTicker> idleTicker_;
+  static constexpr int kBusyFrameMs = 16, kIdleFrameMs = 250, kSettleFrames = 4;
+  int settleFrames_ = 0;
   N8VRootWidget *window_ = nullptr;
   QVBoxLayout *rootLayout_ = nullptr;
   NativeNode root_;

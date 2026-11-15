@@ -1170,6 +1170,8 @@ inline bool initialize(int width, int height, std::string_view title) {
 
 inline bool pumpEvents() { return n8v_pump_events(); }
 
+inline void wake() { n8v_wake(); }
+
 inline void shutdown() { n8v_shutdown(); }
 
 inline void setStyleFamily(StyleFamily family) { n8v_set_style_family(detail::toC(family)); }

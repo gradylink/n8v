@@ -692,6 +692,8 @@ typedef struct n8v_custom_paint_vtable {
 
 N8V_API bool n8v_initialize(int width, int height, const char *title);
 N8V_API bool n8v_pump_events(void);
+
+N8V_API void n8v_wake(void);
 N8V_API void n8v_shutdown(void);
 
 N8V_API void n8v_set_style_family(n8v_style_family family);

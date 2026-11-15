@@ -62,6 +62,8 @@ bool n8v_pump_events(void) {
   return keepOpen;
 }
 
+void n8v_wake(void) { n8v::activeBackend().wake(); }
+
 void n8v_show_file_dialog(n8v_file_dialog_options options) {
   using namespace n8v::detail;
   FileDialogRequest request;
