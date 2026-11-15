@@ -2014,7 +2014,6 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
     gtk_widget_set_margin_start(nn.collapseButton, 6);
     gtk_widget_set_visible(nn.collapseButton, FALSE);
     connect(nn.collapseButton, "clicked", &Gtk4TreeBackend::onCollapseClicked, pn);
-    gtk_widget_set_hexpand(nn.titleLabel, TRUE);
     nn.titleRow = gtk_overlay_new();
     gtk_overlay_set_child(GTK_OVERLAY(nn.titleRow), nn.titleLabel);
     gtk_widget_set_halign(nn.collapseButton, GTK_ALIGN_END);
