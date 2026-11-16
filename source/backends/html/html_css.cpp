@@ -268,9 +268,38 @@ std::string panelCss(const Paint &paint, PanelRole role) {
   return css;
 }
 
+std::string sidebarRowCss(const Paint &paint, bool selected, bool collapsed) {
+  const SidebarPaint rows = paint.sidebar();
+  auto make = [&](bool hovered, bool pressed) {
+    ButtonPaint bp = paint.button(selected ? ButtonStyle::Primary : ButtonStyle::Secondary, hovered, pressed);
+    bp.padding = paint.button(ButtonStyle::Secondary, false, false).padding;
+    const Padding &rp = rows.rowPadding;
+    if (rp.left || rp.right || rp.top || rp.bottom) bp.padding = rp;
+    const Color background = selected && rows.rowSelectedBackground.a > 0.0f ? rows.rowSelectedBackground
+                             : hovered && rows.rowHoverBackground.a > 0.0f   ? rows.rowHoverBackground
+                                                                             : rows.rowBackground;
+    if (rows.rowSelectedBackground.a > 0.0f || rows.rowHoverBackground.a > 0.0f || rows.rowBackground.a > 0.0f) bp.background = background;
+    const Color text = selected && rows.rowSelectedTextColor.a > 0.0f ? rows.rowSelectedTextColor : rows.rowTextColor;
+    if (text.a > 0.0f) bp.textColor = text;
+    if (rows.rowCornerRadius > 0.0f) bp.cornerRadius = {rows.rowCornerRadius, rows.rowCornerRadius, rows.rowCornerRadius, rows.rowCornerRadius};
+    return bp;
+  };
+  const ButtonPaint normal = make(false, false);
+  const ButtonPaint hover = make(true, false);
+  const ButtonPaint pressed = make(true, true);
+  std::string css = "&{box-sizing:border-box;appearance:none;-webkit-appearance:none;border:0;margin:0;cursor:pointer;display:flex;align-items:center;justify-content:" +
+                    std::string(collapsed ? "center" : "flex-start") + ";gap:" + cssNumber(normal.fontSize / 2.0f) + "px;width:100%;flex:none;text-align:left;" +
+                    (collapsed ? "padding:0;height:60px;" : "padding:" + cssPadding(normal.padding) + ";") + fontDecl(normal.font, normal.fontSize) + buttonState(normal) +
+                    transition(normal.transitionSeconds, "background-color,color,border-radius") + "}\n";
+  css += "&:hover{" + buttonState(hover) + "}\n&:active{" + buttonState(pressed) + "}\n";
+  css += "&:focus-visible{outline:2px solid " + cssColor(Color{normal.textColor.r, normal.textColor.g, normal.textColor.b, 120}) + ";outline-offset:-2px}\n";
+  css += "& img{display:block;flex:none}\n& img[hidden],& span[hidden]{display:none}\n& span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n";
+  return css;
+}
+
 std::string sidebarListCss(const Paint &paint) {
   const SidebarPaint p = paint.sidebar();
-  return "&{box-sizing:border-box;background:" + cssColor(p.background) + ";border-left:" + cssNumber(p.borderWidth) + "px solid " + cssColor(p.borderColor) +
+  return "&{box-sizing:border-box;background:" + cssColor(p.background) + ";border-right:" + cssNumber(p.borderWidth) + "px solid " + cssColor(p.borderColor) +
          ";border-radius:" + cssRadius(p.cornerRadius) + ";padding:" + cssPadding(p.padding) + ";gap:" + cssNumber(p.rowGap) + "px;overflow-y:auto;overflow-x:hidden}\n";
 }
 

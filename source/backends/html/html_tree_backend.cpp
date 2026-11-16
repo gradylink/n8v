@@ -109,11 +109,15 @@ struct NativeNode {
   // sidebar
   val listEl = val::undefined();
   val titleEl = val::undefined();
+  val titleText = val::undefined();
+  val collapseTop = val::undefined();
+  val collapseBottom = val::undefined();
   val contentArea = val::undefined();
 
   bool floating = false;
   bool parentIsRow = false;
   bool stickyBottom = false;
+  double lastClientHeight = -1.0;
   bool stickyAtBottom = true;
   double lastScrollHeight = 0.0;
   std::string lastItemsKey;
@@ -446,6 +450,17 @@ public:
         }
       }
       break;
+    case Kind::Sidebar:
+      if (type == "click") {
+        const auto *o = propsOf<n8v_sidebar_options>(node);
+        if (!o || !o->collapsed) break;
+        *o->collapsed = !*o->collapsed;
+        if (o->on_collapse) o->on_collapse(*o->collapsed, o->on_collapse_userdata);
+        apply(nn);
+        for (NativeNode *kid : nn.kids)
+          if (kid->kind() == Kind::Page) apply(*kid);
+      }
+      break;
     case Kind::Checkbox:
     case Kind::Toggle:
       if (type == "change") dispatch::setChecked(node, value == "1");
@@ -496,7 +511,8 @@ private:
   void installRootStyle() {
     dynamicText_.call<void>("appendData", css::expand(css::textCss(activePaint(), {}), "#n8v-root") + "\n");
     const Color window = activePaint().windowBackground();
-    dynamicText_.call<void>("appendData", "html,body,#n8v-root{background:" + css::cssColor(window) + "}\n");
+    const bool dark = (0.2126f * window.r + 0.7152f * window.g + 0.0722f * window.b) < 128.0f;
+    dynamicText_.call<void>("appendData", "html,body,#n8v-root{background:" + css::cssColor(window) + ";color-scheme:" + (dark ? "dark" : "light") + "}\n");
   }
 
   void restyleAll() {
@@ -602,7 +618,10 @@ std::string HtmlTreeBackend::containerCss(NativeNode &nn) {
       },
       [&](const n8v_floating_options &o) {
         out += "display:flex;flex-direction:column;align-items:flex-start;";
-        if (o.opaque) out += "background:Canvas;";
+        if (o.opaque) {
+          out += "background:" + css::cssColor(activePaint().windowBackground()) +
+                 ";border-radius:" + css::cssRadius(activePaint().panel(PanelRole::Card, false, false).cornerRadius) + ";";
+        }
       },
       [&](const n8v_sidebar_options &) { out += "display:flex;flex-direction:row;min-width:0;min-height:0;"; },
       [](const auto &) {},
@@ -702,7 +721,7 @@ size_t HtmlTreeBackend::pageIndex(NativeNode &sidebar, NativeNode &page) const {
 
 void HtmlTreeBackend::attach(NativeNode &parent, NativeNode &child, size_t index) {
   if (parent.kind() == Kind::Sidebar && (child.kind() == Kind::Page || isSidebarDecoration(child.kind()))) {
-    val reference = val::null();
+    val reference = parent.collapseBottom;
     for (size_t i = index + 1; i < parent.kids.size(); ++i) {
       if (parent.kids[i]->kind() == Kind::Page || isSidebarDecoration(parent.kids[i]->kind())) {
         reference = parent.kids[i]->outer;
@@ -759,9 +778,12 @@ void HtmlTreeBackend::applyStickyBottom() {
     if (!nn->stickyBottom) continue;
     val el = nn->outer;
     const double height = el["scrollHeight"].as<double>();
-    if (height != nn->lastScrollHeight) {
+    const double viewport = el["clientHeight"].as<double>();
+    // Content growing or the viewport shrinking (a taller composer) both move the bottom edge.
+    if (height != nn->lastScrollHeight || viewport != nn->lastClientHeight) {
       if (nn->stickyAtBottom) el.set("scrollTop", height);
       nn->lastScrollHeight = height;
+      nn->lastClientHeight = viewport;
     }
     nn->stickyAtBottom = el["scrollTop"].as<double>() + el["clientHeight"].as<double>() >= height - kStickyBottomEpsilonPx;
   }
@@ -904,8 +926,14 @@ void HtmlTreeBackend::build(NativeNode &nn) {
     nn.outer = createEl("div");
     nn.listEl = createEl("nav");
     nn.titleEl = createEl("div");
+    nn.titleText = createEl("span");
+    nn.collapseTop = createEl("button");
+    nn.collapseBottom = createEl("button");
+    nn.titleEl.call<void>("appendChild", nn.titleText);
+    nn.titleEl.call<void>("appendChild", nn.collapseTop);
     nn.contentArea = createEl("div");
     nn.listEl.call<void>("appendChild", nn.titleEl);
+    nn.listEl.call<void>("appendChild", nn.collapseBottom);
     nn.outer.call<void>("appendChild", nn.listEl);
     nn.outer.call<void>("appendChild", nn.contentArea);
     nn.content = nn.contentArea;
@@ -980,20 +1008,30 @@ void HtmlTreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   }
   const bool isSelected = sidebar && (int)pageIndex(*const_cast<NativeNode *>(sidebar), nn) == selected;
   const ButtonStyle style = isSelected ? ButtonStyle::Primary : ButtonStyle::Secondary;
-  setClass(nn.outer, classFor(css::buttonCss(paint, style)));
-  setCss(nn.outer, "width:100%;justify-content:flex-start;flex:none;");
+  bool collapsed = false;
+  if (sidebar && sidebar->node) {
+    if (const auto *so = propsOf<n8v_sidebar_options>(*sidebar->node)) collapsed = so->collapsed && *so->collapsed;
+  }
+  setClass(nn.outer, classFor(css::sidebarRowCss(paint, isSelected, collapsed)));
   bindEvents(nn, nn.outer, true);
-  nn.label.set("textContent", pageLabelWithBadges(o.name ? o.name : "", o.notify, o.badge));
+  const std::string name = o.name ? o.name : "";
+  nn.label.set("textContent", pageLabelWithBadges(name, o.notify, o.badge));
+  nn.label.set("hidden", collapsed);
+  if (collapsed) setAttr(nn.outer, "title", name);
+  else nn.outer.call<void>("removeAttribute", std::string("title"));
   const bool hasIcon = o.icon && *o.icon;
   const bool hasImage = !hasIcon && o.image && *o.image;
   const ButtonPaint bp = paint.button(style, false, false);
   if (hasIcon) {
-    setImage(nn.image, getOrDecodeIcon(o.icon, bp.fontSize, bp.textColor));
+    const int glyph = collapsed ? 24 : bp.fontSize;
+    setImage(nn.image, getOrDecodeIcon(o.icon, glyph, bp.textColor));
+    nn.image["style"].set("width", std::to_string(glyph) + "px");
+    nn.image["style"].set("height", std::to_string(glyph) + "px");
   } else if (hasImage) {
     n8v_image_options imageOptions = {};
     imageOptions.source_kind = N8V_IMAGE_SOURCE_PATH;
     imageOptions.path = o.image;
-    const int box = bp.fontSize * 2;
+    const int box = collapsed ? 40 : bp.fontSize * 2;
     setImage(nn.image, getOrFitImageInSquare(getOrDecodeImage(imageOptions), box));
     nn.image["style"].set("width", std::to_string(box) + "px");
     nn.image["style"].set("height", std::to_string(box) + "px");
@@ -1031,16 +1069,24 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
       [&](const n8v_flex_options &o) { nn.stickyBottom = o.stick_to_bottom && o.clip_vertical; },
       [&](const n8v_panel_options &o) {
         std::string css = css::panelCss(paint, (o.role == N8V_PANEL_ROLE_LIST_ITEM ? PanelRole::ListItem : PanelRole::Card));
-        if (o.has_padding) css += "&{padding:" + std::to_string(o.padding.top) + "px " + std::to_string(o.padding.right) + "px " + std::to_string(o.padding.bottom) + "px " + std::to_string(o.padding.left) + "px}\n";
+        if (o.has_padding)
+          css += "&{padding:" + std::to_string(o.padding.top) + "px " + std::to_string(o.padding.right) + "px " + std::to_string(o.padding.bottom) + "px " +
+                 std::to_string(o.padding.left) + "px}\n";
         setClass(nn.outer, classFor(css));
       },
       [&](const n8v_floating_options &) {},
       [&](const n8v_sidebar_options &o) {
+        const bool collapsible = o.collapsed != nullptr;
+        const bool collapsed = collapsible && *o.collapsed;
         float listWidth = o.width.mode == N8V_SIZING_FIXED ? o.width.value : 0.0f;
         std::string listCss = "display:flex;flex-direction:column;align-items:stretch;flex:none;min-height:0;";
-        if (listWidth > 0.0f) listCss += "width:" + css::cssNumber(listWidth) + "px;";
-        if (o.min_width > 0.0f) listCss += "min-width:" + css::cssNumber(o.min_width) + "px;";
-        if (o.max_width > 0.0f) listCss += "max-width:" + css::cssNumber(o.max_width) + "px;";
+        if (collapsed) {
+          listCss += "width:72px;min-width:72px;max-width:72px;";
+        } else {
+          if (listWidth > 0.0f) listCss += "width:" + css::cssNumber(listWidth) + "px;";
+          if (o.min_width > 0.0f) listCss += "min-width:" + css::cssNumber(o.min_width) + "px;";
+          if (o.max_width > 0.0f) listCss += "max-width:" + css::cssNumber(o.max_width) + "px;";
+        }
         setCss(nn.listEl, listCss);
         setClass(nn.listEl, classFor(css::sidebarListCss(paint)));
         setCss(nn.contentArea, "flex:1 1 0%;min-width:0;min-height:0;display:flex;flex-direction:column;align-items:stretch;position:relative;");
@@ -1048,12 +1094,24 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
         TextOptions titleOptions;
         titleOptions.bold = true;
         const TextPaint tp = paint.text(titleOptions);
-        nn.titleEl.set("textContent", title);
+        nn.titleText.set("textContent", title);
         setCss(
           nn.titleEl,
-          std::string("display:") + (title.empty() ? "none" : "block") + ";text-align:center;font-weight:bold;color:" + css::cssColor(tp.color) +
-            ";font-family:" + css::cssFontFamily(tp.font) + ";font-size:" + css::cssNumber(tp.fontSize) + "px;padding:4px 0;flex:none;"
+          std::string("display:") + ((title.empty() && !collapsible) || collapsed ? "none" : "flex") +
+            ";position:relative;align-items:center;justify-content:center;font-weight:bold;color:" + css::cssColor(tp.color) + ";font-family:" + css::cssFontFamily(tp.font) +
+            ";font-size:" + css::cssNumber(tp.fontSize) + "px;padding:4px 28px;flex:none;"
         );
+        const std::string arrowCss = "appearance:none;-webkit-appearance:none;border:0;background:transparent;cursor:pointer;width:28px;height:28px;flex:none;padding:0;font-"
+                                     "size:20px;line-height:1;color:" +
+                                     css::cssColor(tp.color) + ";opacity:.75;border-radius:6px;";
+        setCss(nn.collapseTop, arrowCss + "position:absolute;right:0;top:50%;transform:translateY(-50%);display:" + (collapsible && !collapsed ? "block" : "none") + ";");
+        setCss(nn.collapseBottom, arrowCss + "align-self:center;margin-top:6px;display:" + (collapsed ? "block" : "none") + ";");
+        nn.collapseTop.set("textContent", std::string("\xe2\x80\xb9"));
+        nn.collapseBottom.set("textContent", std::string("\xe2\x80\xba"));
+        setAttr(nn.collapseTop, "title", "Collapse");
+        setAttr(nn.collapseBottom, "title", "Expand");
+        bindEvents(nn, nn.collapseTop, true);
+        bindEvents(nn, nn.collapseBottom, true);
       },
       [&](const n8v_page_options &o) { applyPage(nn, o); },
       [&](const n8v_button_options &o) { applyButton(nn, o); },

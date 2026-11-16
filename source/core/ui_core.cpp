@@ -60,6 +60,7 @@ std::vector<std::string> stickyBottomContainerIds;
 struct StickyBottomState {
   float lastMaxScrollY = 0.0f;
   float lastContentHeight = -1.0f;
+  float lastContainerHeight = -1.0f;
 };
 std::unordered_map<std::string, StickyBottomState> stickyBottomState;
 constexpr float kStickyBottomEpsilonPx = 24.0f;
@@ -89,13 +90,14 @@ void resolvePendingScrollRequests() {
     if (!scrollData.found) continue;
     float maxScrollY = std::max(scrollData.contentDimensions.height - scrollData.scrollContainerDimensions.height, 0.0f);
     StickyBottomState &state = stickyBottomState[containerId];
-    if (scrollData.contentDimensions.height != state.lastContentHeight) {
+    if (scrollData.contentDimensions.height != state.lastContentHeight || scrollData.scrollContainerDimensions.height != state.lastContainerHeight) {
       float currentY = -scrollData.scrollPosition->y;
       bool wasAtBottom = currentY >= state.lastMaxScrollY - kStickyBottomEpsilonPx;
       if (wasAtBottom) {
         applyScrollY(backend, cid.id, maxScrollY, scrollData);
       }
       state.lastContentHeight = scrollData.contentDimensions.height;
+      state.lastContainerHeight = scrollData.scrollContainerDimensions.height;
     }
     state.lastMaxScrollY = maxScrollY;
   }
