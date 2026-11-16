@@ -534,13 +534,16 @@ foreach(_n8v_target ${_n8v_targets})
   endif()
 
   if(N8V_HAVE_HTML)
+    if(NOT N8V_HTML_SHELL)
+      set(N8V_HTML_SHELL "${CMAKE_CURRENT_SOURCE_DIR}/source/backends/html/shell_minimal.html")
+    endif()
     target_link_options(${_n8v_target} INTERFACE
       "SHELL:-sASYNCIFY=1"
       "SHELL:-sALLOW_MEMORY_GROWTH=1"
       "SHELL:-sFORCE_FILESYSTEM=1"
       "SHELL:-sEXPORTED_RUNTIME_METHODS=[\"ccall\"]"
       "--bind"
-      "SHELL:--shell-file ${CMAKE_CURRENT_SOURCE_DIR}/source/backends/html/shell_minimal.html"
+      "SHELL:--shell-file ${N8V_HTML_SHELL}"
     )
   endif()
 
