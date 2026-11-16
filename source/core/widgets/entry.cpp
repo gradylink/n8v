@@ -143,6 +143,10 @@ void entry(const n8v_entry_options &options, int ordinal) {
   meta.onEntryChangeUserdata = options.on_change_userdata;
   meta.onEntrySubmit = options.on_submit;
   meta.onEntrySubmitUserdata = options.on_submit_userdata;
+  meta.onEntryKey = options.on_key;
+  meta.onEntryKeyUserdata = options.on_key_userdata;
+  meta.onEntryPasteFiles = options.on_paste_files;
+  meta.onEntryPasteFilesUserdata = options.on_paste_files_userdata;
   decl.userData = &meta;
 
   if (multiline && !n8v::activeBackend().rendersNativeChrome()) {

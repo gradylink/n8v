@@ -347,6 +347,15 @@ bool n8v_is_hovered(const char *id) {
 
 } // extern "C"
 
+namespace n8v {
+
+bool Backend::prefersDark() const {
+  const Color window = activePaint().windowBackground();
+  return (0.2126f * window.r + 0.7152f * window.g + 0.0722f * window.b) < 128.0f;
+}
+
+} // namespace n8v
+
 namespace n8v::detail::emit {
 
 namespace {

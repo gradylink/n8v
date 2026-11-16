@@ -31,6 +31,12 @@ inline void applyTextEmphasis(TextPaint &paint, const TextOptions &options) {
   if (options.darken) paint.color.a *= 0.6f;
 }
 
+enum class CheckMark {
+  Always,
+  Never,
+  WhenChecked,
+};
+
 struct CheckboxPaint {
   Color background = {0, 0, 0, 0};
   Color borderColor = {0, 0, 0, 0};
@@ -42,6 +48,7 @@ struct CheckboxPaint {
   FontFamily font = FontFamily::DejaVuSans;
   uint16_t fontSize = 16;
   float transitionSeconds = 0.0f;
+  CheckMark checkMark = CheckMark::Always;
 };
 
 struct RadioPaint {
@@ -137,6 +144,14 @@ struct SidebarPaint {
   CornerRadius cornerRadius;
   Padding padding;
   float rowGap = 4.0f;
+  Color rowBackground = {0, 0, 0, 0};
+  Color rowHoverBackground = {0, 0, 0, 0};
+  Color rowSelectedBackground = {0, 0, 0, 0};
+  Color rowTextColor = {0, 0, 0, 0};
+  Color rowSelectedTextColor = {0, 0, 0, 0};
+  float rowCornerRadius = 0.0f;
+  /** All zero (the default) pads rows like the style's secondary button. */
+  Padding rowPadding;
 };
 
 struct PanelPaint {

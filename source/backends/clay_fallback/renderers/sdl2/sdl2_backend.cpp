@@ -3,6 +3,8 @@
 
 #include "backends/clay_fallback/text/line_layout.hpp"
 #include "core/native_widget_meta.hpp"
+#include "core/open_url.hpp"
+#include "core/ui_core_internal.hpp"
 #include "core/style.hpp"
 #include "core/text_style_flags.hpp"
 
@@ -119,6 +121,7 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
   SDL_RenderSetClipRect(renderer_, nullptr);
   textLineTrackOrdinal_ = -1;
   textLineTrackBase_ = nullptr;
+  documentLinks_.clear();
 
   bool pendingIsCheckbox = false;
   bool pendingIsRadio = false;
@@ -234,14 +237,18 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
     }
     case CLAY_RENDER_COMMAND_TYPE_BORDER: {
       const Clay_BorderRenderData &border = command->renderData.border;
-      float width = (float)border.width.left;
-      const bool leftOnly = border.width.right == 0 && border.width.top == 0 && border.width.bottom == 0;
-      if (width > 0.0f && border.color.a > 0.0f) {
-        if (leftOnly) {
-          const Clay_BoundingBox &box = command->boundingBox;
-          drawFilledRect(Clay_BoundingBox{box.x, box.y, width, box.height}, border.color);
-        } else {
-          drawRoundedRectBorder(command->boundingBox, border.color, border.cornerRadius, width);
+      const Clay_BoundingBox &box = command->boundingBox;
+      const float left = border.width.left, right = border.width.right, top = border.width.top, bottom = border.width.bottom;
+      if (border.color.a > 0.0f) {
+        const int sides = (left > 0) + (right > 0) + (top > 0) + (bottom > 0);
+        if (sides == 1) {
+          // A single edge (a sidebar's divider, say) is a plain bar, not an outline.
+          if (left > 0) drawFilledRect(Clay_BoundingBox{box.x, box.y, left, box.height}, border.color);
+          else if (right > 0) drawFilledRect(Clay_BoundingBox{box.x + box.width - right, box.y, right, box.height}, border.color);
+          else if (top > 0) drawFilledRect(Clay_BoundingBox{box.x, box.y, box.width, top}, border.color);
+          else drawFilledRect(Clay_BoundingBox{box.x, box.y + box.height - bottom, box.width, bottom}, border.color);
+        } else if (sides > 1) {
+          drawRoundedRectBorder(box, border.color, border.cornerRadius, std::max({left, right, top, bottom}));
         }
       }
       break;
@@ -269,6 +276,13 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
     }
   }
   if (multilineMeta_) finishMultilineEntry();
+
+  for (const DocumentLink &link : documentLinks_) {
+    if (pointerX_ < link.box.x || pointerX_ > link.box.x + link.box.width || pointerY_ < link.box.y || pointerY_ > link.box.y + link.box.height) continue;
+    ui_internal::pendingCursor = CursorKind::Pointer;
+    if (justClicked_) openUrl(link.url);
+    break;
+  }
   justClicked_ = false;
   SDL_RenderPresent(renderer_);
 }

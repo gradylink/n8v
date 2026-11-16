@@ -44,6 +44,9 @@ struct Backend {
    */
   virtual bool pumpEvents() = 0;
 
+  /** Whether the UI looks dark. Backends that draw everything themselves judge by the active style's window color; native ones ask their toolkit. */
+  virtual bool prefersDark() const;
+
   /** Makes a `pumpEvents` that is waiting return promptly. Safe to call from any thread. */
   virtual void wake() {}
 

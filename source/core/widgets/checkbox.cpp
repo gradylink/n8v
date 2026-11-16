@@ -74,7 +74,10 @@ void checkbox(const n8v_checkbox_options &opts, std::string_view labelView, int 
   meta.indicatorFillColor = easeColor(ordinal, 4, paint.background, paint.transitionSeconds);
   meta.indicatorBorderColor = easeColor(ordinal, 8, paint.borderColor, paint.transitionSeconds);
   meta.indicatorBorderWidth = easeValue(animKey(ordinal, 12), paint.borderWidth, paint.transitionSeconds);
-  meta.indicatorGlyphColor = easeColor(ordinal, 16, paint.checkColor, paint.transitionSeconds);
+  n8v::Color checkColor = paint.checkColor;
+  const bool isChecked = opts.checked && *opts.checked;
+  if (paint.checkMark == n8v::CheckMark::Never || (paint.checkMark == n8v::CheckMark::WhenChecked && !isChecked)) checkColor.a = 0.0f;
+  meta.indicatorGlyphColor = easeColor(ordinal, 16, checkColor, paint.transitionSeconds);
   meta.indicatorCornerRadius = radius;
   meta.indicatorSize = indicatorSize;
   decl.userData = &meta;

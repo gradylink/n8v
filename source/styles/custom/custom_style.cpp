@@ -71,6 +71,11 @@ public:
     return plainPaint().panel(role, hovered, pressed);
   }
 
+  Color windowBackground() const override {
+    if (vtable_.window_background) return fromC(vtable_.window_background(userdata_));
+    return plainPaint().windowBackground();
+  }
+
 private:
   n8v_custom_paint_vtable vtable_{};
   void *userdata_ = nullptr;

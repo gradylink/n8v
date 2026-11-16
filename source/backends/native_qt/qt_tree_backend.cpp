@@ -58,6 +58,7 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -79,7 +80,8 @@
 #include "qt6multimediawidgets_lazy_vars.h"
 #include <QMediaPlayer>
 #include <QUrl>
-#include <QVideoWidget>
+#include <QVideoFrame>
+#include <QVideoSink>
 #endif
 #include <QWidget>
 
@@ -341,10 +343,24 @@ public:
   using QStyledItemDelegate::QStyledItemDelegate;
   bool centered = false;
 
-protected:
-  void initStyleOption(QStyleOptionViewItem *option, const QModelIndex &index) const override {
-    QStyledItemDelegate::initStyleOption(option, index);
-    if (centered) option->decorationAlignment = Qt::AlignCenter;
+  int iconExtent = 40;
+
+  void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
+    if (!centered) {
+      QStyledItemDelegate::paint(painter, option, index);
+      return;
+    }
+    QStyleOptionViewItem plain = option;
+    initStyleOption(&plain, index);
+    const QIcon icon = plain.icon;
+    plain.icon = QIcon();
+    plain.text.clear();
+    const QWidget *widget = option.widget;
+    (widget ? widget->style() : QApplication::style())->drawControl(QStyle::CE_ItemViewItem, &plain, painter, widget);
+    if (icon.isNull()) return;
+    const QSize size = icon.actualSize(QSize(iconExtent, iconExtent)); // a small glyph stays small rather than being stretched
+    const QRect target(QPoint(option.rect.center().x() - size.width() / 2, option.rect.center().y() - size.height() / 2), size);
+    icon.paint(painter, target, Qt::AlignCenter, (option.state & QStyle::State_Enabled) ? QIcon::Normal : QIcon::Disabled);
   }
 };
 
@@ -365,7 +381,7 @@ public:
       if (textFormat() == Qt::MarkdownText) doc.setMarkdown(text());
       else doc.setHtml(text());
       doc.setTextWidth(-1);
-      idealHint_ = QSize((int)std::ceil(doc.idealWidth()), (int)std::ceil(doc.size().height()));
+      idealHint_ = QSize((int)std::ceil(doc.idealWidth()) + 2, (int)std::ceil(doc.size().height()));
       hintDirty_ = false;
     }
     const QMargins m = contentsMargins();
@@ -421,7 +437,7 @@ public:
       doc.setDefaultFont(font());
       doc.setHtml(text());
       doc.setTextWidth(-1);
-      idealHint_ = QSize((int)std::ceil(doc.idealWidth()), (int)std::ceil(doc.size().height()));
+      idealHint_ = QSize((int)std::ceil(doc.idealWidth()) + 2, (int)std::ceil(doc.size().height()));
       hintDirty_ = false;
     }
     const QMargins m = contentsMargins();
@@ -444,19 +460,52 @@ private:
 };
 
 #ifdef N8V_HAVE_QT_MULTIMEDIA
-class N8VVideoWidget final : public QVideoWidget {
+class N8VVideoSurface final : public QWidget {
 public:
-  using QVideoWidget::QVideoWidget;
+  using QWidget::QWidget;
   QMediaPlayer *player = nullptr;
+  QVideoSink *sink = nullptr;
+  float radius = 0.0f;
+
+  QSize sizeHint() const override { return QSize(480, 270); }
+
+  bool pull() {
+    if (!sink) return false;
+    const QVideoFrame next = sink->videoFrame();
+    if (!next.isValid() || (next.startTime() == lastStart_ && next.endTime() == lastEnd_)) return false;
+    lastStart_ = next.startTime();
+    lastEnd_ = next.endTime();
+    const QImage image = next.toImage();
+    if (image.isNull()) return false;
+    frame_ = image;
+    update();
+    return true;
+  }
 
 protected:
+  void paintEvent(QPaintEvent *) override {
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    painter.setRenderHint(QPainter::Antialiasing);
+    QPainterPath clip;
+    clip.addRoundedRect(QRectF(rect()), radius, radius);
+    painter.setClipPath(clip);
+    painter.fillRect(rect(), Qt::black);
+    if (frame_.isNull()) return;
+    const QSize shown = frame_.size().scaled(size(), Qt::KeepAspectRatio);
+    painter.drawImage(QRect(QPoint((width() - shown.width()) / 2, (height() - shown.height()) / 2), shown), frame_);
+  }
   void mouseReleaseEvent(QMouseEvent *event) override {
     if (player && event->button() == Qt::LeftButton) {
       if (player->playbackState() == QMediaPlayer::PlayingState) player->pause();
       else player->play();
     }
-    QVideoWidget::mouseReleaseEvent(event);
+    QWidget::mouseReleaseEvent(event);
   }
+
+private:
+  QImage frame_;
+  qint64 lastStart_ = -2, lastEnd_ = -2;
 };
 
 bool multimediaAvailable() { return lzy_qt6multimedia_lazy_is_available() && lzy_qt6multimediawidgets_lazy_is_available(); }
@@ -665,6 +714,7 @@ struct NativeNode {
   const void *pixmapSource = nullptr;
 #ifdef N8V_HAVE_QT_MULTIMEDIA
   QMediaPlayer *player = nullptr;
+  bool autoPaused = false;
   QAudioOutput *audio = nullptr;
   QSlider *seek = nullptr;
   int seekSet = 0;
@@ -814,7 +864,7 @@ public:
   }
 
   bool pumpEvents() override {
-    const bool busy = settleFrames_ > 0 || popoverOpen_ || !pendingScrolls_.empty() || !pendingFocus_.empty();
+    const bool busy = settleFrames_ > 0 || popoverOpen_ || videoPlaying_ || !pendingScrolls_.empty() || !pendingFocus_.empty();
     idleTicker_->arm(busy ? kBusyFrameMs : kIdleFrameMs);
     QCoreApplication::processEvents(QEventLoop::WaitForMoreEvents);
     const bool timedOut = idleTicker_->disarm();
@@ -824,6 +874,8 @@ public:
     else if (settleFrames_ > 0) --settleFrames_;
     return window_->isVisible();
   }
+
+  bool prefersDark() const override { return window_ && window_->palette().color(QPalette::Window).lightness() < 128; }
 
   void wake() override {
     if (app_) QMetaObject::invokeMethod(app_.get(), [] {}, Qt::QueuedConnection);
@@ -1077,6 +1129,7 @@ private:
   static constexpr int kBusyFrameMs = 16, kIdleFrameMs = 250, kSettleFrames = 4;
   int settleFrames_ = 0;
   bool popoverOpen_ = false;
+  bool videoPlaying_ = false;
   N8VRootWidget *window_ = nullptr;
   QVBoxLayout *rootLayout_ = nullptr;
   NativeNode root_;
@@ -1325,6 +1378,7 @@ void QtTreeBackend::setScrolled(NativeNode &nn, bool want, bool horizontal, bool
     nn.scroll = nullptr;
   }
   if (nn.scroll) {
+    if (QWidget *content = nn.scroll->widget()) content->setSizePolicy(horizontal ? QSizePolicy::Preferred : QSizePolicy::Ignored, content->sizePolicy().verticalPolicy());
     nn.scroll->setHorizontalScrollBarPolicy(horizontal ? Qt::ScrollBarAsNeeded : Qt::ScrollBarAlwaysOff);
     nn.scroll->setVerticalScrollBarPolicy(vertical ? Qt::ScrollBarAsNeeded : Qt::ScrollBarAlwaysOff);
   }
@@ -1416,8 +1470,25 @@ void QtTreeBackend::updateMultilineHeight(NativeNode &nn) {
 
 void QtTreeBackend::pollNative() {
   const std::vector<PNode *> nodes(live_.begin(), live_.end());
+  videoPlaying_ = false;
   for (PNode *pn : nodes) {
     NativeNode &nn = *native(*pn);
+#ifdef N8V_HAVE_QT_MULTIMEDIA
+    if (nn.kind() == Kind::Video && nn.player && nn.widget) {
+      auto *surface = static_cast<N8VVideoSurface *>(nn.widget);
+      const bool seen = surface->isVisible() && !surface->visibleRegion().isEmpty();
+      const bool playing = nn.player->playbackState() == QMediaPlayer::PlayingState;
+      if (!seen && playing) {
+        nn.player->pause();
+        nn.autoPaused = true;
+      } else if (seen && nn.autoPaused) {
+        nn.player->play();
+        nn.autoPaused = false;
+      }
+      if (seen && playing) videoPlaying_ = true;
+      if (seen) surface->pull();
+    }
+#endif
 #ifdef N8V_HAVE_QT_MULTIMEDIA
     if ((nn.kind() == Kind::Video || nn.kind() == Kind::Audio) && nn.player && nn.seek) {
       const qint64 duration = nn.player->duration();
@@ -1518,6 +1589,14 @@ void QtTreeBackend::updateFloating() {
     QWidget *hostWidget = host.outer ? host.outer : host.content;
     QWidget *container = hostWidget == window_ ? window_ : hostWidget->parentWidget();
     if (o->keep_on_screen && hostWidget != window_) container = window_;
+    else if (hostWidget != window_) {
+      for (NativeNode *ancestor = nn.parentNode ? nn.parentNode->parentNode : nullptr; ancestor; ancestor = ancestor->parentNode) {
+        if (ancestor->scroll && ancestor->content) {
+          container = ancestor->content;
+          break;
+        }
+      }
+    }
     if (!container) container = window_;
     const QRect hostRect = hostWidget == window_ ? window_->rect() : QRect(hostWidget->mapTo(container, QPoint(0, 0)), hostWidget->size());
     if (nn.outer->parentWidget() != container) {
@@ -1789,11 +1868,12 @@ void QtTreeBackend::build(NativeNode &nn) {
       auto *box = new QVBoxLayout(nn.outer);
       box->setContentsMargins(0, 0, 0, 0);
       box->setSpacing(4);
-      auto *surface = new N8VVideoWidget();
+      auto *surface = new N8VVideoSurface();
       nn.player = new QMediaPlayer(nn.outer);
       nn.audio = new QAudioOutput(nn.outer);
       nn.player->setAudioOutput(nn.audio);
-      nn.player->setVideoOutput(surface);
+      surface->sink = new QVideoSink(nn.outer);
+      nn.player->setVideoSink(surface->sink);
       surface->player = nn.player;
       box->addWidget(surface, 1);
       if (o && o->controls) {
@@ -2028,6 +2108,7 @@ void QtTreeBackend::applySidebar(NativeNode &nn, const n8v_sidebar_options &o) {
   nn.titleRow->layout()->setAlignment(nn.collapseButton, Qt::AlignRight | Qt::AlignVCenter);
   static_cast<QBoxLayout *>(nn.titleRow->layout())->setContentsMargins(0, title.empty() ? 6 : 0, 0, 0);
   nn.sidebarDelegate->centered = collapsed;
+  nn.sidebarDelegate->iconExtent = 40;
   nn.list->viewport()->update();
   const int width = collapsed ? 72 : o.width.mode == N8V_SIZING_FIXED ? (int)o.width.value : 0;
   for (NativeNode *kid : nn.kids)
@@ -2227,6 +2308,10 @@ void QtTreeBackend::apply(NativeNode &nn) {
       [&](const n8v_video_options &o) {
 #ifdef N8V_HAVE_QT_MULTIMEDIA
         if (nn.player) {
+          float radius = activePaint().image().cornerRadius.topLeft;
+          if (o.rounding.mode == N8V_ROUNDING_NONE) radius = 0.0f;
+          else if (o.rounding.mode == N8V_ROUNDING_FIXED) radius = o.rounding.radius.top_left;
+          static_cast<N8VVideoSurface *>(nn.widget)->radius = radius;
           const std::string source = o.source ? o.source : "";
           if (source != nn.videoSource) {
             nn.videoSource = source;

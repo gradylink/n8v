@@ -43,6 +43,7 @@ Clay_ElementId sidebarContentAnchorId(int sidebarOrdinal) { return Clay_GetEleme
 constexpr float kCollapsedWidth = 72.0f;
 constexpr float kCollapsedRowHeight = 60.0f;
 constexpr float kCollapsedIconSize = 40.0f;
+constexpr float kCollapsedGlyphSize = 24.0f;
 constexpr float kCollapseButtonSize = 28.0f;
 
 struct SidebarContext {
@@ -222,7 +223,7 @@ void openSidebar(const n8v_sidebar_options &opts, int ordinal) {
   decl.backgroundColor = n8v::detail::toClay(paint.background);
   decl.cornerRadius = n8v::detail::toClay(paint.cornerRadius);
   decl.border.color = n8v::detail::toClay(paint.borderColor);
-  decl.border.width = {(uint16_t)paint.borderWidth, 0, 0, 0, 0};
+  decl.border.width = {0, (uint16_t)paint.borderWidth, 0, 0, 0}; // along the edge facing the content
   decl.clip.vertical = true;
   if (n8v::activeBackend().ownsScrollMath()) {
     decl.clip.childOffset = Clay_GetScrollOffset();
@@ -246,6 +247,7 @@ void openSidebar(const n8v_sidebar_options &opts, int ordinal) {
     headerDecl.layout.layoutDirection = CLAY_LEFT_TO_RIGHT;
     headerDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
     headerDecl.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
+    headerDecl.layout.padding = {0, 0, 0, 8}; // a little air between the title and the first row
     Clay__ConfigureOpenElement(headerDecl);
     if (collapsible) {
       Clay__OpenElement();
@@ -312,19 +314,24 @@ void sidebarSection(const n8v_sidebar_section_options &opts, int ordinal) {
 
 void sidebarDivider(int /*ordinal*/) {
   if (sidebarStack.empty()) return;
-  const n8v::SidebarPaint paint = n8v::activePaint().sidebar();
   n8v::Color line = n8v::activePaint().text(n8v::TextOptions{}).color;
   line.a *= 0.18f;
+
+  Clay__OpenElement();
+  Clay_ElementDeclaration box = {};
+  box.layout.sizing.width = CLAY_SIZING_GROW(0);
+  box.layout.padding = {0, 0, 8, 8};
+  Clay__ConfigureOpenElement(box);
 
   Clay__OpenElement();
   Clay_ElementDeclaration decl = {};
   decl.layout.sizing.width = CLAY_SIZING_GROW(0);
   decl.layout.sizing.height = CLAY_SIZING_FIXED(1);
-  decl.layout.padding = {0, 0, 0, 0};
   decl.backgroundColor = n8v::detail::toClay(line);
   Clay__ConfigureOpenElement(decl);
   Clay__CloseElement();
-  (void)paint;
+
+  Clay__CloseElement();
 }
 
 bool openPage(const n8v_page_options &opts, int rowOrdinal) {
@@ -350,15 +357,30 @@ bool openPage(const n8v_page_options &opts, int rowOrdinal) {
 
   const bool hovered = Clay_Hovered();
   const bool pressed = hovered && n8v::activeBackend().pointerDown();
-  const n8v::ButtonPaint paint = n8v::activePaint().button(selected ? n8v::ButtonStyle::Primary : n8v::ButtonStyle::Secondary, hovered, pressed);
+  n8v::ButtonPaint paint = n8v::activePaint().button(selected ? n8v::ButtonStyle::Primary : n8v::ButtonStyle::Secondary, hovered, pressed);
+  paint.padding = n8v::activePaint().button(n8v::ButtonStyle::Secondary, false, false).padding;
+  {
+    const n8v::Padding rowPadding = n8v::activePaint().sidebar().rowPadding;
+    if (rowPadding.left || rowPadding.right || rowPadding.top || rowPadding.bottom) paint.padding = rowPadding;
+  }
+  {
+    const n8v::SidebarPaint rows = n8v::activePaint().sidebar();
+    const n8v::Color rowBackground = selected && rows.rowSelectedBackground.a > 0.0f ? rows.rowSelectedBackground
+                                     : hovered && rows.rowHoverBackground.a > 0.0f   ? rows.rowHoverBackground
+                                                                                     : rows.rowBackground;
+    if (rows.rowSelectedBackground.a > 0.0f || rows.rowHoverBackground.a > 0.0f || rows.rowBackground.a > 0.0f) paint.background = rowBackground;
+    const n8v::Color rowText = selected && rows.rowSelectedTextColor.a > 0.0f ? rows.rowSelectedTextColor : rows.rowTextColor;
+    if (rowText.a > 0.0f) paint.textColor = rowText;
+    if (rows.rowCornerRadius > 0.0f) paint.cornerRadius = {rows.rowCornerRadius, rows.rowCornerRadius, rows.rowCornerRadius, rows.rowCornerRadius};
+  }
 
   const bool collapsed = ctx.collapsed;
-  const float iconSlotSize = collapsed ? kCollapsedIconSize : hasImage ? (float)paint.fontSize * 2.0f : (float)paint.fontSize;
+  const float iconSlotSize = collapsed ? (hasImage ? kCollapsedIconSize : kCollapsedGlyphSize) : hasImage ? (float)paint.fontSize * 2.0f : (float)paint.fontSize;
 
   std::string imagePathStorage(imageView);
   const n8v::detail::DecodedImage *rowImage = nullptr;
   if (hasIcon) {
-    rowImage = n8v::detail::getOrDecodeIcon(iconView, paint.fontSize, paint.textColor);
+    rowImage = n8v::detail::getOrDecodeIcon(iconView, (uint16_t)std::lround(iconSlotSize), paint.textColor);
   } else if (hasImage) {
     n8v_image_options imgOpts = {};
     imgOpts.source_kind = N8V_IMAGE_SOURCE_PATH;

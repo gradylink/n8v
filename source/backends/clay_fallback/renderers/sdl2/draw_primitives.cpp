@@ -1,15 +1,16 @@
 #include "backends/clay_fallback/text/emoji.hpp"
-#include "sdl2_backend_impl.hpp"
 #include "backends/text_edit_utils.hpp"
+#include "sdl2_backend_impl.hpp"
 
 #include "backends/clay_fallback/text/line_layout.hpp"
+#include "core/style.hpp"
 #include "core/text_style_flags.hpp"
 
 #include <SDL2/SDL.h>
 
 #include <algorithm>
-#include <memory>
 #include <cmath>
+#include <memory>
 #include <string_view>
 #include <vector>
 
@@ -49,8 +50,10 @@ float Sdl2Backend::caretPixelX(std::string_view text, FontFamily family, uint16_
 void Sdl2Backend::drawCursorCaret(const Clay_BoundingBox &textBox, std::string_view value, FontFamily family, uint16_t fontSize, size_t byteOffset, bool bold, bool italic) {
   float x = std::round(textBox.x + caretPixelX(value, family, fontSize, byteOffset, bold, italic));
   int y0 = (int)textBox.y, y1 = (int)(textBox.y + textBox.height);
-  SDL_SetRenderDrawColor(renderer_, 20, 20, 20, 255);
+  const Color caret = activePaint().entry(true, true).textColor;
+  SDL_SetRenderDrawColor(renderer_, (Uint8)caret.r, (Uint8)caret.g, (Uint8)caret.b, 255);
   SDL_RenderDrawLine(renderer_, (int)x, y0, (int)x, y1);
+  SDL_RenderDrawLine(renderer_, (int)x + 1, y0, (int)x + 1, y1);
 }
 
 void Sdl2Backend::drawSelectionHighlight(

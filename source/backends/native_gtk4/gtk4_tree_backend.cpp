@@ -335,6 +335,12 @@ public:
 
   void wake() override { g_main_context_wakeup(g_main_context_default()); }
 
+  bool prefersDark() const override {
+    GdkRGBA text;
+    gtk_widget_get_color(window_, &text);
+    return (0.2126f * text.red + 0.7152f * text.green + 0.0722f * text.blue) > 0.5f;
+  }
+
   bool pointerDown() const override { return false; }
   Clay_Dimensions windowSize() const override { return {(float)gtk_widget_get_width(window_), (float)gtk_widget_get_height(window_)}; }
   Clay_Dimensions measureText(std::string_view, FontFamily, uint16_t, bool, bool) const override { return {0, 0}; }

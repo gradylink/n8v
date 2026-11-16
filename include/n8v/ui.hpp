@@ -267,6 +267,7 @@ inline n8v_checkbox_paint toC(const CheckboxPaint &p) {
     .font = toC(p.font),
     .font_size = p.fontSize,
     .transition_seconds = p.transitionSeconds,
+    .check_mark = (int)p.checkMark,
   };
 }
 
@@ -282,6 +283,7 @@ inline CheckboxPaint fromC(n8v_checkbox_paint p) {
     .font = fromC(p.font),
     .fontSize = p.font_size,
     .transitionSeconds = p.transition_seconds,
+    .checkMark = (CheckMark)p.check_mark,
   };
 }
 
@@ -473,6 +475,13 @@ inline n8v_sidebar_paint toC(const SidebarPaint &p) {
     .corner_radius = toC(p.cornerRadius),
     .padding = toC(p.padding),
     .row_gap = p.rowGap,
+    .row_background = toC(p.rowBackground),
+    .row_hover_background = toC(p.rowHoverBackground),
+    .row_selected_background = toC(p.rowSelectedBackground),
+    .row_text_color = toC(p.rowTextColor),
+    .row_selected_text_color = toC(p.rowSelectedTextColor),
+    .row_corner_radius = p.rowCornerRadius,
+    .row_padding = toC(p.rowPadding),
   };
 }
 
@@ -484,6 +493,13 @@ inline SidebarPaint fromC(n8v_sidebar_paint p) {
     .cornerRadius = fromC(p.corner_radius),
     .padding = fromC(p.padding),
     .rowGap = p.row_gap,
+    .rowBackground = fromC(p.row_background),
+    .rowHoverBackground = fromC(p.row_hover_background),
+    .rowSelectedBackground = fromC(p.row_selected_background),
+    .rowTextColor = fromC(p.row_text_color),
+    .rowSelectedTextColor = fromC(p.row_selected_text_color),
+    .rowCornerRadius = p.row_corner_radius,
+    .rowPadding = fromC(p.row_padding),
   };
 }
 
@@ -560,6 +576,8 @@ extern "C" inline n8v_sidebar_paint _n8v_custom_paint_sidebar_trampoline(void *u
 extern "C" inline n8v_panel_paint _n8v_custom_paint_panel_trampoline(n8v_panel_role role, bool hovered, bool pressed, void *userdata) {
   return toC(static_cast<const Paint *>(userdata)->panel(fromC(role), hovered, pressed));
 }
+
+extern "C" inline n8v_color _n8v_custom_paint_window_background_trampoline(void *userdata) { return toC(static_cast<const Paint *>(userdata)->windowBackground()); }
 
 inline void beginFrame() {
   n8v_begin_frame();
@@ -1174,6 +1192,9 @@ inline bool initialize(int width, int height, std::string_view title) {
 
 inline bool pumpEvents() { return n8v_pump_events(); }
 
+/** Whether the UI currently looks dark: the toolkit's theme for GTK and Qt, the active style's window color for the backends that draw it themselves. */
+inline bool isDarkTheme() { return n8v_is_dark_theme(); }
+
 inline void wake() { n8v_wake(); }
 
 inline void shutdown() { n8v_shutdown(); }
@@ -1226,6 +1247,7 @@ inline void setCustomPaint(Paint &paint) {
   vtable.icon = detail::_n8v_custom_paint_icon_trampoline;
   vtable.sidebar = detail::_n8v_custom_paint_sidebar_trampoline;
   vtable.panel = detail::_n8v_custom_paint_panel_trampoline;
+  vtable.window_background = detail::_n8v_custom_paint_window_background_trampoline;
   n8v_set_custom_paint(&vtable, &paint);
 }
 

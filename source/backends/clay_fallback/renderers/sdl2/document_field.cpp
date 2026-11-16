@@ -101,11 +101,18 @@ void Sdl2Backend::renderDocument(NativeWidgetMeta &meta, const Clay_BoundingBox 
           const float padLeft = first ? 2.0f : 0.0f;
           const float padRight = continues ? spaceWidth : 2.0f;
           drawFilledRect(
-            Clay_BoundingBox{cursor.x - padLeft, cursor.y, w + padLeft + padRight, lineHeightFor(fontSize)},
+            Clay_BoundingBox{cursor.x - padLeft, cursor.y + 2.0f, w + padLeft + padRight, lineHeightFor(fontSize) - 5.0f},
             Clay_Color{style.background.r, style.background.g, style.background.b, style.background.a}
           );
         }
         drawWord(word, fontSize, bold, run.italic, run.strikethrough, link, w, styled ? &style : nullptr);
+        if (link && (!styled || style.clickable)) {
+          documentLinks_.push_back({Clay_BoundingBox{cursor.x, cursor.y, w, lineHeightFor(fontSize)}, run.linkUrl});
+          if (styled) {
+            const n8v_color underline = style.foreground.a > 0.0f ? style.foreground : n8v_color{baseColor.r, baseColor.g, baseColor.b, baseColor.a};
+            drawFilledRect(Clay_BoundingBox{cursor.x, cursor.y + lineHeightFor(fontSize) - 4.0f, w, 1.0f}, Clay_Color{underline.r, underline.g, underline.b, underline.a});
+          }
+        }
         cursor.x += w + spaceWidth;
       }
       if (next == std::string::npos) break;

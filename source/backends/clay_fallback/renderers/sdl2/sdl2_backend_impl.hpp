@@ -9,10 +9,10 @@
 #include <SDL2/SDL.h>
 
 #include <cstdint>
-#include <utility>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace n8v::detail {
@@ -51,6 +51,10 @@ private:
     void *onChangeUserdata = nullptr;
     n8v_click_fn onSubmit = nullptr;
     void *onSubmitUserdata = nullptr;
+    n8v_key_fn onKey = nullptr;
+    void *onKeyUserdata = nullptr;
+    n8v_paste_files_fn onPasteFiles = nullptr;
+    void *onPasteFilesUserdata = nullptr;
     bool multiline = false;
     n8v_submit_mode submitMode = N8V_SUBMIT_ON_ENTER;
     int ordinal = -1;
@@ -62,6 +66,7 @@ private:
   };
 
   void refreshFocusedEntryCallbacks(const NativeWidgetMeta &meta);
+  void clampEntryCursor();
 
   struct EntryLineBox {
     size_t start = 0;
@@ -167,6 +172,11 @@ private:
   std::unordered_map<const void *, SDL_Texture *> imageTextures_;
   std::unordered_map<uint64_t, SDL_Texture *> emojiTextures_;
   bool escapePressed_ = false;
+  struct DocumentLink {
+    Clay_BoundingBox box;
+    std::string url;
+  };
+  std::vector<DocumentLink> documentLinks_;
   Clay_Vector2 pendingScrollDelta_{0, 0};
   std::vector<SDL_Rect> clipStack_;
 };

@@ -33,6 +33,10 @@ struct NativeWidgetMeta {
   bool password = false;                                    // Entry only
   n8v_text_change_fn onEntryChange = nullptr;               // Entry only
   void *onEntryChangeUserdata = nullptr;                    // Entry only
+  n8v_key_fn onEntryKey = nullptr;                          // Entry only - Up/Down/Escape; true means handled
+  void *onEntryKeyUserdata = nullptr;                       // Entry only
+  n8v_paste_files_fn onEntryPasteFiles = nullptr;           // Entry only - files or an image pasted from the clipboard
+  void *onEntryPasteFilesUserdata = nullptr;                // Entry only
   n8v_click_fn onEntrySubmit = nullptr;                     // Entry only - fires on Enter/Return
   void *onEntrySubmitUserdata = nullptr;                    // Entry only
   bool entryMultiline = false;                              // Entry only

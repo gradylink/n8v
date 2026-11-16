@@ -1,4 +1,5 @@
 #include "backends/text_edit_utils.hpp"
+#include "clipboard_files.hpp"
 #include "sdl2_backend_impl.hpp"
 
 #include "core/native_widget_meta.hpp"
@@ -40,6 +41,10 @@ void Sdl2Backend::handleEntryClick(NativeWidgetMeta *meta, size_t hitOffset) {
   entry_.onChangeUserdata = meta->onEntryChangeUserdata;
   entry_.onSubmit = meta->onEntrySubmit;
   entry_.onSubmitUserdata = meta->onEntrySubmitUserdata;
+  entry_.onKey = meta->onEntryKey;
+  entry_.onKeyUserdata = meta->onEntryKeyUserdata;
+  entry_.onPasteFiles = meta->onEntryPasteFiles;
+  entry_.onPasteFilesUserdata = meta->onEntryPasteFilesUserdata;
   entry_.multiline = meta->entryMultiline;
   entry_.submitMode = meta->entrySubmitMode;
   entry_.ordinal = key;
@@ -71,8 +76,15 @@ void Sdl2Backend::eraseEntrySelection() {
   entry_.cursor = entry_.anchor = s;
 }
 
+void Sdl2Backend::clampEntryCursor() {
+  if (!entry_.value) return;
+  entry_.cursor = std::min(entry_.cursor, entry_.value->size());
+  entry_.anchor = std::min(entry_.anchor, entry_.value->size());
+}
+
 void Sdl2Backend::insertAtCursor(std::string_view text) {
   if (!entry_.value || text.empty()) return;
+  clampEntryCursor();
   lastActivityTicks_ = SDL_GetTicks();
   scrollToCaret_ = true;
   if (entry_.hasSelection()) eraseEntrySelection();
@@ -89,11 +101,23 @@ void Sdl2Backend::moveEntryCursor(size_t newPos, bool extendSelection) {
 
 void Sdl2Backend::handleEntryKey(SDL_Keysym keysym) {
   if (!entry_.value) return;
+  clampEntryCursor();
   lastActivityTicks_ = SDL_GetTicks();
   scrollToCaret_ = true;
   std::string &s = *entry_.value;
   bool ctrl = (keysym.mod & KMOD_CTRL) != 0;
   bool shift = (keysym.mod & KMOD_SHIFT) != 0;
+
+  if (entry_.onKey) {
+    n8v_key key = N8V_KEY_UP;
+    bool known = true;
+    if (keysym.sym == SDLK_UP) key = N8V_KEY_UP;
+    else if (keysym.sym == SDLK_DOWN) key = N8V_KEY_DOWN;
+    else if (keysym.sym == SDLK_ESCAPE) key = N8V_KEY_ESCAPE;
+    else known = false;
+    unsigned mods = (shift ? N8V_MOD_SHIFT : 0u) | (ctrl ? N8V_MOD_CTRL : 0u) | ((keysym.mod & KMOD_ALT) ? N8V_MOD_ALT : 0u);
+    if (known && entry_.onKey(key, mods, entry_.onKeyUserdata)) return;
+  }
 
   switch (keysym.sym) {
   case SDLK_RETURN:
@@ -155,6 +179,15 @@ void Sdl2Backend::handleEntryKey(SDL_Keysym keysym) {
     break;
   case SDLK_v:
     if (ctrl) {
+      if (entry_.onPasteFiles) {
+        const std::vector<std::string> pasted = clipboardFiles();
+        if (!pasted.empty()) {
+          std::vector<const char *> paths;
+          for (const std::string &path : pasted) paths.push_back(path.c_str());
+          entry_.onPasteFiles(paths.data(), paths.size(), entry_.onPasteFilesUserdata);
+          break;
+        }
+      }
       char *clip = SDL_GetClipboardText();
       if (clip) {
         insertAtCursor(clip);
@@ -198,10 +231,15 @@ void Sdl2Backend::handleEntryKey(SDL_Keysym keysym) {
 }
 
 void Sdl2Backend::refreshFocusedEntryCallbacks(const NativeWidgetMeta &meta) {
+  clampEntryCursor();
   entry_.onChange = meta.onEntryChange;
   entry_.onChangeUserdata = meta.onEntryChangeUserdata;
   entry_.onSubmit = meta.onEntrySubmit;
   entry_.onSubmitUserdata = meta.onEntrySubmitUserdata;
+  entry_.onKey = meta.onEntryKey;
+  entry_.onKeyUserdata = meta.onEntryKeyUserdata;
+  entry_.onPasteFiles = meta.onEntryPasteFiles;
+  entry_.onPasteFilesUserdata = meta.onEntryPasteFilesUserdata;
   entry_.submitMode = meta.entrySubmitMode;
 }
 

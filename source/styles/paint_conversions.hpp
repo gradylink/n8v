@@ -161,6 +161,7 @@ inline n8v_checkbox_paint toC(const CheckboxPaint &p) {
     .font = toC(p.font),
     .font_size = p.fontSize,
     .transition_seconds = p.transitionSeconds,
+    .check_mark = (int)p.checkMark,
   };
 }
 
@@ -176,6 +177,7 @@ inline CheckboxPaint fromC(n8v_checkbox_paint p) {
     .font = fromC(p.font),
     .fontSize = p.font_size,
     .transitionSeconds = p.transition_seconds,
+    .checkMark = (CheckMark)p.check_mark,
   };
 }
 
@@ -367,6 +369,13 @@ inline n8v_sidebar_paint toC(const SidebarPaint &p) {
     .corner_radius = toC(p.cornerRadius),
     .padding = toC(p.padding),
     .row_gap = p.rowGap,
+    .row_background = toC(p.rowBackground),
+    .row_hover_background = toC(p.rowHoverBackground),
+    .row_selected_background = toC(p.rowSelectedBackground),
+    .row_text_color = toC(p.rowTextColor),
+    .row_selected_text_color = toC(p.rowSelectedTextColor),
+    .row_corner_radius = p.rowCornerRadius,
+    .row_padding = toC(p.rowPadding),
   };
 }
 
@@ -378,6 +387,13 @@ inline SidebarPaint fromC(n8v_sidebar_paint p) {
     .cornerRadius = fromC(p.corner_radius),
     .padding = fromC(p.padding),
     .rowGap = p.row_gap,
+    .rowBackground = fromC(p.row_background),
+    .rowHoverBackground = fromC(p.row_hover_background),
+    .rowSelectedBackground = fromC(p.row_selected_background),
+    .rowTextColor = fromC(p.row_text_color),
+    .rowSelectedTextColor = fromC(p.row_selected_text_color),
+    .rowCornerRadius = p.row_corner_radius,
+    .rowPadding = fromC(p.row_padding),
   };
 }
 

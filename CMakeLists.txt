@@ -483,6 +483,7 @@ else()
     source/backends/clay_fallback/renderers/sdl2/indicators.cpp
     source/backends/clay_fallback/renderers/sdl2/draw_primitives.cpp
     source/backends/clay_fallback/renderers/sdl2/image_field.cpp
+    source/backends/clay_fallback/renderers/sdl2/clipboard_files.cpp
     source/backends/clay_fallback/renderers/sdl2/document_field.cpp
   )
 endif()
@@ -515,6 +516,9 @@ foreach(_n8v_target ${_n8v_targets})
   target_include_directories(${_n8v_target} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
   target_include_directories(${_n8v_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/source)
   target_link_libraries(${_n8v_target} PUBLIC n8v_fonts n8v_icons)
+  if(WIN32)
+    target_link_libraries(${_n8v_target} PRIVATE user32 shell32)
+  endif()
   if(TARGET n8v_emoji)
     target_compile_definitions(${_n8v_target} PRIVATE N8V_HAVE_BUNDLED_EMOJI)
     target_link_libraries(${_n8v_target} PUBLIC n8v_emoji)

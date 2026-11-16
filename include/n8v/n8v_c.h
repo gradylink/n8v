@@ -567,6 +567,8 @@ typedef struct n8v_checkbox_paint {
   n8v_font_family font;
   uint16_t font_size;
   float transition_seconds;
+  /** 0 = always (as `check_color` says), 1 = never, 2 = only while checked. */
+  int check_mark;
 } n8v_checkbox_paint;
 
 typedef struct n8v_radio_paint {
@@ -662,6 +664,13 @@ typedef struct n8v_sidebar_paint {
   n8v_corner_radius corner_radius;
   n8v_padding padding;
   float row_gap;
+  n8v_color row_background;
+  n8v_color row_hover_background;
+  n8v_color row_selected_background;
+  n8v_color row_text_color;
+  n8v_color row_selected_text_color;
+  float row_corner_radius;
+  n8v_padding row_padding;
 } n8v_sidebar_paint;
 
 typedef struct n8v_panel_paint {
@@ -684,6 +693,7 @@ typedef n8v_image_paint (*n8v_paint_image_fn)(void *userdata);
 typedef n8v_icon_paint (*n8v_paint_icon_fn)(void *userdata);
 typedef n8v_sidebar_paint (*n8v_paint_sidebar_fn)(void *userdata);
 typedef n8v_panel_paint (*n8v_paint_panel_fn)(n8v_panel_role role, bool hovered, bool pressed, void *userdata);
+typedef n8v_color (*n8v_paint_window_background_fn)(void *userdata);
 
 /** Function-pointer vtable for a custom style. Any entry may be null - see n8v_set_custom_paint. */
 typedef struct n8v_custom_paint_vtable {
@@ -699,12 +709,17 @@ typedef struct n8v_custom_paint_vtable {
   n8v_paint_icon_fn icon;
   n8v_paint_sidebar_fn sidebar;
   n8v_paint_panel_fn panel;
+  /** What the window is cleared to; null keeps the Plain style's. */
+  n8v_paint_window_background_fn window_background;
 } n8v_custom_paint_vtable;
 
 N8V_API bool n8v_initialize(int width, int height, const char *title);
 N8V_API bool n8v_pump_events(void);
 
 N8V_API void n8v_wake(void);
+
+/** Whether the UI currently has a dark appearance: the toolkit's theme for native backends, the active style's window color for the others. */
+N8V_API bool n8v_is_dark_theme(void);
 N8V_API void n8v_shutdown(void);
 
 N8V_API void n8v_set_style_family(n8v_style_family family);
