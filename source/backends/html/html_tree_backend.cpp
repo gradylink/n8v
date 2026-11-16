@@ -493,7 +493,11 @@ private:
     return name;
   }
 
-  void installRootStyle() { dynamicText_.call<void>("appendData", css::expand(css::textCss(activePaint(), {}), "#n8v-root") + "\n"); }
+  void installRootStyle() {
+    dynamicText_.call<void>("appendData", css::expand(css::textCss(activePaint(), {}), "#n8v-root") + "\n");
+    const Color window = activePaint().windowBackground();
+    dynamicText_.call<void>("appendData", "html,body,#n8v-root{background:" + css::cssColor(window) + "}\n");
+  }
 
   void restyleAll() {
     styleGeneration_ = activeStyleGeneration();
