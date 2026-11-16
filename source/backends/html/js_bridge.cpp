@@ -45,8 +45,36 @@ EM_JS(void, n8vHtmlInstallListeners, (), {
     el.style.height = (el.scrollHeight + el.offsetHeight - el.clientHeight) + 'px';
   };
 
+  document.addEventListener('paste', function(e) {
+    var el = e.target;
+    if (!el.hasAttribute || !el.hasAttribute('data-n8v') || !e.clipboardData) return;
+    var files = Array.prototype.slice.call(e.clipboardData.files || []);
+    if (!files.length || e.clipboardData.getData('text')) return;
+    e.preventDefault();
+    var dir = '/n8v-paste';
+    Promise.all(files.map(function(file, i) {
+      return file.arrayBuffer().then(function(buf) {
+        var name = file.name || ('image.' + ((file.type || 'image/png').split('/')[1] || 'png'));
+        var full = dir + '/' + Date.now() + '-' + i + '-' + name;
+        FS.mkdirTree(dir);
+        FS.writeFile(full, new Uint8Array(buf));
+        return full;
+      });
+    })).then(function(paths) { Module.ccall('n8v_html_paste_files', null, ['number', 'string'], [ordinalOf(el), paths.join('\n')]); });
+  });
+
   document.addEventListener('keydown', function(e) {
     var el = e.target;
+    if (el.hasAttribute && el.hasAttribute('data-n8v') && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') && !e.isComposing) {
+      var keyCode = e.key === 'ArrowUp' ? 0 : e.key === 'ArrowDown' ? 1 : e.key === 'Escape' ? 2 : -1;
+      if (keyCode >= 0) {
+        var mods = (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.altKey ? 4 : 0);
+        if (Module.ccall('n8v_html_key', 'number', ['number', 'number', 'number'], [ordinalOf(el), keyCode, mods])) {
+          e.preventDefault();
+          return;
+        }
+      }
+    }
     if (e.key === 'Enter' && el.tagName === 'INPUT' && el.type !== 'checkbox' && el.type !== 'radio' && el.hasAttribute('data-n8v')) {
       send(ordinalOf(el), 'submit', '');
     } else if (e.key === 'Enter' && el.tagName === 'TEXTAREA' && el.hasAttribute('data-n8v') && !e.isComposing) {

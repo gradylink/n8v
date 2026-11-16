@@ -312,6 +312,7 @@ std::string documentCss(const Paint &paint) {
   const TextPaint link = paint.text(linkOptions);
   std::string css = "&{color:" + cssColor(body.color) + ";" + fontDecl(body.font, body.fontSize) + "overflow-wrap:anywhere}\n";
   css += "& h1,& h2,& h3,& h4,& h5,& h6{margin:.6em 0 .3em;line-height:1.2}\n& h1{font-size:2em}\n& h2{font-size:1.5em}\n& h3{font-size:1.25em}\n";
+  css += "& > :first-child{margin-top:0}\n& > :last-child{margin-bottom:0}\n";
   css += "& p{margin:.5em 0}\n& ul,& ol{margin:.5em 0;padding-left:1.6em}\n";
   css += "& a{color:" + cssColor(link.color) + "}\n";
   css += "& code{font-family:monospace;background:rgba(127,127,127,.18);padding:.1em .3em;border-radius:3px}\n";

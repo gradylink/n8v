@@ -118,6 +118,8 @@ struct NativeNode {
   bool parentIsRow = false;
   bool stickyBottom = false;
   double lastClientHeight = -1.0;
+  double adjustX = 0.0;
+  double adjustY = 0.0;
   bool stickyAtBottom = true;
   double lastScrollHeight = 0.0;
   std::string lastItemsKey;
@@ -310,6 +312,7 @@ public:
   void commitFrame() override {
     if (styleGeneration_ != activeStyleGeneration()) restyleAll();
     applyStickyBottom();
+    applyKeepOnScreen();
     resolvePendingScrolls();
     resolvePendingFocus();
   }
@@ -419,6 +422,27 @@ public:
     byOrdinal_.erase(node.ordinal);
     delete nn;
     node.handle = nullptr;
+  }
+
+  bool onKey(int ordinal, int key, unsigned mods) {
+    auto it = byOrdinal_.find(ordinal);
+    if (it == byOrdinal_.end() || native(*it->second)->kind() != Kind::Entry) return false;
+    return dispatch::key(*it->second, (n8v_key)key, mods);
+  }
+
+  void onPasteFiles(int ordinal, const std::string &joinedPaths) {
+    auto it = byOrdinal_.find(ordinal);
+    if (it == byOrdinal_.end()) return;
+    std::vector<std::string> paths;
+    size_t start = 0;
+    while (start <= joinedPaths.size()) {
+      const size_t end = joinedPaths.find('\n', start);
+      const std::string path = joinedPaths.substr(start, end == std::string::npos ? std::string::npos : end - start);
+      if (!path.empty()) paths.push_back(path);
+      if (end == std::string::npos) break;
+      start = end + 1;
+    }
+    if (!paths.empty()) dispatch::pasteFiles(*it->second, paths);
   }
 
   void onEvent(int ordinal, const std::string &type, const std::string &value) {
@@ -544,6 +568,7 @@ private:
   void applyButton(NativeNode &nn, const n8v_button_options &o);
   std::string multilineEntryCss(NativeNode &nn, const n8v_entry_options &o, const Paint &paint);
   void applyPage(NativeNode &nn, const n8v_page_options &o);
+  void applyKeepOnScreen();
   void applyLayout(NativeNode &nn);
   std::string containerCss(NativeNode &nn);
   std::string sizingCss(NativeNode &nn);
@@ -669,8 +694,8 @@ std::string HtmlTreeBackend::floatingCss(NativeNode &nn) {
   double pfx = 0, pfy = 0, efx = 0, efy = 0;
   attachFraction(o->parent_attach_point, pfx, pfy);
   attachFraction(o->element_attach_point, efx, efy);
-  std::string out = "position:absolute;z-index:10;left:calc(" + pct(pfx) + " + " + css::cssNumber(o->offset_x) + "px);top:calc(" + pct(pfy) + " + " +
-                    css::cssNumber(o->offset_y) + "px);" + "transform:translate(" + pct(-efx) + "," + pct(-efy) + ");";
+  std::string out = std::string("position:absolute;z-index:") + (o->keep_on_screen ? "100" : "10") + ";left:calc(" + pct(pfx) + " + " + css::cssNumber(o->offset_x) +
+                    "px);top:calc(" + pct(pfy) + " + " + css::cssNumber(o->offset_y) + "px);" + "transform:translate(" + pct(-efx) + "," + pct(-efy) + ");";
   auto dim = [&](const n8v_sizing &s, const char *name) {
     if (s.mode == N8V_SIZING_FIXED) out += std::string(name) + ":" + css::cssNumber(s.value) + "px;";
     else if (s.mode == N8V_SIZING_GROW) out += std::string(name) + ":100%;";
@@ -773,13 +798,35 @@ void HtmlTreeBackend::registerId(NativeNode &nn) {
   }
 }
 
+void HtmlTreeBackend::applyKeepOnScreen() {
+  const val window = val::global("window");
+  const double width = window["innerWidth"].as<double>();
+  const double height = window["innerHeight"].as<double>();
+  for (PNode *pn : live_) {
+    NativeNode *nn = native(*pn);
+    if (!nn || nn->kind() != Kind::Floating) continue;
+    const auto *o = propsOf<n8v_floating_options>(*pn);
+    if (!o || !o->keep_on_screen || nn->outer.isUndefined()) continue;
+    const val rect = nn->outer.call<val>("getBoundingClientRect");
+    const double w = rect["width"].as<double>(), h = rect["height"].as<double>();
+    if (w <= 0 || h <= 0) continue;
+    const double margin = o->screen_margin;
+    const double plainX = rect["left"].as<double>() - nn->adjustX, plainY = rect["top"].as<double>() - nn->adjustY;
+    const double newX = std::clamp(plainX, margin, std::max(margin, width - w - margin)) - plainX;
+    const double newY = std::clamp(plainY, margin, std::max(margin, height - h - margin)) - plainY;
+    if (newX == nn->adjustX && newY == nn->adjustY) continue;
+    nn->adjustX = newX;
+    nn->adjustY = newY;
+    nn->outer["style"].set("translate", css::cssNumber((float)newX) + "px " + css::cssNumber((float)newY) + "px");
+  }
+}
+
 void HtmlTreeBackend::applyStickyBottom() {
   for (auto &[id, nn] : byId_) {
     if (!nn->stickyBottom) continue;
     val el = nn->outer;
     const double height = el["scrollHeight"].as<double>();
     const double viewport = el["clientHeight"].as<double>();
-    // Content growing or the viewport shrinking (a taller composer) both move the bottom edge.
     if (height != nn->lastScrollHeight || viewport != nn->lastClientHeight) {
       if (nn->stickyAtBottom) el.set("scrollTop", height);
       nn->lastScrollHeight = height;
@@ -1013,6 +1060,18 @@ void HtmlTreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
     if (const auto *so = propsOf<n8v_sidebar_options>(*sidebar->node)) collapsed = so->collapsed && *so->collapsed;
   }
   setClass(nn.outer, classFor(css::sidebarRowCss(paint, isSelected, collapsed)));
+  if (sidebar && !collapsed) {
+    bool anyImage = false;
+    for (const NativeNode *kid : sidebar->kids) {
+      const auto *po = kid->node ? propsOf<n8v_page_options>(*kid->node) : nullptr;
+      if (po && !(po->icon && *po->icon) && po->image && *po->image) anyImage = true;
+    }
+    const SidebarPaint rows = paint.sidebar();
+    Padding pad = rows.rowPadding;
+    if (!(pad.left || pad.right || pad.top || pad.bottom)) pad = paint.button(ButtonStyle::Secondary, false, false).padding;
+    if (anyImage) nn.outer["style"].set("minHeight", std::to_string((int)(paint.button(style, false, false).fontSize * 2 + pad.top + pad.bottom)) + "px");
+    else nn.outer["style"].set("minHeight", std::string());
+  }
   bindEvents(nn, nn.outer, true);
   const std::string name = o.name ? o.name : "";
   nn.label.set("textContent", pageLabelWithBadges(name, o.notify, o.badge));
@@ -1099,7 +1158,7 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
           nn.titleEl,
           std::string("display:") + ((title.empty() && !collapsible) || collapsed ? "none" : "flex") +
             ";position:relative;align-items:center;justify-content:center;font-weight:bold;color:" + css::cssColor(tp.color) + ";font-family:" + css::cssFontFamily(tp.font) +
-            ";font-size:" + css::cssNumber(tp.fontSize) + "px;padding:4px 28px;flex:none;"
+            ";font-size:" + css::cssNumber(tp.fontSize) + "px;padding:6px 28px 12px;flex:none;"
         );
         const std::string arrowCss = "appearance:none;-webkit-appearance:none;border:0;background:transparent;cursor:pointer;width:28px;height:28px;flex:none;padding:0;font-"
                                      "size:20px;line-height:1;color:" +
@@ -1310,6 +1369,12 @@ extern "C" {
 
 EMSCRIPTEN_KEEPALIVE void n8v_html_file_dialog_done(int id, const char *paths) {
   if (n8v::detail::gInstance) n8v::detail::gInstance->onFileDialogDone(id, paths ? paths : "");
+}
+
+EMSCRIPTEN_KEEPALIVE int n8v_html_key(int ordinal, int key, unsigned mods) { return n8v::detail::gInstance && n8v::detail::gInstance->onKey(ordinal, key, mods) ? 1 : 0; }
+
+EMSCRIPTEN_KEEPALIVE void n8v_html_paste_files(int ordinal, const char *paths) {
+  if (n8v::detail::gInstance) n8v::detail::gInstance->onPasteFiles(ordinal, paths ? paths : "");
 }
 
 EMSCRIPTEN_KEEPALIVE void n8v_html_event(int ordinal, const char *type, const char *value) {
