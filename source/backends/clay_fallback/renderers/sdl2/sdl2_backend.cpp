@@ -3,6 +3,7 @@
 
 #include "backends/clay_fallback/text/line_layout.hpp"
 #include "core/native_widget_meta.hpp"
+#include "core/style.hpp"
 #include "core/text_style_flags.hpp"
 
 #include <SDL2/SDL_video.h>
@@ -79,6 +80,7 @@ bool Sdl2Backend::pumpEvents() {
       if (entry_.value) insertAtCursor(event.text.text);
       break;
     case SDL_KEYDOWN:
+      if (event.key.keysym.sym == SDLK_ESCAPE) escapePressed_ = true;
       if (entry_.value) handleEntryKey(event.key.keysym);
       else if (textSel_.active) handleTextKey(event.key.keysym);
       break;
@@ -107,7 +109,8 @@ void Sdl2Backend::beginFrame() {
   }
 
   Clay_SetPointerState({pointerX_, pointerY_}, pointerDown_);
-  SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
+  const Color window = activePaint().windowBackground();
+  SDL_SetRenderDrawColor(renderer_, (Uint8)window.r, (Uint8)window.g, (Uint8)window.b, 255);
   SDL_RenderClear(renderer_);
 }
 
@@ -157,6 +160,7 @@ void Sdl2Backend::present(Clay_RenderCommandArray commands) {
       pendingEntryDragging = false;
       if (meta && meta->kind == NativeWidgetKind::Entry) {
         pendingEntryMeta = meta;
+        if (stableWidgetKey(*meta) == entry_.ordinal) refreshFocusedEntryCallbacks(*meta);
         bool hit = Clay_PointerOver(Clay_ElementId{command->id});
         if (justClicked_ && hit) {
           pendingEntryClicked = true;
@@ -289,6 +293,8 @@ void Sdl2Backend::setCursor(CursorKind cursor) {
 void Sdl2Backend::shutdown() {
   for (auto &[source, texture] : imageTextures_) SDL_DestroyTexture(texture);
   imageTextures_.clear();
+  for (auto &[key, texture] : emojiTextures_) SDL_DestroyTexture(texture);
+  emojiTextures_.clear();
   if (pointerCursor_) {
     SDL_FreeCursor(pointerCursor_);
     pointerCursor_ = nullptr;

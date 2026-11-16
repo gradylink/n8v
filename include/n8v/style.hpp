@@ -161,6 +161,8 @@ struct Paint {
   virtual IconPaint icon() const = 0;
   virtual SidebarPaint sidebar() const = 0;
   virtual PanelPaint panel(PanelRole role, bool hovered, bool pressed) const = 0;
+  /** What the window is cleared to behind everything, by backends that draw it themselves. */
+  virtual Color windowBackground() const { return {255, 255, 255, 255}; }
 };
 
 } // namespace n8v

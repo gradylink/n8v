@@ -379,8 +379,8 @@ if(NOT EMSCRIPTEN)
 endif()
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/backends/html.cmake")
 
-# Qt can't draw the SVG-in-OpenType emoji fonts which have become the standard on some systems
-if(N8V_HAVE_QT)
+# Qt can't draw the SVG-in-OpenType emoji fonts which have become the standard on some systems, and the SDL2 backend only has a grayscale glyph atlas
+if(N8V_HAVE_QT OR TRUE)
   set(_N8V_EMOJI_STAGE "${CMAKE_CURRENT_BINARY_DIR}/n8v_emoji")
   set(_N8V_EMOJI_FONT "${_N8V_EMOJI_STAGE}/Twemoji.Mozilla.ttf")
   if(NOT EXISTS "${_N8V_EMOJI_FONT}")
@@ -393,7 +393,7 @@ if(N8V_HAVE_QT)
     list(GET _N8V_EMOJI_STATUS 0 _N8V_EMOJI_CODE)
     if(NOT _N8V_EMOJI_CODE EQUAL 0)
       file(REMOVE "${_N8V_EMOJI_FONT}")
-      message(WARNING "[n8v] Could not fetch the Twemoji font (${_N8V_EMOJI_STATUS}); the Qt backend will only show emoji the system can draw.")
+      message(WARNING "[n8v] Could not fetch the Twemoji font (${_N8V_EMOJI_STATUS}); the Qt and SDL2 backends will only show emoji the system can draw.")
     endif()
   endif()
   if(EXISTS "${_N8V_EMOJI_FONT}")
@@ -464,6 +464,7 @@ set(N8V_SOURCES
   source/backends/clay_fallback/text/bundled_font.cpp
   source/backends/clay_fallback/text/font_atlas.cpp
   source/backends/clay_fallback/text/line_layout.cpp
+  source/backends/clay_fallback/text/emoji.cpp
 )
 
 if(EMSCRIPTEN)
@@ -514,6 +515,10 @@ foreach(_n8v_target ${_n8v_targets})
   target_include_directories(${_n8v_target} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
   target_include_directories(${_n8v_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/source)
   target_link_libraries(${_n8v_target} PUBLIC n8v_fonts n8v_icons)
+  if(TARGET n8v_emoji)
+    target_compile_definitions(${_n8v_target} PRIVATE N8V_HAVE_BUNDLED_EMOJI)
+    target_link_libraries(${_n8v_target} PUBLIC n8v_emoji)
+  endif()
   cl_add_dep(${_n8v_target} plutosvg PUBLIC)
   cl_add_dep(${_n8v_target} clay PRIVATE)
   cl_add_dep(${_n8v_target} stb_truetype PRIVATE)

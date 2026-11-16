@@ -79,6 +79,8 @@ struct Backend {
   virtual bool aliasesSwitchAsCheckbox() const { return false; }
 
   virtual Clay_Vector2 consumeScrollDelta() { return {0, 0}; }
+
+  virtual bool consumeEscapePress() { return false; }
   virtual bool ownsScrollMath() const { return false; }
 
   virtual void setScrollOffsetY(uint32_t /*containerId*/, float /*y*/) {}

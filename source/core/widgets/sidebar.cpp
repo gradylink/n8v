@@ -9,11 +9,13 @@
 #include "core/clay_convert.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/text_style_flags.hpp"
+#include "core/theme_color.hpp"
 #include "core/tree/emit.hpp"
 #include "core/ui_core_internal.hpp"
 
 #include <clay.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <functional>
@@ -38,6 +40,11 @@ uint16_t snapGapToGrid(uint16_t value, float unit) {
 
 Clay_ElementId sidebarContentAnchorId(int sidebarOrdinal) { return Clay_GetElementIdWithIndex(CLAY_STRING("n8v-sidebar-content"), (uint32_t)sidebarOrdinal); }
 
+constexpr float kCollapsedWidth = 72.0f;
+constexpr float kCollapsedRowHeight = 60.0f;
+constexpr float kCollapsedIconSize = 40.0f;
+constexpr float kCollapseButtonSize = 28.0f;
+
 struct SidebarContext {
   int *selectedPtr = nullptr;
   std::function<void(int)> onChange;
@@ -45,7 +52,34 @@ struct SidebarContext {
   int ordinal = 0;
   bool compact = false;
   float contentWidth = 0.0f;
+  bool collapsible = false;
+  bool collapsed = false;
 };
+
+struct CollapseState {
+  bool *collapsed = nullptr;
+  n8v_bool_change_fn onCollapse = nullptr;
+  void *onCollapseUserdata = nullptr;
+};
+
+std::unordered_map<int, CollapseState> collapseStates;
+
+void dispatchCollapse(void *userdata) {
+  auto *state = static_cast<CollapseState *>(userdata);
+  if (!state || !state->collapsed) return;
+  *state->collapsed = !*state->collapsed;
+  if (state->onCollapse) state->onCollapse(*state->collapsed, state->onCollapseUserdata);
+}
+
+n8v::Color badgeFill(int color) {
+  if (color <= 0) {
+    n8v::Color text = n8v::activePaint().text(n8v::TextOptions{}).color;
+    text.a = 46;
+    return text;
+  }
+  const n8v_color named = n8v::detail::builtinThemeColor((n8v_named_color)color, false);
+  return {named.r, named.g, named.b, 255.0f};
+}
 
 std::vector<SidebarContext> sidebarStack;
 
@@ -70,11 +104,61 @@ void dispatchRowHover(Clay_ElementId /*elementId*/, Clay_PointerData pointerData
   if (meta && meta->onClick) meta->onClick(meta->onClickUserdata);
 }
 
+/** The arrow button that folds and unfolds a sidebar: a small hoverable square with a chevron. */
+void emitCollapseButton(const SidebarContext &ctx, int key, bool pointsRight) {
+  const n8v::ButtonPaint paint = n8v::activePaint().button(n8v::ButtonStyle::Ghost, false, false);
+  Clay__OpenElement();
+  const bool hovered = Clay_Hovered();
+  const n8v::ButtonPaint hoverPaint = n8v::activePaint().button(n8v::ButtonStyle::Ghost, hovered, hovered && n8v::activeBackend().pointerDown());
+  if (hovered) pendingCursor = n8v::CursorKind::Pointer;
+
+  Clay_ElementDeclaration decl = {};
+  decl.layout.sizing.width = CLAY_SIZING_FIXED(kCollapseButtonSize);
+  decl.layout.sizing.height = CLAY_SIZING_FIXED(kCollapseButtonSize);
+  decl.layout.childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER};
+  decl.backgroundColor = n8v::detail::toClay(hoverPaint.background);
+  decl.cornerRadius = {5, 5, 5, 5};
+
+  widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
+  n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
+  meta.kind = n8v::NativeWidgetKind::Button;
+  meta.ordinal = key;
+  meta.onClick = &dispatchCollapse;
+  meta.onClickUserdata = &collapseStates[ctx.ordinal];
+  decl.userData = &meta;
+  Clay__ConfigureOpenElement(decl);
+  Clay_OnHover(dispatchRowHover, &meta);
+
+  const int iconSize = (int)(paint.fontSize + 2);
+  const n8v::detail::DecodedImage *chevron = n8v::detail::getOrDecodeIcon(pointsRight ? "chevron-right" : "chevron-left", (uint16_t)iconSize, paint.textColor);
+  if (chevron) {
+    Clay__OpenElement();
+    Clay_ElementDeclaration iconDecl = {};
+    iconDecl.image.imageData = const_cast<n8v::detail::DecodedImage *>(chevron);
+    iconDecl.layout.sizing.width = CLAY_SIZING_FIXED((float)iconSize);
+    iconDecl.layout.sizing.height = CLAY_SIZING_FIXED((float)iconSize);
+    widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
+    n8v::detail::NativeWidgetMeta &iconMeta = widgetMetaStorage.back();
+    iconMeta.kind = n8v::NativeWidgetKind::Icon;
+    iconMeta.ordinal = key + 1;
+    iconMeta.image = chevron;
+    iconMeta.iconName = pointsRight ? "chevron-right" : "chevron-left";
+    iconMeta.iconTint = paint.textColor;
+    iconDecl.userData = &iconMeta;
+    Clay__ConfigureOpenElement(iconDecl);
+    Clay__CloseElement();
+  }
+  Clay__CloseElement();
+}
+
 } // namespace
 
 namespace n8v::detail::ui_internal {
 
-void releaseSidebarState(int ordinal) { pageClickStates.erase(ordinal); }
+void releaseSidebarState(int ordinal) {
+  pageClickStates.erase(ordinal);
+  collapseStates.erase(ordinal);
+}
 
 void resetSidebarFrameState() { sidebarStack.clear(); }
 
@@ -95,7 +179,10 @@ void openSidebar(const n8v_sidebar_options &opts, int ordinal) {
   if (listWidthSizing.mode != n8v::SizingMode::Fixed) {
     std::fprintf(stderr, "[n8v] sidebar(): width should be Sizing::fixed(...) - the content pane's position is derived from it directly\n");
   }
-  const float listWidthPx = listWidthSizing.value;
+  const bool collapsible = opts.collapsed != nullptr;
+  const bool collapsed = collapsible && *opts.collapsed;
+  if (collapsible) collapseStates[ordinal] = CollapseState{opts.collapsed, opts.on_collapse, opts.on_collapse_userdata};
+  const float listWidthPx = collapsed ? kCollapsedWidth : listWidthSizing.value;
 
   Clay_Dimensions windowSize = n8v::activeBackend().windowSize();
   float availableWidth = sidebarStack.empty() ? windowSize.width : sidebarStack.back().contentWidth;
@@ -113,6 +200,7 @@ void openSidebar(const n8v_sidebar_options &opts, int ordinal) {
   Clay__CloseElement();
 
   n8v::Padding pad = paint.padding;
+  if (collapsed) pad.left = pad.right = 6;
   uint16_t gap = (uint16_t)paint.rowGap;
   Clay_Dimensions cell = n8v::activeBackend().cellSize();
   if (cell.width > 0.0f && cell.height > 0.0f) {
@@ -129,7 +217,7 @@ void openSidebar(const n8v_sidebar_options &opts, int ordinal) {
   decl.layout.childGap = gap;
   decl.layout.padding = n8v::detail::toClay(pad);
   decl.layout.childAlignment.x = CLAY_ALIGN_X_CENTER;
-  decl.layout.sizing.width = n8v::detail::toClay(toSizing(opts.width));
+  decl.layout.sizing.width = collapsed ? CLAY_SIZING_FIXED(kCollapsedWidth) : n8v::detail::toClay(toSizing(opts.width));
   decl.layout.sizing.height = CLAY_SIZING_GROW(0);
   decl.backgroundColor = n8v::detail::toClay(paint.background);
   decl.cornerRadius = n8v::detail::toClay(paint.cornerRadius);
@@ -149,17 +237,51 @@ void openSidebar(const n8v_sidebar_options &opts, int ordinal) {
 
   Clay__ConfigureOpenElement(decl);
 
+  SidebarContext context{opts.selected, n8v::detail::toStdFunction(opts.on_change, opts.on_change_userdata), 0, ordinal, opts.compact, contentWidth, collapsible, collapsed};
+
   std::string_view titleView = toView(opts.title);
-  if (!titleView.empty()) {
-    n8v_text_options textOpts = {};
-    textOpts.bold = true;
-    text(textOpts, titleView, ordinal + 1);
+  if (!collapsed && (!titleView.empty() || collapsible)) {
+    Clay__OpenElement();
+    Clay_ElementDeclaration headerDecl = {};
+    headerDecl.layout.layoutDirection = CLAY_LEFT_TO_RIGHT;
+    headerDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
+    headerDecl.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
+    Clay__ConfigureOpenElement(headerDecl);
+    if (collapsible) {
+      Clay__OpenElement();
+      Clay_ElementDeclaration spacer = {};
+      spacer.layout.sizing.width = CLAY_SIZING_FIXED(kCollapseButtonSize);
+      Clay__ConfigureOpenElement(spacer);
+      Clay__CloseElement();
+    }
+    Clay__OpenElement();
+    Clay_ElementDeclaration titleDecl = {};
+    titleDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
+    titleDecl.layout.childAlignment.x = CLAY_ALIGN_X_CENTER;
+    Clay__ConfigureOpenElement(titleDecl);
+    if (!titleView.empty()) {
+      n8v_text_options textOpts = {};
+      textOpts.bold = true;
+      text(textOpts, titleView, ordinal + 1);
+    }
+    Clay__CloseElement();
+    if (collapsible) emitCollapseButton(context, ordinal + 5001, false);
+    Clay__CloseElement();
   }
 
-  sidebarStack.push_back(SidebarContext{opts.selected, n8v::detail::toStdFunction(opts.on_change, opts.on_change_userdata), 0, ordinal, opts.compact, contentWidth});
+  sidebarStack.push_back(context);
 }
 
 void closeSidebar() {
+  const SidebarContext context = sidebarStack.back();
+  if (context.collapsible && context.collapsed) {
+    Clay__OpenElement();
+    Clay_ElementDeclaration fill = {};
+    fill.layout.sizing.height = CLAY_SIZING_GROW(0);
+    Clay__ConfigureOpenElement(fill);
+    Clay__CloseElement();
+    emitCollapseButton(context, context.ordinal + 5002, true);
+  }
   sidebarStack.pop_back();
 
   Clay__CloseElement(); // list region
@@ -230,7 +352,8 @@ bool openPage(const n8v_page_options &opts, int rowOrdinal) {
   const bool pressed = hovered && n8v::activeBackend().pointerDown();
   const n8v::ButtonPaint paint = n8v::activePaint().button(selected ? n8v::ButtonStyle::Primary : n8v::ButtonStyle::Secondary, hovered, pressed);
 
-  const float iconSlotSize = hasImage ? (float)paint.fontSize * 2.0f : (float)paint.fontSize;
+  const bool collapsed = ctx.collapsed;
+  const float iconSlotSize = collapsed ? kCollapsedIconSize : hasImage ? (float)paint.fontSize * 2.0f : (float)paint.fontSize;
 
   std::string imagePathStorage(imageView);
   const n8v::detail::DecodedImage *rowImage = nullptr;
@@ -248,10 +371,15 @@ bool openPage(const n8v_page_options &opts, int rowOrdinal) {
   decl.layout.padding = n8v::detail::toClay(paint.padding);
   decl.layout.sizing.width = CLAY_SIZING_GROW(0);
   decl.backgroundColor = n8v::detail::toClay(paint.background);
-  if (rowImage) {
-    decl.layout.layoutDirection = CLAY_LEFT_TO_RIGHT;
-    decl.layout.childGap = paint.fontSize / 2;
-    decl.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
+  decl.layout.layoutDirection = CLAY_LEFT_TO_RIGHT;
+  decl.layout.childGap = paint.fontSize / 2;
+  decl.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
+  if (collapsed) {
+    decl.layout.padding = {0, 0, 0, 0};
+    decl.layout.childAlignment.x = CLAY_ALIGN_X_CENTER;
+    decl.layout.sizing.height = CLAY_SIZING_FIXED(kCollapsedRowHeight);
+  } else if (!ctx.compact) {
+    decl.layout.sizing.height = CLAY_SIZING_FIXED((float)paint.fontSize * 2.0f + paint.padding.top + paint.padding.bottom);
   }
   float radius = easeValue(animKey(rowOrdinal, 0), paint.cornerRadius.topLeft, paint.transitionSeconds);
   decl.cornerRadius = {radius, radius, radius, radius};
@@ -263,7 +391,7 @@ bool openPage(const n8v_page_options &opts, int rowOrdinal) {
 
   Clay_Dimensions nativeSize =
     n8v::activeBackend().measureNativeChrome(n8v::NativeWidgetKind::Button, nameView, paint.fontSize, rowImage != nullptr, hasImage ? iconSlotSize : 0.0f);
-  if (nativeSize.height > 0) decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
+  if (nativeSize.height > 0 && !collapsed) decl.layout.sizing.height = CLAY_SIZING_FIXED(nativeSize.height);
 
   n8v::CornerRadius imageCornerRadius{};
   if (hasImage) {
@@ -324,14 +452,75 @@ bool openPage(const n8v_page_options &opts, int rowOrdinal) {
     Clay__CloseElement();
   }
 
-  textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, false, false, false, true, rowOrdinal});
-  Clay_TextElementConfig textConfig = {};
-  textConfig.textColor = n8v::detail::toClay(paint.textColor);
-  textConfig.fontSize = paint.fontSize;
-  textConfig.fontId = n8v::detail::textFontId(paint.font, false, false);
-  textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
-  textConfig.userData = &textStyleStorage.back();
-  CLAY_TEXT(internString(n8v::detail::pageLabelWithBadges(std::string(nameView), opts.notify, opts.badge)), textConfig);
+  if (opts.notify) {
+    Clay__OpenElement();
+    Clay_ElementDeclaration bar = {};
+    bar.layout.sizing.width = CLAY_SIZING_FIXED(3);
+    bar.layout.sizing.height = CLAY_SIZING_FIXED(16);
+    bar.backgroundColor = n8v::detail::toClay(paint.textColor);
+    bar.cornerRadius = {2, 2, 2, 2};
+    bar.floating.attachTo = CLAY_ATTACH_TO_PARENT;
+    bar.floating.attachPoints.element = CLAY_ATTACH_POINT_LEFT_CENTER;
+    bar.floating.attachPoints.parent = CLAY_ATTACH_POINT_LEFT_CENTER;
+    bar.floating.offset = {collapsed ? 2.0f : 3.0f, 0};
+    bar.floating.pointerCaptureMode = CLAY_POINTER_CAPTURE_MODE_PASSTHROUGH;
+    Clay__ConfigureOpenElement(bar);
+    Clay__CloseElement();
+  }
+
+  if (collapsed && !rowImage && !nameView.empty()) {
+    size_t length = 1;
+    const unsigned char lead = (unsigned char)nameView[0];
+    if (lead >= 0xF0) length = 4;
+    else if (lead >= 0xE0) length = 3;
+    else if (lead >= 0xC0) length = 2;
+    textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, true, false, false, true, rowOrdinal});
+    Clay_TextElementConfig initial = {};
+    initial.textColor = n8v::detail::toClay(paint.textColor);
+    initial.fontSize = (uint16_t)(paint.fontSize + 5);
+    initial.fontId = n8v::detail::textFontId(paint.font, true, false);
+    initial.wrapMode = CLAY_TEXT_WRAP_NONE;
+    initial.userData = &textStyleStorage.back();
+    CLAY_TEXT(internString(std::string(nameView.substr(0, std::min(length, nameView.size())))), initial);
+  }
+
+  if (!collapsed) {
+    Clay__OpenElement();
+    Clay_ElementDeclaration nameBox = {};
+    nameBox.layout.sizing.width = CLAY_SIZING_GROW(0);
+    nameBox.clip.horizontal = true;
+    Clay__ConfigureOpenElement(nameBox);
+    textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, opts.notify, false, false, true, rowOrdinal});
+    Clay_TextElementConfig textConfig = {};
+    textConfig.textColor = n8v::detail::toClay(paint.textColor);
+    textConfig.fontSize = paint.fontSize;
+    textConfig.fontId = n8v::detail::textFontId(paint.font, opts.notify, false);
+    textConfig.wrapMode = CLAY_TEXT_WRAP_NONE;
+    textConfig.userData = &textStyleStorage.back();
+    CLAY_TEXT(internString(std::string(nameView)), textConfig);
+    Clay__CloseElement();
+
+    if (opts.badge && *opts.badge) {
+
+      Clay__OpenElement();
+      Clay_ElementDeclaration pill = {};
+      pill.layout.padding = {7, 7, 1, 1};
+      pill.layout.childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER};
+      pill.backgroundColor = n8v::detail::toClay(badgeFill((int)opts.badge_color));
+      const float pillRadius = paint.fontSize;
+      pill.cornerRadius = {pillRadius, pillRadius, pillRadius, pillRadius};
+      Clay__ConfigureOpenElement(pill);
+      textStyleStorage.push_back(n8v::detail::TextStyleFlags{paint.font, true, false, false, true, rowOrdinal, false, false, true});
+      Clay_TextElementConfig badgeText = {};
+      badgeText.textColor = n8v::detail::toClay(opts.badge_color > 0 ? n8v::Color{255, 255, 255, 255} : paint.textColor);
+      badgeText.fontSize = (uint16_t)std::max(8L, std::lround(paint.fontSize * 0.8));
+      badgeText.fontId = n8v::detail::textFontId(paint.font, true, false);
+      badgeText.wrapMode = CLAY_TEXT_WRAP_NONE;
+      badgeText.userData = &textStyleStorage.back();
+      CLAY_TEXT(internString(std::string(opts.badge)), badgeText);
+      Clay__CloseElement();
+    }
+  }
 
   Clay__CloseElement(); // row
 

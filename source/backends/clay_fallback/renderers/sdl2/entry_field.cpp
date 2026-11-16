@@ -197,6 +197,14 @@ void Sdl2Backend::handleEntryKey(SDL_Keysym keysym) {
   }
 }
 
+void Sdl2Backend::refreshFocusedEntryCallbacks(const NativeWidgetMeta &meta) {
+  entry_.onChange = meta.onEntryChange;
+  entry_.onChangeUserdata = meta.onEntryChangeUserdata;
+  entry_.onSubmit = meta.onEntrySubmit;
+  entry_.onSubmitUserdata = meta.onEntrySubmitUserdata;
+  entry_.submitMode = meta.entrySubmitMode;
+}
+
 void Sdl2Backend::renderEntryText(NativeWidgetMeta *meta, const Clay_RenderCommand &command, bool clicked, bool dragging) {
   auto *flags = static_cast<TextStyleFlags *>(command.userData);
   uint16_t fontSize = command.renderData.text.fontSize;

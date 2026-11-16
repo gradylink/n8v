@@ -12,10 +12,17 @@
 
 namespace n8v::detail {
 
+struct EmojiQuad {
+  uint32_t codepoint = 0;
+  float x = 0;
+  size_t codepointIndex = 0;
+};
+
 struct LineLayoutResult {
   std::shared_ptr<FontAtlas> atlas;
   FontGeneration *generation = nullptr;
   std::vector<GlyphQuad> quads;
+  std::vector<EmojiQuad> emoji;
   std::vector<float> caretX;
   float scale = 1.0f;
   float width = 0, height = 0;

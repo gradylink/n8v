@@ -1,3 +1,4 @@
+#include "backends/clay_fallback/text/emoji.hpp"
 #include "sdl2_backend_impl.hpp"
 #include "backends/text_edit_utils.hpp"
 
@@ -7,6 +8,7 @@
 #include <SDL2/SDL.h>
 
 #include <algorithm>
+#include <memory>
 #include <cmath>
 #include <string_view>
 #include <vector>
@@ -147,6 +149,15 @@ void Sdl2Backend::drawText(const Clay_RenderCommand &command, size_t selStartByt
     SDL_RenderGeometry(renderer_, texture, vertices.data(), (int)vertices.size(), indices.data(), (int)indices.size());
   }
 
+  for (const EmojiQuad &emoji : layout.emoji) {
+    const int size = std::max(6, (int)std::lround(textData.fontSize));
+    const std::shared_ptr<const EmojiBitmap> bitmap = emojiBitmap(emoji.codepoint, size);
+    SDL_Texture *picture = bitmap ? emojiTexture(emoji.codepoint, size) : nullptr;
+    if (!picture) continue;
+    SDL_Rect to{(int)std::round(originX + emoji.x * layout.scale), (int)std::round(baselineY - bitmap->ascent), bitmap->width, bitmap->height};
+    SDL_RenderCopy(renderer_, picture, nullptr, &to);
+  }
+
   if (underline) {
     SDL_SetRenderDrawColor(renderer_, tint.r, tint.g, tint.b, tint.a);
     int underlineY = (int)std::round(command.boundingBox.y + command.boundingBox.height - 1.0f);
@@ -158,6 +169,22 @@ void Sdl2Backend::drawText(const Clay_RenderCommand &command, size_t selStartByt
     int strikeY = (int)std::round(command.boundingBox.y + command.boundingBox.height * 0.5f);
     SDL_RenderDrawLine(renderer_, (int)originX, strikeY, (int)std::round(originX + layout.width), strikeY);
   }
+}
+
+SDL_Texture *Sdl2Backend::emojiTexture(uint32_t codepoint, int pixelSize) {
+  const uint64_t key = (uint64_t)codepoint << 16 | (uint64_t)(pixelSize & 0xFFFF);
+  if (auto it = emojiTextures_.find(key); it != emojiTextures_.end()) return it->second;
+
+  SDL_Texture *texture = nullptr;
+  if (const std::shared_ptr<const EmojiBitmap> bitmap = emojiBitmap(codepoint, pixelSize)) {
+    texture = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, bitmap->width, bitmap->height);
+    if (texture) {
+      SDL_UpdateTexture(texture, nullptr, bitmap->rgba.data(), bitmap->width * 4);
+      SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    }
+  }
+  emojiTextures_[key] = texture;
+  return texture;
 }
 
 void Sdl2Backend::drawFocusRing(const Clay_BoundingBox &box, const Clay_CornerRadius &cornerRadius) {

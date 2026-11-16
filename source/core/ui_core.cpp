@@ -218,6 +218,13 @@ void n8v_begin_frame(void) {
 
   n8v::Backend &backend = n8v::activeBackend();
   backend.beginFrame();
+  {
+    static bool pointerWasDown = false;
+    const bool down = backend.pointerDown();
+    pointerPressedThisFrame = down && !pointerWasDown;
+    pointerWasDown = down;
+    escapePressedThisFrame = backend.consumeEscapePress();
+  }
 
   textStorage.clear();
   textStyleStorage.clear();
@@ -342,17 +349,55 @@ bool n8v_is_hovered(const char *id) {
 
 namespace n8v::detail::emit {
 
+namespace {
+
+struct FloatingAdjust {
+  float x = 0.0f;
+  float y = 0.0f;
+};
+
+} // namespace
+
 void openFloating(const n8v_floating_options &options) {
+  Clay_ElementId parentId{};
+  parentId.id = Clay_GetOpenElementId();
   openElementMaybeWithId(options.id);
+  const bool popover = options.keep_on_screen;
+  const bool hasId = options.id && *options.id;
+  const Clay_ElementId selfId = hasId ? Clay_GetElementId(Clay_String{false, (int32_t)std::strlen(options.id), options.id}) : Clay_ElementId{};
+
+  if (options.on_dismiss) {
+    const bool inside = Clay_Hovered() || Clay_PointerOver(parentId);
+    if (escapePressedThisFrame || (pointerPressedThisFrame && !inside)) options.on_dismiss(options.on_dismiss_userdata);
+  }
+
+  static std::unordered_map<uint32_t, FloatingAdjust> adjusts;
+  float nudgeX = 0.0f, nudgeY = 0.0f;
+  if (popover && hasId) {
+    FloatingAdjust &adjust = adjusts[selfId.id];
+    const Clay_ElementData previous = Clay_GetElementData(selfId);
+    if (previous.found) {
+      const Clay_Dimensions window = n8v::activeBackend().windowSize();
+      const float margin = options.screen_margin;
+      const float plainX = previous.boundingBox.x - adjust.x, plainY = previous.boundingBox.y - adjust.y;
+      const float maxX = std::max(margin, window.width - previous.boundingBox.width - margin);
+      const float maxY = std::max(margin, window.height - previous.boundingBox.height - margin);
+      adjust.x = std::clamp(plainX, margin, maxX) - plainX;
+      adjust.y = std::clamp(plainY, margin, maxY) - plainY;
+    }
+    nudgeX = adjust.x;
+    nudgeY = adjust.y;
+  }
 
   Clay_ElementDeclaration decl = {};
   decl.layout.sizing.width = n8v::detail::toClay(toSizing(options.width));
   decl.layout.sizing.height = n8v::detail::toClay(toSizing(options.height));
   decl.floating.attachTo = CLAY_ATTACH_TO_PARENT;
-  decl.floating.clipTo = CLAY_CLIP_TO_ATTACHED_PARENT;
+  decl.floating.clipTo = popover ? CLAY_CLIP_TO_NONE : CLAY_CLIP_TO_ATTACHED_PARENT;
+  if (popover) decl.floating.zIndex = 100;
   decl.floating.attachPoints.element = n8v::detail::toClay(toAttachPoint(options.element_attach_point));
   decl.floating.attachPoints.parent = n8v::detail::toClay(toAttachPoint(options.parent_attach_point));
-  decl.floating.offset = {options.offset_x, options.offset_y};
+  decl.floating.offset = {options.offset_x + nudgeX, options.offset_y + nudgeY};
 
   Clay__ConfigureOpenElement(decl);
 }

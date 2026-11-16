@@ -14,4 +14,10 @@ StyleFamily activeStyleFamily();
 
 uint64_t activeStyleGeneration();
 
+/**
+ * Whether the desktop prefers a dark appearance: N8V_THEME=dark|light overrides, else the GNOME/GTK/KDE settings are consulted.
+ * Only the backends that draw everything themselves (the Clay ones) look at this; native backends follow their toolkit.
+ */
+bool activeThemeIsDark();
+
 } // namespace n8v

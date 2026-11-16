@@ -169,6 +169,8 @@ inline std::deque<n8v::detail::TextStyleFlags> textStyleStorage;
 inline std::deque<n8v::detail::NativeWidgetMeta> widgetMetaStorage;
 
 inline n8v::CursorKind pendingCursor = n8v::CursorKind::Default;
+inline bool pointerPressedThisFrame = false;
+inline bool escapePressedThisFrame = false;
 inline float currentDelta = 0.0f;
 
 inline int64_t animKey(int ordinal, int slot) { return (int64_t)ordinal * 64 + slot; }

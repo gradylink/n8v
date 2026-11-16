@@ -9,6 +9,7 @@
 #include <SDL2/SDL.h>
 
 #include <cstdint>
+#include <utility>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -27,6 +28,7 @@ public:
   bool showMessageDialog(const MessageDialogRequest &request, MessageDialogDone done) override;
   bool pointerDown() const override { return pointerDown_; }
   bool isEntryFocused(int ordinal) const override { return entry_.ordinal == ordinal; }
+  bool consumeEscapePress() override { return std::exchange(escapePressed_, false); }
   Clay_Vector2 consumeScrollDelta() override {
     Clay_Vector2 delta = pendingScrollDelta_;
     pendingScrollDelta_ = {0, 0};
@@ -58,6 +60,8 @@ private:
     size_t selStart() const { return std::min(cursor, anchor); }
     size_t selEnd() const { return std::max(cursor, anchor); }
   };
+
+  void refreshFocusedEntryCallbacks(const NativeWidgetMeta &meta);
 
   struct EntryLineBox {
     size_t start = 0;
@@ -119,6 +123,7 @@ private:
     const Clay_BoundingBox &textBox, std::string_view value, FontFamily family, uint16_t fontSize, size_t selStart, size_t selEnd, bool bold = false, bool italic = false
   );
   void uploadAtlas(FontGeneration &gen);
+  SDL_Texture *emojiTexture(uint32_t codepoint, int pixelSize);
   void drawText(const Clay_RenderCommand &command, size_t selStartByte = SIZE_MAX, size_t selEndByte = SIZE_MAX, SDL_Color selectedTint = SDL_Color{255, 255, 255, 255});
   void drawFocusRing(const Clay_BoundingBox &box, const Clay_CornerRadius &cornerRadius);
   void drawThickLine(float x0, float y0, float x1, float y1, float thickness, const Clay_Color &color);
@@ -160,6 +165,8 @@ private:
   int clickCount_ = 0;
   bool debugModeChecked_ = false;
   std::unordered_map<const void *, SDL_Texture *> imageTextures_;
+  std::unordered_map<uint64_t, SDL_Texture *> emojiTextures_;
+  bool escapePressed_ = false;
   Clay_Vector2 pendingScrollDelta_{0, 0};
   std::vector<SDL_Rect> clipStack_;
 };

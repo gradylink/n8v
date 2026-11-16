@@ -2,11 +2,20 @@
 
 #include <n8v/types.hpp>
 
+#include "core/style.hpp"
+#include "core/theme_color.hpp"
+
 #include <clay.h>
 
 namespace n8v::detail {
 
-inline Clay_Color toClay(const Color &color) { return {color.r, color.g, color.b, color.a}; }
+inline Clay_Color toClay(const Color &color) {
+  if (color.a < 0.0f) {
+    const n8v_color resolved = resolveThemeColor(n8v_color{color.r, color.g, color.b, color.a}, activeThemeIsDark());
+    return {resolved.r, resolved.g, resolved.b, resolved.a};
+  }
+  return {color.r, color.g, color.b, color.a};
+}
 
 inline Clay_Padding toClay(const Padding &padding) { return {padding.left, padding.right, padding.top, padding.bottom}; }
 
