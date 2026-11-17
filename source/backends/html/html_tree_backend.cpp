@@ -1085,6 +1085,7 @@ void HtmlTreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
     setImage(nn.image, getOrDecodeIcon(o.icon, glyph, bp.textColor));
     nn.image["style"].set("width", std::to_string(glyph) + "px");
     nn.image["style"].set("height", std::to_string(glyph) + "px");
+    nn.image["style"].set("borderRadius", std::string());
   } else if (hasImage) {
     n8v_image_options imageOptions = {};
     imageOptions.source_kind = N8V_IMAGE_SOURCE_PATH;
@@ -1093,6 +1094,7 @@ void HtmlTreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
     setImage(nn.image, getOrFitImageInSquare(getOrDecodeImage(imageOptions), box));
     nn.image["style"].set("width", std::to_string(box) + "px");
     nn.image["style"].set("height", std::to_string(box) + "px");
+    nn.image["style"].set("borderRadius", std::string("22%"));
   }
   nn.image.set("hidden", !(hasIcon || hasImage));
   layoutPageContent(nn);
