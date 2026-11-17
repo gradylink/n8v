@@ -7,6 +7,13 @@ EM_JS(void, n8vHtmlInstallListeners, (), {
   }
   function ordinalOf(el) { return parseInt(el.getAttribute('data-n8v'), 10); }
 
+  Module.n8vActivity = 0;
+  function bump() { Module.n8vActivity++; }
+  ['click', 'mousedown', 'mouseup', 'mouseover', 'mouseout', 'wheel', 'scroll', 'keydown', 'keyup', 'input', 'change', 'paste', 'focusin', 'focusout', 'touchstart', 'touchmove', 'touchend', 'dragover', 'drop', 'contextmenu'].forEach(function(type) {
+    document.addEventListener(type, bump, {capture: true, passive: true});
+  });
+  window.addEventListener('resize', bump);
+
   document.addEventListener('click', function(e) {
     var el = e.target.closest ? e.target.closest('[data-n8v-click]') : null;
     if (!el) return;

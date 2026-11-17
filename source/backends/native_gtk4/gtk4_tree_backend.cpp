@@ -25,6 +25,9 @@
 
 #ifdef N8V_HAVE_ADWAITA
 #include <adwaita.h>
+#if ADW_CHECK_VERSION(1, 5, 0)
+#define N8V_HAVE_ADW_ALERT_DIALOG 1
+#endif
 #endif
 
 #include <algorithm>
@@ -393,7 +396,7 @@ public:
     if (!window_) return false;
     const char *heading = request.title.empty() ? request.message.c_str() : request.title.c_str();
     const char *body = request.title.empty() ? nullptr : request.message.c_str();
-#if defined(N8V_HAVE_ADWAITA) && ADW_CHECK_VERSION(1, 5, 0)
+#ifdef N8V_HAVE_ADW_ALERT_DIALOG
     AdwDialog *dialog = adw_alert_dialog_new(heading, body);
     for (size_t i = 0; i < request.buttons.size(); ++i) {
       const std::string id = std::to_string(i);
@@ -422,7 +425,7 @@ public:
 #endif
   }
 
-#if defined(N8V_HAVE_ADWAITA) && ADW_CHECK_VERSION(1, 5, 0)
+#ifdef N8V_HAVE_ADW_ALERT_DIALOG
   static void onAdwMessageDialogDone(GObject *source, GAsyncResult *res, gpointer data) {
     std::unique_ptr<MessageDialogDone> done(static_cast<MessageDialogDone *>(data));
     const char *response = adw_alert_dialog_choose_finish(ADW_ALERT_DIALOG(source), res);

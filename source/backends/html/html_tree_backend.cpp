@@ -22,6 +22,7 @@
 #include <emscripten/val.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -295,17 +296,42 @@ public:
   }
 
   bool pumpEvents() override {
-    constexpr double targetFrameMs = 1000.0 / 60.0;
-    const double now = emscripten_get_now();
-    const double elapsed = lastFrameTime_ > 0.0 ? now - lastFrameTime_ : targetFrameMs;
-    const double remaining = targetFrameMs - elapsed;
-    emscripten_sleep(remaining > 0.0 ? (unsigned int)remaining : 0);
+    constexpr double busyFrameMs = 1000.0 / 60.0, idleFrameMs = 250.0, sliceMs = 8.0;
+    constexpr int settleFrames = 4;
+    const bool busy = settleFrames_ > 0 || !pendingScrolls_.empty() || !pendingFocus_.empty();
+    const double interval = busy ? busyFrameMs : idleFrameMs;
+    const double started = lastFrameTime_ > 0.0 ? lastFrameTime_ : emscripten_get_now() - interval;
+
+    bool activity = false, userActivity = false;
+    for (;;) {
+      const double counter = val::module_property("n8vActivity").as<double>();
+      const bool woken = wakeRequested_.exchange(false);
+      const bool touched = counter != lastActivityCounter_;
+      if (woken || touched) {
+        lastActivityCounter_ = counter;
+        activity = true;
+        userActivity = touched;
+        break;
+      }
+      const double left = interval - (emscripten_get_now() - started);
+      if (left <= 0.0) break;
+      emscripten_sleep((unsigned int)std::max(1.0, std::min(sliceMs, left)));
+    }
+    if (activity) {
+      const double left = busyFrameMs - (emscripten_get_now() - started);
+      if (left > 0.0) emscripten_sleep((unsigned int)left);
+      settleFrames_ = std::max(settleFrames_, userActivity ? settleFrames : 1);
+    } else if (settleFrames_ > 0) {
+      --settleFrames_;
+    }
     lastFrameTime_ = emscripten_get_now();
     val win = val::global("window");
     width_ = win["innerWidth"].as<int>();
     height_ = win["innerHeight"].as<int>();
     return true;
   }
+
+  void wake() override { wakeRequested_ = true; }
 
   bool pointerDown() const override { return false; }
   Clay_Dimensions windowSize() const override { return {(float)width_, (float)height_}; }
@@ -565,6 +591,10 @@ private:
   }
 
   void setImage(val &img, const DecodedImage *decoded) {
+    const double key = decoded ? (double)(uintptr_t)decoded + (double)decoded->width * 3.0 + (double)decoded->height * 7.0 : 0.0;
+    const val previous = img["n8vImage"];
+    if (!previous.isUndefined() && previous.as<double>() == key) return;
+    img.set("n8vImage", key);
     if (!decoded) {
       img.call<void>("removeAttribute", std::string("src"));
       return;
@@ -616,6 +646,9 @@ private:
   uint64_t styleGeneration_ = 0;
   int width_ = 0, height_ = 0;
   double lastFrameTime_ = 0.0;
+  double lastActivityCounter_ = -1.0;
+  int settleFrames_ = 0;
+  std::atomic<bool> wakeRequested_{false};
   bool initialized_ = false;
 };
 
