@@ -118,8 +118,6 @@ struct NativeNode {
   bool parentIsRow = false;
   bool stickyBottom = false;
   double lastClientHeight = -1.0;
-  double adjustX = 0.0;
-  double adjustY = 0.0;
   bool stickyAtBottom = true;
   double lastScrollHeight = 0.0;
   std::string lastItemsKey;
@@ -811,12 +809,13 @@ void HtmlTreeBackend::applyKeepOnScreen() {
     const double w = rect["width"].as<double>(), h = rect["height"].as<double>();
     if (w <= 0 || h <= 0) continue;
     const double margin = o->screen_margin;
-    const double plainX = rect["left"].as<double>() - nn->adjustX, plainY = rect["top"].as<double>() - nn->adjustY;
+    double currentX = 0.0, currentY = 0.0;
+    const std::string applied = nn->outer["style"]["translate"].as<std::string>();
+    if (!applied.empty()) std::sscanf(applied.c_str(), "%lfpx %lfpx", &currentX, &currentY);
+    const double plainX = rect["left"].as<double>() - currentX, plainY = rect["top"].as<double>() - currentY;
     const double newX = std::clamp(plainX, margin, std::max(margin, width - w - margin)) - plainX;
     const double newY = std::clamp(plainY, margin, std::max(margin, height - h - margin)) - plainY;
-    if (newX == nn->adjustX && newY == nn->adjustY) continue;
-    nn->adjustX = newX;
-    nn->adjustY = newY;
+    if (std::abs(newX - currentX) < 0.5 && std::abs(newY - currentY) < 0.5) continue;
     nn->outer["style"].set("translate", css::cssNumber((float)newX) + "px " + css::cssNumber((float)newY) + "px");
   }
 }
@@ -1158,15 +1157,16 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
           nn.titleEl,
           std::string("display:") + ((title.empty() && !collapsible) || collapsed ? "none" : "flex") +
             ";position:relative;align-items:center;justify-content:center;font-weight:bold;color:" + css::cssColor(tp.color) + ";font-family:" + css::cssFontFamily(tp.font) +
-            ";font-size:" + css::cssNumber(tp.fontSize) + "px;padding:6px 28px 12px;flex:none;"
+            ";font-size:" + css::cssNumber(tp.fontSize) + "px;padding:6px 36px 12px;flex:none;"
         );
-        const std::string arrowCss = "appearance:none;-webkit-appearance:none;border:0;background:transparent;cursor:pointer;width:28px;height:28px;flex:none;padding:0;font-"
-                                     "size:20px;line-height:1;color:" +
-                                     css::cssColor(tp.color) + ";opacity:.75;border-radius:6px;";
-        setCss(nn.collapseTop, arrowCss + "position:absolute;right:0;top:50%;transform:translateY(-50%);display:" + (collapsible && !collapsed ? "block" : "none") + ";");
-        setCss(nn.collapseBottom, arrowCss + "align-self:center;margin-top:6px;display:" + (collapsed ? "block" : "none") + ";");
-        nn.collapseTop.set("textContent", std::string("\xe2\x80\xb9"));
-        nn.collapseBottom.set("textContent", std::string("\xe2\x80\xba"));
+        const std::string arrowCss = "appearance:none;-webkit-appearance:none;border:0;background-color:transparent;cursor:pointer;width:28px;height:28px;flex:none;padding:0;"
+                                     "background-repeat:no-repeat;background-position:center;background-size:16px 16px;opacity:.75;border-radius:6px;";
+        setCss(
+          nn.collapseTop,
+          arrowCss + css::chevronCss(tp.color, false) +
+            "position:absolute;right:6px;top:50%;transform:translateY(-50%);display:" + (collapsible && !collapsed ? "block" : "none") + ";"
+        );
+        setCss(nn.collapseBottom, arrowCss + css::chevronCss(tp.color, true) + "align-self:center;margin-top:6px;display:" + (collapsed ? "block" : "none") + ";");
         setAttr(nn.collapseTop, "title", "Collapse");
         setAttr(nn.collapseBottom, "title", "Expand");
         bindEvents(nn, nn.collapseTop, true);

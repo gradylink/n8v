@@ -268,6 +268,12 @@ std::string panelCss(const Paint &paint, PanelRole role) {
   return css;
 }
 
+std::string chevronCss(const Color &c, bool pointsRight) {
+  const char *path = pointsRight ? "M5.5 3.5L10 8l-4.5 4.5" : "M10.5 3.5L6 8l4.5 4.5";
+  return "background-image:url(\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='" + std::string(path) + "' fill='none' stroke='" + svgColor(c) +
+         "' stroke-opacity='" + svgOpacity(c) + "' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>\");";
+}
+
 std::string sidebarRowCss(const Paint &paint, bool selected, bool collapsed) {
   const SidebarPaint rows = paint.sidebar();
   auto make = [&](bool hovered, bool pressed) {

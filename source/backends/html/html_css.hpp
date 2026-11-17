@@ -26,6 +26,7 @@ std::string dropdownCss(const Paint &paint);
 std::string sliderCss(const Paint &paint);
 std::string panelCss(const Paint &paint, PanelRole role);
 std::string sidebarListCss(const Paint &paint);
+std::string chevronCss(const Color &c, bool pointsRight);
 std::string sidebarRowCss(const Paint &paint, bool selected, bool collapsed);
 std::string imageCss(const CornerRadius &radius);
 std::string documentCss(const Paint &paint);
