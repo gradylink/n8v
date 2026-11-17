@@ -8,6 +8,7 @@
 #include "core/image_loader.hpp"
 #include "core/markdown/markdown.hpp"
 #include "core/markdown/markdown_to_html.hpp"
+#include "core/open_url.hpp"
 #include "core/style.hpp"
 #include "core/theme_color.hpp"
 #include "core/tree/dispatch.hpp"
@@ -1381,6 +1382,10 @@ extern "C" {
 
 EMSCRIPTEN_KEEPALIVE void n8v_html_file_dialog_done(int id, const char *paths) {
   if (n8v::detail::gInstance) n8v::detail::gInstance->onFileDialogDone(id, paths ? paths : "");
+}
+
+EMSCRIPTEN_KEEPALIVE void n8v_html_open_url(const char *url) {
+  if (url) n8v::detail::openUrl(url);
 }
 
 EMSCRIPTEN_KEEPALIVE int n8v_html_key(int ordinal, int key, unsigned mods) { return n8v::detail::gInstance && n8v::detail::gInstance->onKey(ordinal, key, mods) ? 1 : 0; }

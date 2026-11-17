@@ -14,6 +14,14 @@ EM_JS(void, n8vHtmlInstallListeners, (), {
     send(ordinalOf(el), 'click', '');
   });
 
+  document.addEventListener('click', function(e) {
+    if (e.defaultPrevented || e.button != 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var a = e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a || !a.closest('#n8v-root')) return;
+    e.preventDefault();
+    Module.ccall('n8v_html_open_url', null, ['string'], [a.getAttribute('href')]);
+  });
+
   document.addEventListener('change', function(e) {
     var el = e.target;
     if (!el.hasAttribute || !el.hasAttribute('data-n8v')) return;
