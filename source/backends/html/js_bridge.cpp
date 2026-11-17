@@ -140,6 +140,38 @@ EM_JS(void, n8vHtmlPickFiles, (int id, int multiple, int folder, const char *acc
   input.click();
 });
 
+EM_JS_DEPS(n8v_html_media, "$UTF8ToString,$stringToNewUTF8");
+EM_JS(char *, n8vHtmlMediaUrl, (const char *path), {
+  var p = UTF8ToString(path);
+  if (/^(https?|blob|data):/i.test(p)) return stringToNewUTF8(p);
+  var store = Module.n8vMediaUrls || (Module.n8vMediaUrls = {});
+  try {
+  var stat = FS.stat(p);
+  var key = stat.size + ':' + stat.mtime.getTime();
+  if (store[p] && store[p].key == key) return stringToNewUTF8(store[p].url);
+  if (store[p]) URL.revokeObjectURL(store[p].url);
+  var bytes = FS.readFile(p);
+  var type = '';
+  var ext = p.lastIndexOf('.') >= 0 ? p.substring(p.lastIndexOf('.') + 1).toLowerCase() : '';
+  var byExtension = {mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', ogv: 'video/ogg', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', oga: 'audio/ogg', m4a: 'audio/mp4', flac: 'audio/flac', opus: 'audio/ogg'};
+  if (byExtension[ext]) type = byExtension[ext];
+  if (!type && bytes.length > 12) {
+    var head = String.fromCharCode.apply(null, bytes.subarray(0, 12));
+    if (head.substring(4, 8) == 'ftyp') type = head.substring(8, 12) == 'qt  ' ? 'video/quicktime' : 'video/mp4';
+    else if (bytes[0] == 0x1A && bytes[1] == 0x45 && bytes[2] == 0xDF && bytes[3] == 0xA3) type = 'video/webm';
+    else if (head.substring(0, 4) == 'OggS') type = 'audio/ogg';
+    else if (head.substring(0, 4) == 'RIFF' && head.substring(8, 12) == 'WAVE') type = 'audio/wav';
+    else if (head.substring(0, 3) == 'ID3' || (bytes[0] == 0xFF && (bytes[1] & 0xE0) == 0xE0)) type = 'audio/mpeg';
+    else if (head.substring(0, 4) == 'fLaC') type = 'audio/flac';
+  }
+  var url = URL.createObjectURL(new Blob([bytes], {type: type}));
+  store[p] = {key: key, url: url};
+  return stringToNewUTF8(url);
+  } catch (e) {
+    return stringToNewUTF8(p);
+  }
+});
+
 EM_JS(int, n8vHtmlMessage, (const char *text, int confirmDialog), {
   var message = UTF8ToString(text);
   if (confirmDialog) return window.confirm(message) ? 1 : 0;
@@ -148,6 +180,7 @@ EM_JS(int, n8vHtmlMessage, (const char *text, int confirmDialog), {
 });
 // clang-format on
 
+extern "C" char *n8vHtmlMediaUrlBridge(const char *path) { return n8vHtmlMediaUrl(path); }
 extern "C" int n8vHtmlMessageBridge(const char *text, int confirm) { return n8vHtmlMessage(text, confirm); }
 extern "C" void n8vHtmlInstallListenersBridge() { n8vHtmlInstallListeners(); }
 extern "C" void n8vHtmlPickFilesBridge(int id, int multiple, int folder, const char *accept) { n8vHtmlPickFiles(id, multiple, folder, accept); }

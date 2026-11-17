@@ -147,6 +147,15 @@ void appendImage(std::string &out, const InlineRun &run, const HtmlOptions &opti
   out += ">";
 }
 
+void appendLinkOpen(std::string &out, const std::string &url) {
+  out += "<a href=\"";
+  escapeAttrInto(out, url);
+  out += "\"";
+  const bool web = url.rfind("http://", 0) == 0 || url.rfind("https://", 0) == 0 || url.rfind("mailto:", 0) == 0;
+  if (web) out += " target=\"_blank\" rel=\"noopener noreferrer\"";
+  out += ">";
+}
+
 void appendInlines(std::string &out, const std::vector<InlineRun> &runs, const HtmlOptions &options) {
   for (const InlineRun &run : runs) {
     if (!run.imageUrl.empty()) {
@@ -157,9 +166,7 @@ void appendInlines(std::string &out, const std::vector<InlineRun> &runs, const H
     n8v_link_style style{};
     if (link && options.linkStyler && options.linkStyler(run.linkUrl, style)) {
       if (style.clickable) {
-        out += "<a href=\"";
-        escapeAttrInto(out, run.linkUrl);
-        out += "\">";
+        appendLinkOpen(out, run.linkUrl);
       }
       const std::string closing = openStyledLink(out, style, options);
       if (run.bold) out += "<b>";
@@ -172,9 +179,7 @@ void appendInlines(std::string &out, const std::vector<InlineRun> &runs, const H
       continue;
     }
     if (link) {
-      out += "<a href=\"";
-      escapeAttrInto(out, run.linkUrl);
-      out += "\">";
+      appendLinkOpen(out, run.linkUrl);
     }
     if (run.bold) out += "<b>";
     if (run.italic) out += "<i>";

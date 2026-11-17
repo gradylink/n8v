@@ -33,7 +33,17 @@
 
 extern "C" void n8vHtmlInstallListenersBridge();
 extern "C" int n8vHtmlMessageBridge(const char *text, int confirm);
+extern "C" char *n8vHtmlMediaUrlBridge(const char *path);
 extern "C" void n8vHtmlPickFilesBridge(int id, int multiple, int folder, const char *accept);
+
+static std::string mediaUrl(const std::string &source) {
+  if (source.empty()) return source;
+  char *converted = n8vHtmlMediaUrlBridge(source.c_str());
+  if (!converted) return source;
+  std::string url = converted;
+  std::free(converted);
+  return url;
+}
 
 namespace n8v::detail {
 namespace {
@@ -1298,7 +1308,7 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
         const std::string source = o.source ? o.source : "";
         if (source != nn.videoSource) {
           nn.videoSource = source;
-          nn.widget.set("src", source);
+          nn.widget.set("src", mediaUrl(source));
         }
         nn.widget.set("controls", o.controls);
         nn.widget.set("loop", o.loop);
@@ -1322,7 +1332,7 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
         const std::string source = o.source ? o.source : "";
         if (source != nn.videoSource) {
           nn.videoSource = source;
-          nn.widget.set("src", source);
+          nn.widget.set("src", mediaUrl(source));
         }
         nn.widget.set("controls", true);
         nn.widget.set("loop", o.loop);
