@@ -102,6 +102,8 @@ if(NOT EMSCRIPTEN)
       SDL_RenderPresent
       SDL_PollEvent
       SDL_GetWindowSize
+      SDL_RaiseWindow
+      SDL_RestoreWindow
       SDL_CreateTexture
       SDL_DestroyTexture
       SDL_SetTextureBlendMode

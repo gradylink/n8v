@@ -881,6 +881,14 @@ public:
     if (app_) QMetaObject::invokeMethod(app_.get(), [] {}, Qt::QueuedConnection);
   }
 
+  void raiseWindow() override {
+    if (!window_) return;
+    window_->setWindowState(window_->windowState() & ~Qt::WindowMinimized);
+    window_->show();
+    window_->raise();
+    window_->activateWindow();
+  }
+
   bool pointerDown() const override { return false; }
   Clay_Dimensions windowSize() const override { return {(float)window_->width(), (float)window_->height()}; }
   Clay_Dimensions measureText(std::string_view, FontFamily, uint16_t, bool, bool) const override { return {0, 0}; }

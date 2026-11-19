@@ -337,6 +337,9 @@ public:
   }
 
   void wake() override { g_main_context_wakeup(g_main_context_default()); }
+  void raiseWindow() override {
+    if (window_) gtk_window_present(GTK_WINDOW(window_));
+  }
 
   bool prefersDark() const override {
     GdkRGBA text;

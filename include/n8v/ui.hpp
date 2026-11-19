@@ -1197,6 +1197,9 @@ inline bool isDarkTheme() { return n8v_is_dark_theme(); }
 
 inline void wake() { n8v_wake(); }
 
+/** Brings the window to the front, restoring it if it was minimized. */
+inline void raiseWindow() { n8v_raise_window(); }
+
 inline void shutdown() { n8v_shutdown(); }
 
 inline void setStyleFamily(StyleFamily family) { n8v_set_style_family(detail::toC(family)); }

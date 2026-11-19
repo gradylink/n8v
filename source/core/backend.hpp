@@ -50,6 +50,9 @@ struct Backend {
   /** Makes a `pumpEvents` that is waiting return promptly. Safe to call from any thread. */
   virtual void wake() {}
 
+  /** Brings the window to the front, restoring it if it was minimized. Call from the UI thread. */
+  virtual void raiseWindow() {}
+
   /** @return Whether the primary pointer button is held this frame. */
   virtual bool pointerDown() const = 0;
 

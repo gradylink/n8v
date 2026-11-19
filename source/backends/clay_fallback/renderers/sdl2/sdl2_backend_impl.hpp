@@ -25,6 +25,11 @@ public:
 
   bool initialize(int width, int height, std::string_view title) override;
   bool pumpEvents() override;
+  void raiseWindow() override {
+    if (!window_) return;
+    SDL_RestoreWindow(window_);
+    SDL_RaiseWindow(window_);
+  }
   bool showMessageDialog(const MessageDialogRequest &request, MessageDialogDone done) override;
   bool pointerDown() const override { return pointerDown_; }
   bool isEntryFocused(int ordinal) const override { return entry_.ordinal == ordinal; }

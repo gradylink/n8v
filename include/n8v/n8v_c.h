@@ -718,6 +718,9 @@ N8V_API bool n8v_pump_events(void);
 
 N8V_API void n8v_wake(void);
 
+/** Brings the window to the front. Call from the UI thread. */
+N8V_API void n8v_raise_window(void);
+
 /** Whether the UI currently has a dark appearance: the toolkit's theme for native backends, the active style's window color for the others. */
 N8V_API bool n8v_is_dark_theme(void);
 N8V_API void n8v_shutdown(void);
