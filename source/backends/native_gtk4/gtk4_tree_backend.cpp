@@ -2324,6 +2324,8 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
       nn.image = gtk_image_new();
       nn.rowLabel = gtk_label_new("");
       gtk_widget_set_halign(nn.rowLabel, GTK_ALIGN_START);
+      gtk_label_set_ellipsize(GTK_LABEL(nn.rowLabel), PANGO_ELLIPSIZE_END);
+      gtk_label_set_xalign(GTK_LABEL(nn.rowLabel), 0.0f);
       if (collapsed) {
         gtk_widget_set_margin_start(hbox, 0);
         gtk_widget_set_margin_end(hbox, 0);
