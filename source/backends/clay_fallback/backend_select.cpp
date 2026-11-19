@@ -1,4 +1,5 @@
 #include "core/backend.hpp"
+#include "backends/html/static_backend.hpp"
 #include <cstdlib>
 #include <cstring>
 
@@ -56,6 +57,7 @@ std::unique_ptr<Backend> selectBackend() {
   return detail::makeHtmlTreeBackend();
 #else
   const char *preferredBackend = std::getenv("N8V_BACKEND");
+  if (preferredBackend && std::strcmp(preferredBackend, "static") == 0) return detail::makeStaticHtmlBackend();
 
 #ifdef N8V_HAS_GTK4_BACKEND
   if ((!preferredBackend || std::strcmp(preferredBackend, "gtk") == 0 || strcmp(preferredBackend, "gtk4") == 0) && lzy_gtk4_lazy_is_available()) {

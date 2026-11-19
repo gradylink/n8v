@@ -467,15 +467,20 @@ set(N8V_SOURCES
   source/backends/clay_fallback/text/emoji.cpp
 )
 
+list(APPEND N8V_SOURCES
+  source/backends/html/html_builder.cpp
+  source/backends/html/html_css.cpp
+  source/backends/html/html_assets.cpp
+  source/backends/html/html_dom.cpp
+)
 if(EMSCRIPTEN)
   list(APPEND N8V_SOURCES
     source/backends/html/html_tree_backend.cpp
-    source/backends/html/html_css.cpp
-    source/backends/html/html_assets.cpp
     source/backends/html/js_bridge.cpp
   )
 else()
   list(APPEND N8V_SOURCES
+    source/backends/html/static_backend.cpp
     source/core/freedesktop_icon_theme.cpp
     source/backends/clay_fallback/renderers/sdl2/sdl2_backend.cpp
     source/backends/clay_fallback/renderers/sdl2/entry_field.cpp
@@ -717,6 +722,7 @@ if(N8V_EXAMPLES)
   add_subdirectory(examples/sidebar_badges)
   add_subdirectory(examples/toggle_button)
   add_subdirectory(examples/multiline_entry)
+  add_subdirectory(examples/static_site)
 endif()
 
 option(N8V_BUILD_JS_BINDING "Build the n8v.node N-API addon for the JS/TS bindings (bindings/js)." OFF)

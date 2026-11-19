@@ -187,6 +187,11 @@ EM_JS(char *, n8vHtmlMediaUrl, (const char *path), {
   }
 });
 
+EM_JS(char *, n8vHtmlBytesUrl, (const unsigned char *bytes, int size, const char *mime), {
+  var blob = new Blob([HEAPU8.slice(bytes, bytes + size)], {type: UTF8ToString(mime)});
+  return stringToNewUTF8(URL.createObjectURL(blob));
+});
+
 EM_JS(int, n8vHtmlMessage, (const char *text, int confirmDialog), {
   var message = UTF8ToString(text);
   if (confirmDialog) return window.confirm(message) ? 1 : 0;
@@ -196,6 +201,7 @@ EM_JS(int, n8vHtmlMessage, (const char *text, int confirmDialog), {
 // clang-format on
 
 extern "C" char *n8vHtmlMediaUrlBridge(const char *path) { return n8vHtmlMediaUrl(path); }
+extern "C" char *n8vHtmlBytesUrlBridge(const unsigned char *bytes, int size, const char *mime) { return n8vHtmlBytesUrl(bytes, size, mime); }
 extern "C" int n8vHtmlMessageBridge(const char *text, int confirm) { return n8vHtmlMessage(text, confirm); }
 extern "C" void n8vHtmlInstallListenersBridge() { n8vHtmlInstallListeners(); }
 extern "C" void n8vHtmlPickFilesBridge(int id, int multiple, int folder, const char *accept) { n8vHtmlPickFiles(id, multiple, folder, accept); }
