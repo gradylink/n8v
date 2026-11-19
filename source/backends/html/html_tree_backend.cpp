@@ -187,6 +187,58 @@ ButtonStyle toButtonStyle(n8v_button_style s) {
   return ButtonStyle::Primary;
 }
 
+const char *buttonStyleName(ButtonStyle style) {
+  switch (style) {
+  case ButtonStyle::Secondary:
+    return "secondary";
+  case ButtonStyle::Ghost:
+    return "ghost";
+  case ButtonStyle::Primary:
+    break;
+  }
+  return "primary";
+}
+
+std::string semanticClasses(const NativeNode &nn) {
+  return std::visit(
+    Overloaded{
+      [](const std::monostate &) { return std::string(); },
+      [](const n8v_flex_options &) { return std::string("n8v-flex"); },
+      [](const n8v_panel_options &o) { return std::string("n8v-panel n8v-panel--") + (o.role == N8V_PANEL_ROLE_LIST_ITEM ? "list-item" : "card"); },
+      [](const n8v_floating_options &) { return std::string("n8v-floating"); },
+      [](const n8v_sidebar_options &o) { return std::string("n8v-sidebar") + (o.collapsed && *o.collapsed ? " n8v-sidebar--collapsed" : ""); },
+      [](const n8v_page_options &) { return std::string("n8v-page"); },
+      [](const n8v_button_options &o) { return std::string("n8v-button n8v-button--") + buttonStyleName(toButtonStyle(o.style)); },
+      [](const n8v_text_options &o) {
+        std::string out = "n8v-text";
+        if (o.bold) out += " n8v-text--bold";
+        if (o.italic) out += " n8v-text--italic";
+        if (o.strikethrough) out += " n8v-text--strikethrough";
+        if (o.small) out += " n8v-text--small";
+        if (o.large) out += " n8v-text--large";
+        if (o.darken) out += " n8v-text--darken";
+        if ((o.url && *o.url) || o.on_click) out += " n8v-link";
+        return out;
+      },
+      [](const n8v_checkbox_options &) { return std::string("n8v-checkbox"); },
+      [](const n8v_toggle_options &) { return std::string("n8v-toggle"); },
+      [](const n8v_radio_options &) { return std::string("n8v-radio"); },
+      [](const n8v_entry_options &o) { return std::string("n8v-entry") + (o.multiline ? " n8v-entry--multiline" : "") + (o.password ? " n8v-entry--password" : ""); },
+      [](const n8v_dropdown_options &) { return std::string("n8v-dropdown"); },
+      [](const n8v_slider_options &) { return std::string("n8v-slider"); },
+      [](const n8v_image_options &) { return std::string("n8v-image"); },
+      [](const n8v_icon_options &) { return std::string("n8v-icon"); },
+      [](const n8v_document_options &) { return std::string("n8v-document"); },
+      [](const n8v_sidebar_section_options &) { return std::string("n8v-sidebar-section"); },
+      [](const n8v_sidebar_divider_options &) { return std::string("n8v-sidebar-divider"); },
+      [](const n8v_video_options &) { return std::string("n8v-video"); },
+      [](const n8v_audio_options &) { return std::string("n8v-audio"); },
+      [](const n8v_divider_options &) { return std::string("n8v-divider"); },
+    },
+    nn.node->current.props
+  );
+}
+
 const char *alignItems(n8v_align a) {
   switch (a) {
   case N8V_ALIGN_CENTER:
@@ -262,13 +314,14 @@ public:
     baseStyle.set(
       "textContent",
       std::string(
+        "@layer n8v{\n"
         "html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#ffffff}\n"
         "*,*::before,*::after{box-sizing:border-box}\n"
         "#n8v-root{position:relative;display:flex;flex-direction:column;align-items:flex-start;width:100%;height:100%;overflow:hidden}\n"
         "#n8v-root button,#n8v-root input,#n8v-root select{font-family:inherit}\n"
         "#n8v-root img{pointer-events:none}\n"
       ) +
-        html_assets::fontFaceCss()
+        html_assets::fontFaceCss() + "}\n"
     );
     doc_["head"].call<void>("appendChild", baseStyle);
 
@@ -556,28 +609,33 @@ private:
   val createEl(const char *tag) { return doc_.call<val>("createElement", std::string(tag)); }
 
   static void setCss(val &el, const std::string &cssText) { el["style"].set("cssText", cssText); }
-  static void setClass(val &el, const std::string &name) { el.set("className", name); }
+  void setClass(val &el, const std::string &generated = {}) { el.set("className", generated.empty() ? semantic_ : semantic_ + " " + generated); }
+
+  static void setPartClass(val &el, const char *name) { el.set("className", std::string(name)); }
 
   std::string classFor(const std::string &tmpl) {
     auto it = classes_.find(tmpl);
     if (it != classes_.end()) return it->second;
-    std::string name = "n8v-c" + std::to_string(nextClass_++);
-    dynamicText_.call<void>("appendData", css::expand(tmpl, "." + name));
+    uint32_t h = 2166136261u;
+    for (unsigned char c : tmpl) h = (h ^ c) * 16777619u;
+    char hex[16];
+    std::snprintf(hex, sizeof hex, "%08x", h);
+    std::string name = std::string("n8v-g-") + hex;
+    dynamicText_.call<void>("appendData", "@layer n8v{" + css::expand(tmpl, "." + name) + "}\n");
     classes_.emplace(tmpl, name);
     return name;
   }
 
   void installRootStyle() {
-    dynamicText_.call<void>("appendData", css::expand(css::textCss(activePaint(), {}), "#n8v-root") + "\n");
+    dynamicText_.call<void>("appendData", "@layer n8v{" + css::expand(css::textCss(activePaint(), {}), "#n8v-root") + "}\n");
     const Color window = activePaint().windowBackground();
     const bool dark = (0.2126f * window.r + 0.7152f * window.g + 0.0722f * window.b) < 128.0f;
-    dynamicText_.call<void>("appendData", "html,body,#n8v-root{background:" + css::cssColor(window) + ";color-scheme:" + (dark ? "dark" : "light") + "}\n");
+    dynamicText_.call<void>("appendData", "@layer n8v{html,body,#n8v-root{background:" + css::cssColor(window) + ";color-scheme:" + (dark ? "dark" : "light") + "}}\n");
   }
 
   void restyleAll() {
     styleGeneration_ = activeStyleGeneration();
     classes_.clear();
-    nextClass_ = 0;
     dynamicText_.set("data", std::string());
     installRootStyle();
     for (PNode *pn : live_) apply(*native(*pn));
@@ -642,7 +700,7 @@ private:
   std::unordered_map<int, FileDialogDone> fileDialogs_;
   int nextFileDialogId_ = 0;
   std::unordered_map<std::string, std::string> classes_;
-  int nextClass_ = 0;
+  std::string semantic_;
   uint64_t styleGeneration_ = 0;
   int width_ = 0, height_ = 0;
   double lastFrameTime_ = 0.0;
@@ -1051,6 +1109,34 @@ void HtmlTreeBackend::build(NativeNode &nn) {
   case Kind::Root:
     break;
   }
+  switch (nn.kind()) {
+  case Kind::Button:
+    setPartClass(nn.label, "n8v-button__label");
+    setPartClass(nn.image, "n8v-button__icon");
+    break;
+  case Kind::Checkbox:
+  case Kind::Toggle:
+  case Kind::Radio: {
+    const char *kind = nn.kind() == Kind::Radio ? "radio" : nn.kind() == Kind::Toggle ? "toggle" : "checkbox";
+    setPartClass(nn.widget, (std::string("n8v-") + kind + "__input").c_str());
+    setPartClass(nn.label, (std::string("n8v-") + kind + "__label").c_str());
+    break;
+  }
+  case Kind::Page:
+    setPartClass(nn.label, "n8v-page__label");
+    setPartClass(nn.image, "n8v-page__icon");
+    setPartClass(nn.content, "n8v-page__content");
+    break;
+  case Kind::Sidebar:
+    setPartClass(nn.titleEl, "n8v-sidebar__header");
+    setPartClass(nn.titleText, "n8v-sidebar__title");
+    setPartClass(nn.collapseTop, "n8v-sidebar__collapse n8v-sidebar__collapse--top");
+    setPartClass(nn.collapseBottom, "n8v-sidebar__collapse n8v-sidebar__collapse--bottom");
+    setPartClass(nn.contentArea, "n8v-sidebar__content");
+    break;
+  default:
+    break;
+  }
 }
 
 void HtmlTreeBackend::applyButton(NativeNode &nn, const n8v_button_options &o) {
@@ -1102,6 +1188,7 @@ void HtmlTreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   if (sidebar && sidebar->node) {
     if (const auto *so = propsOf<n8v_sidebar_options>(*sidebar->node)) collapsed = so->collapsed && *so->collapsed;
   }
+  semantic_ = std::string("n8v-page") + (isSelected ? " n8v-page--selected" : "");
   setClass(nn.outer, classFor(css::sidebarRowCss(paint, isSelected, collapsed)));
   if (sidebar && !collapsed) {
     bool anyImage = false;
@@ -1166,11 +1253,15 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
   PNode &pn = *nn.node;
   const Paint &paint = activePaint();
   const std::string &label = pn.current.label;
+  semantic_ = semanticClasses(nn);
 
   std::visit(
     Overloaded{
       [&](const std::monostate &) {},
-      [&](const n8v_flex_options &o) { nn.stickyBottom = o.stick_to_bottom && o.clip_vertical; },
+      [&](const n8v_flex_options &o) {
+        nn.stickyBottom = o.stick_to_bottom && o.clip_vertical;
+        setClass(nn.outer);
+      },
       [&](const n8v_panel_options &o) {
         std::string css = css::panelCss(paint, (o.role == N8V_PANEL_ROLE_LIST_ITEM ? PanelRole::ListItem : PanelRole::Card));
         if (o.has_padding)
@@ -1178,7 +1269,7 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
                  std::to_string(o.padding.left) + "px}\n";
         setClass(nn.outer, classFor(css));
       },
-      [&](const n8v_floating_options &) {},
+      [&](const n8v_floating_options &) { setClass(nn.outer); },
       [&](const n8v_sidebar_options &o) {
         const bool collapsible = o.collapsed != nullptr;
         const bool collapsed = collapsible && *o.collapsed;
@@ -1192,7 +1283,8 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
           if (o.max_width > 0.0f) listCss += "max-width:" + css::cssNumber(o.max_width) + "px;";
         }
         setCss(nn.listEl, listCss);
-        setClass(nn.listEl, classFor(css::sidebarListCss(paint)));
+        setClass(nn.outer);
+        nn.listEl.set("className", std::string("n8v-sidebar__list ") + classFor(css::sidebarListCss(paint)));
         setCss(nn.contentArea, "flex:1 1 0%;min-width:0;min-height:0;display:flex;flex-direction:column;align-items:stretch;position:relative;");
         const std::string title = o.title ? o.title : "";
         TextOptions titleOptions;
@@ -1368,6 +1460,7 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
           nn.videoSource = source;
           nn.widget.set("src", mediaUrl(source));
         }
+        setClass(nn.outer);
         nn.widget.set("controls", true);
         nn.widget.set("loop", o.loop);
         nn.widget.set("muted", o.muted);
@@ -1384,9 +1477,13 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
       },
       [&](const n8v_sidebar_section_options &o) {
         nn.widget.set("textContent", std::string(o.title ? o.title : ""));
+        setClass(nn.outer);
         setCss(nn.outer, "flex:none;padding:12px 12px 4px;font-weight:bold;font-size:0.85em;opacity:0.65;text-align:left;");
       },
-      [&](const n8v_sidebar_divider_options &) { setCss(nn.outer, "flex:none;height:1px;margin:6px 12px;background:currentColor;opacity:0.18;"); },
+      [&](const n8v_sidebar_divider_options &) {
+        setClass(nn.outer);
+        setCss(nn.outer, "flex:none;height:1px;margin:6px 12px;background:currentColor;opacity:0.18;");
+      },
       [&](const n8v_document_options &o) {
         setClass(nn.outer, classFor(css::documentCss(paint)));
         const markdown::CachedDocument cached = markdown::getOrParse(o.markdown ? o.markdown : "");
