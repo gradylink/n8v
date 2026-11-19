@@ -32,6 +32,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -2385,7 +2386,7 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   gtk_widget_set_visible(nn.image, hasIcon || hasImage);
   if (hasIcon) setIconImage(nn, nn.image, o.icon, kDefaultIconSize);
   if (hasImage) {
-    const int kPageImageSize = collapsed ? kCollapsedImageSize : 28;
+    const int kPageImageSize = collapsed ? kCollapsedImageSize : o.image_size > 0.0f ? std::max(8, (int)std::lround(o.image_size)) : 28;
     n8v_image_options imageOptions{};
     imageOptions.source_kind = N8V_IMAGE_SOURCE_PATH;
     imageOptions.path = o.image;
@@ -2408,6 +2409,8 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
         GdkTexture *texture = makeTexture(baked);
         gtk_image_set_from_paintable(GTK_IMAGE(nn.image), GDK_PAINTABLE(texture));
         gtk_image_set_pixel_size(GTK_IMAGE(nn.image), kPageImageSize);
+        gtk_widget_set_size_request(nn.image, !collapsed && o.image_size > 0.0f ? 28 : -1, -1);
+        gtk_widget_set_halign(nn.image, GTK_ALIGN_CENTER);
         g_object_unref(texture);
         nn.textureSource = baked;
       }

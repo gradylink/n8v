@@ -375,7 +375,7 @@ bool openPage(const n8v_page_options &opts, int rowOrdinal) {
   }
 
   const bool collapsed = ctx.collapsed;
-  const float iconSlotSize = collapsed ? (hasImage ? kCollapsedIconSize : kCollapsedGlyphSize) : hasImage ? (float)paint.fontSize * 2.0f : (float)paint.fontSize;
+  const float iconSlotSize = collapsed ? (hasImage ? kCollapsedIconSize : kCollapsedGlyphSize) : hasImage ? (opts.image_size > 0.0f ? opts.image_size : (float)paint.fontSize * 2.0f) : (float)paint.fontSize;
 
   std::string imagePathStorage(imageView);
   const n8v::detail::DecodedImage *rowImage = nullptr;

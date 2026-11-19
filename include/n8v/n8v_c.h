@@ -538,6 +538,8 @@ typedef struct n8v_page_options {
   /** Short text shown in a pill on the right of the row (e.g. a count). NULL or empty shows nothing. */
   const char *badge;
   n8v_badge_color badge_color;
+  /** Size of `image` in pixels; 0 for the usual size. Added last so bindings that zero the struct keep working. */
+  float image_size;
 } n8v_page_options;
 
 typedef struct n8v_button_paint {

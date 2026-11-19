@@ -245,6 +245,8 @@ struct PageOptions {
   std::string_view image = {};
   /** Only affects `.image`; ignored when `.icon` is used. */
   Rounding imageRounding = Rounding::styleDefault();
+  /** How big `.image` is in the row, in pixels. 0 is the usual size, for a picture; a small one (about the height of the text) makes it sit in the line like an emoji. */
+  float imageSize = 0.0f;
   /** Draws attention to the row: a marker on its left and an emphasised name. */
   bool notify = false;
   /** Short text shown in a pill on the right of the row (e.g. a count). Empty shows nothing. */

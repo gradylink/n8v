@@ -657,6 +657,7 @@ inline bool openPage(const PageOptions &options) {
   c_opts.icon = iconStorage.empty() ? nullptr : iconStorage.c_str();
   c_opts.image = imageStorage.empty() ? nullptr : imageStorage.c_str();
   c_opts.image_rounding = toC(options.imageRounding);
+  c_opts.image_size = options.imageSize;
   std::string badgeStorage(options.badge);
   c_opts.notify = options.notify;
   c_opts.badge = badgeStorage.empty() ? nullptr : badgeStorage.c_str();

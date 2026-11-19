@@ -77,6 +77,7 @@ template <typename V> void visitFields(n8v_page_options &o, V &v) {
   v.num(o.notify);
   v.str(o.badge);
   v.num(o.badge_color);
+  v.num(o.image_size);
 }
 
 template <typename V> void visitFields(n8v_button_options &o, V &v) {

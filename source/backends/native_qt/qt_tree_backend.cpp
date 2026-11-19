@@ -2142,7 +2142,9 @@ void QtTreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   nn.item->setToolTip(collapsed ? shown : QString());
   nn.item->setSizeHint(QSize(0, collapsed ? 60 : compact ? 26 : 38));
   if (o.image && *o.image && !(o.icon && *o.icon)) {
-    const int kPageImageSize = collapsed ? 40 : 28;
+    const int kPageSlotSize = collapsed ? 40 : 28;
+    const bool small = !collapsed && o.image_size > 0.0f;
+    const int kPageImageSize = small ? std::max(8, (int)std::lround(o.image_size)) : kPageSlotSize;
     n8v_image_options imageOptions{};
     imageOptions.source_kind = N8V_IMAGE_SOURCE_PATH;
     imageOptions.path = o.image;
@@ -2163,9 +2165,18 @@ void QtTreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
       const DecodedImage *baked = getOrBakeRoundedImage(decoded, decoded->width, decoded->height, radius.topLeft, radius.topRight, radius.bottomLeft, radius.bottomRight);
       const std::string key = std::string("page-image:") + o.image + "@" + std::to_string(kPageImageSize) + "@" + std::to_string(reinterpret_cast<uintptr_t>(baked));
       if (nn.iconKey != key) {
-        nn.item->setIcon(QIcon(pixmapFromDecoded(baked)));
+        QPixmap picture = pixmapFromDecoded(baked);
+        if (small) {
+          QPixmap slot(kPageSlotSize, kPageSlotSize);
+          slot.fill(Qt::transparent);
+          QPainter painter(&slot);
+          painter.drawPixmap((kPageSlotSize - picture.width()) / 2, (kPageSlotSize - picture.height()) / 2, picture);
+          painter.end();
+          picture = slot;
+        }
+        nn.item->setIcon(QIcon(picture));
         nn.iconKey = key;
-        if (sidebar && sidebar->list) sidebar->list->setIconSize(QSize(kPageImageSize, kPageImageSize));
+        if (sidebar && sidebar->list) sidebar->list->setIconSize(QSize(kPageSlotSize, kPageSlotSize));
       }
     }
   } else if (o.icon && *o.icon) {
