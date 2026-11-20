@@ -20,6 +20,7 @@ widgets when available and if needed can fall back to built-in styles.
 ### Partial Support
 
 - HTML (I'd like to add SSR/SSG)
+- Terminal ([FTXUI](https://github.com/ArthurSonzogni/FTXUI), opt in with `N8V_BACKEND=tui`)
 
 ### Planned Support
 

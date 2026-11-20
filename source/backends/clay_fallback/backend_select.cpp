@@ -24,6 +24,10 @@
 #include "milsko_lazy_vars.h"
 #endif
 
+#ifdef N8V_HAS_FTXUI_BACKEND
+#include "backends/native_ftxui/ftxui_tree_backend.hpp"
+#endif
+
 #ifdef N8V_HAS_FLTK_BACKEND
 #include "backends/native_fltk/fltk_backend.hpp"
 #include "fltk_lazy_vars.h"
@@ -75,6 +79,11 @@ std::unique_ptr<Backend> selectBackend() {
 #ifdef N8V_HAS_FLTK_BACKEND
   if ((!preferredBackend || std::strcmp(preferredBackend, "fltk") == 0) && lzy_fltk_lazy_is_available()) {
     return detail::makeFltkBackend();
+  }
+#endif
+#ifdef N8V_HAS_FTXUI_BACKEND
+  if (preferredBackend && (std::strcmp(preferredBackend, "tui") == 0 || std::strcmp(preferredBackend, "ftxui") == 0)) {
+    return detail::makeFtxuiTreeBackend();
   }
 #endif
   if (lzy_sdl2_lazy_is_available()) {
