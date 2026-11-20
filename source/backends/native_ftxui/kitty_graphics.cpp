@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -100,7 +101,10 @@ uint32_t KittyGraphics::ensure(const DecodedImage *image, int cols, int rows) {
   if (cols <= 0 || rows <= 0 || (size_t)cols > kKittyDiacriticCount || (size_t)rows > kKittyDiacriticCount) return 0;
 
   const auto key = std::make_tuple(image, cols, rows);
-  if (auto it = ids_.find(key); it != ids_.end()) return it->second;
+  if (auto it = ids_.find(key); it != ids_.end()) {
+    lastUsed_[it->second] = frame_;
+    return it->second;
+  }
 
   const DecodedImage *source = image;
   const double scale = std::min({1.0, (double)cols * kPixelsPerCellX / image->width, (double)rows * kPixelsPerCellY / image->height});
@@ -129,16 +133,36 @@ uint32_t KittyGraphics::ensure(const DecodedImage *image, int cols, int rows) {
   writeAll(out);
 
   sent_.push_back(id);
+  lastUsed_[id] = frame_;
   ids_[key] = id;
   pixelSize_[id] = {source->width, source->height};
   return id;
 }
 
+void KittyGraphics::forgetUnused() {
+  constexpr uint64_t kUnusedFrames = 1800;
+  std::string out;
+  for (auto it = lastUsed_.begin(); it != lastUsed_.end();) {
+    if (frame_ - it->second < kUnusedFrames) {
+      ++it;
+      continue;
+    }
+    const uint32_t id = it->first;
+    out += "\x1b_Ga=d,d=I,q=2,i=" + std::to_string(id) + "\x1b\\";
+    for (auto key = ids_.begin(); key != ids_.end();) key = key->second == id ? ids_.erase(key) : std::next(key);
+    sent_.erase(std::remove(sent_.begin(), sent_.end(), id), sent_.end());
+    pixelSize_.erase(id);
+    it = lastUsed_.erase(it);
+  }
+  if (!out.empty()) writeAll(out);
+}
+
 void KittyGraphics::beginFrame() {
+  ++frame_;
+  if (frame_ % 300 == 0) forgetUnused();
   if (protocol_ != ImageProtocol::KittyDirect) return;
   placements_.clear();
   frameOpen_ = true;
-  writeAll("\x1b[?2026h");
 }
 
 void KittyGraphics::place(uint32_t id, int x, int y, int cellX0, int cellY0, int cellX1, int cellY1, int cols, int rows) {
@@ -159,17 +183,34 @@ void KittyGraphics::place(uint32_t id, int x, int y, int cellX0, int cellY0, int
 void KittyGraphics::endFrame() {
   if (!frameOpen_) return;
   frameOpen_ = false;
-  std::string out = "\x1b_Ga=d,d=a,q=2\x1b\\";
+  if (placements_ == shown_) {
+    placements_.clear();
+    return;
+  }
+  std::string out = "\x1b[?2026h";
+  uint32_t shownId = 0;
+  for (const Placement &old : shown_) out += "\x1b_Ga=d,d=i,q=2,i=" + std::to_string(old.id) + ",p=" + std::to_string(++shownId) + "\x1b\\";
   out += "\0337";
+  uint32_t placementId = 0;
   for (const Placement &p : placements_) {
     out += "\x1b[" + std::to_string(p.y + 1) + ";" + std::to_string(p.x + 1) + "H";
-    out += "\x1b_Ga=p,q=2,C=1,p=1,i=" + std::to_string(p.id) + ",c=" + std::to_string(p.cols) + ",r=" + std::to_string(p.rows);
+    out += "\x1b_Ga=p,q=2,C=1,p=" + std::to_string(++placementId) + ",i=" + std::to_string(p.id) + ",c=" + std::to_string(p.cols) + ",r=" + std::to_string(p.rows);
     if (p.srcW > 0) out += ",x=" + std::to_string(p.srcX) + ",y=" + std::to_string(p.srcY) + ",w=" + std::to_string(p.srcW) + ",h=" + std::to_string(p.srcH);
     out += "\x1b\\";
   }
   out += "\0338";
   out += "\x1b[?2026l";
+  // N8V_TUI_IMAGE_LOG=<file> records what each frame asks the terminal to drop and show, for chasing stale or doubled images.
+  if (const char *logPath = std::getenv("N8V_TUI_IMAGE_LOG")) {
+    if (FILE *f = std::fopen(logPath, "a")) {
+      std::fprintf(f, "frame: drop %zu, show %zu\n", shown_.size(), placements_.size());
+      for (const Placement &old : shown_) std::fprintf(f, "  drop id=%u at=(%d,%d) %dx%d\n", old.id, old.x, old.y, old.cols, old.rows);
+      for (const Placement &p : placements_) std::fprintf(f, "  show id=%u at=(%d,%d) %dx%d crop=(%d,%d %dx%d)\n", p.id, p.x, p.y, p.cols, p.rows, p.srcX, p.srcY, p.srcW, p.srcH);
+      std::fclose(f);
+    }
+  }
   writeAll(out);
+  shown_ = std::move(placements_);
   placements_.clear();
 }
 
@@ -183,6 +224,8 @@ void KittyGraphics::deleteAll() {
   writeAll(out);
   sent_.clear();
   ids_.clear();
+  lastUsed_.clear();
+  shown_.clear();
 }
 
 } // namespace n8v::detail

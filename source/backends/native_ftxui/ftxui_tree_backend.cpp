@@ -22,6 +22,8 @@
 #include <ftxui/screen/string.hpp>
 #include <ftxui/screen/terminal.hpp>
 
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -66,6 +68,8 @@ int cellsY(float px) {
   if (px <= 0.0f) return 0;
   return std::max(1, (int)std::lround(px / kCellHeightPx));
 }
+int offsetX(float px) { return (int)std::lround(px / kCellWidthPx); }
+int offsetY(float px) { return (int)std::lround(px / kCellHeightPx); }
 int paddingX(uint16_t px) { return (int)std::lround(px / kCellWidthPx); }
 int paddingY(uint16_t px) { return (int)std::lround(px / kCellHeightPx); }
 
@@ -221,6 +225,40 @@ private:
   bool horizontal_;
 };
 
+class CrossAlignNode : public ui::Node {
+public:
+  CrossAlignNode(ui::Element child, bool horizontalMain, bool center) : ui::Node(ui::Elements{std::move(child)}), horizontalMain_(horizontalMain), center_(center) {}
+
+  void ComputeRequirement() override {
+    children_[0]->ComputeRequirement();
+    requirement_ = children_[0]->requirement();
+    if (horizontalMain_) requirement_.flex_grow_y = requirement_.flex_shrink_y = 0;
+    else requirement_.flex_grow_x = requirement_.flex_shrink_x = 0;
+  }
+
+  void SetBox(ui::Box box) override {
+    ui::Node::SetBox(box);
+    const auto &req = children_[0]->requirement();
+    ui::Box inner = box;
+    if (horizontalMain_) {
+      const int free = std::max(0, (box.y_max - box.y_min + 1) - req.min_y);
+      const int shift = center_ ? free / 2 : free;
+      inner.y_min = box.y_min + shift;
+      inner.y_max = std::min(box.y_max, inner.y_min + req.min_y - 1);
+    } else {
+      const int free = std::max(0, (box.x_max - box.x_min + 1) - req.min_x);
+      const int shift = center_ ? free / 2 : free;
+      inner.x_min = box.x_min + shift;
+      inner.x_max = std::min(box.x_max, inner.x_min + req.min_x - 1);
+    }
+    children_[0]->SetBox(inner);
+  }
+
+private:
+  bool horizontalMain_;
+  bool center_;
+};
+
 class PaddingNode final : public ui::Node {
 public:
   PaddingNode(ui::Element child, int left, int right, int top, int bottom) : left_(left), right_(right), top_(top), bottom_(bottom) { children_.push_back(std::move(child)); }
@@ -274,7 +312,7 @@ struct OverlayHost {
 
 class OverlayNode final : public ui::Node {
 public:
-  using Place = std::function<ui::Box(int width, int height)>;
+  using Place = std::function<ui::Box(int width, int height, const ui::Box &clip)>;
 
   OverlayNode(ui::Element child, OverlayHost &host, Place place) : host_(host), place_(std::move(place)) { children_.push_back(ui::clear_under(std::move(child))); }
 
@@ -283,10 +321,12 @@ public:
     requirement_ = {};
   }
 
-  void Render(ui::Screen &) override {
-    host_.pending.push_back([this](ui::Screen &screen) {
+  void Render(ui::Screen &queuedOn) override {
+    const ui::Box clip = queuedOn.stencil;
+    host_.pending.push_back([this, clip](ui::Screen &screen) {
       const ui::Requirement inner = children_[0]->requirement();
-      const ui::Box placed = place_(inner.min_x, inner.min_y);
+      const ui::Box placed = place_(inner.min_x, inner.min_y, clip);
+      if (placed.x_max < placed.x_min || placed.y_max < placed.y_min) return;
       children_[0]->SetBox(placed);
       const ui::Box saved = screen.stencil;
       screen.stencil = ui::Box::Intersection(saved, placed);
@@ -302,7 +342,8 @@ private:
 
 class LayerRoot final : public ui::Node {
 public:
-  LayerRoot(ui::Element child, OverlayHost &host, std::function<void()> afterRender) : host_(host), afterRender_(std::move(afterRender)) {
+  LayerRoot(ui::Element child, OverlayHost &host, std::function<void()> beforeRender, std::function<void()> afterRender)
+      : host_(host), beforeRender_(std::move(beforeRender)), afterRender_(std::move(afterRender)) {
     children_.push_back(std::move(child));
   }
 
@@ -318,6 +359,7 @@ public:
 
   void Render(ui::Screen &screen) override {
     host_.pending.clear();
+    beforeRender_();
     children_[0]->Render(screen);
     for (size_t i = 0; i < host_.pending.size(); ++i) host_.pending[i](screen);
     host_.pending.clear();
@@ -326,6 +368,7 @@ public:
 
 private:
   OverlayHost &host_;
+  std::function<void()> beforeRender_;
   std::function<void()> afterRender_;
 };
 
@@ -479,6 +522,30 @@ size_t byteOffsetOfGlyph(const std::vector<std::string> &glyphs, size_t index) {
   return bytes;
 }
 
+int redirectStderrToLog() {
+  if (!isatty(STDERR_FILENO)) return -1;
+  std::string path;
+  if (const char *explicitPath = std::getenv("N8V_TUI_LOG")) path = explicitPath;
+  else {
+    const char *state = std::getenv("XDG_STATE_HOME");
+    const char *home = std::getenv("HOME");
+    std::string dir = state && *state ? std::string(state) : home && *home ? std::string(home) + "/.local/state" : std::string();
+    if (!dir.empty()) {
+      dir += "/n8v";
+      mkdir((dir.substr(0, dir.size() - 4)).c_str(), 0700);
+      mkdir(dir.c_str(), 0700);
+      path = dir + "/tui.log";
+    }
+  }
+  int target = path.empty() ? -1 : open(path.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0600);
+  if (target < 0) target = open("/dev/null", O_WRONLY);
+  if (target < 0) return -1;
+  const int saved = dup(STDERR_FILENO);
+  dup2(target, STDERR_FILENO);
+  close(target);
+  return saved;
+}
+
 class FtxuiTreeBackend final : public Backend, public tree::TreeOps {
 public:
   ~FtxuiTreeBackend() override { shutdown(); }
@@ -488,6 +555,7 @@ public:
       std::fprintf(stderr, "[n8v] The terminal backend needs an interactive terminal.\n");
       return false;
     }
+    savedStderr_ = redirectStderrToLog();
     app_.emplace(ui::App::Fullscreen());
     app_->ForceHandleCtrlC(false);
     kitty_.setProtocol(imageProtocol_);
@@ -566,6 +634,11 @@ public:
     loop_.reset();
     app_.reset();
     root_ = nullptr;
+    if (savedStderr_ >= 0) {
+      dup2(savedStderr_, STDERR_FILENO);
+      close(savedStderr_);
+      savedStderr_ = -1;
+    }
   }
 
   void create(PNode &node) override {
@@ -646,7 +719,7 @@ private:
     ui::Element body = ui::vbox(std::move(top));
     if (dialog_) body = ui::dbox({body, renderDialog()});
     if (!focused_ && !focusables_.empty()) focused_ = focusables_.front();
-    return std::make_shared<LayerRoot>(std::move(body), overlays_, [this] { afterRender(); });
+    return std::make_shared<LayerRoot>(std::move(body), overlays_, [this] { kitty_.restartPlacements(); }, [this] { afterRender(); });
   }
 
   ui::Elements renderKids(NativeNode &n) {
@@ -797,12 +870,7 @@ private:
       if (mainSize && hasGrow(*mainSize)) mainGrows = true;
       ui::Element e = render(*kid);
       if (crossAlign != N8V_ALIGN_START && !(crossSize && hasGrow(*crossSize))) {
-        ui::Elements wrap;
-        if (crossAlign != N8V_ALIGN_START) wrap.push_back(ui::filler());
-        wrap.push_back(std::move(e));
-        if (crossAlign == N8V_ALIGN_CENTER) wrap.push_back(ui::filler());
-        e = horizontal ? ui::vbox(std::move(wrap)) : ui::hbox(std::move(wrap));
-        if (mainSize && hasGrow(*mainSize)) e = horizontal ? ui::xflex_grow(std::move(e)) : ui::yflex_grow(std::move(e));
+        e = std::make_shared<CrossAlignNode>(std::move(e), horizontal, crossAlign == N8V_ALIGN_CENTER);
       }
       if (gapCells > 0 && !items.empty()) items.push_back(ui::emptyElement() | ui::size(horizontal ? ui::WIDTH : ui::HEIGHT, ui::EQUAL, gapCells));
       items.push_back(std::move(e));
@@ -909,17 +977,23 @@ private:
     const auto &o = *propsOf<n8v_floating_options>(*n.node);
     floatings_.push_back(&n);
     ui::Element content = renderKidsBox(n, N8V_DIRECTION_VERTICAL);
-    if (o.opaque) content = ui::borderRounded(std::move(content));
+    const bool ownsBorder = n.kids.size() == 1 && n.kids[0]->kind() == Kind::Panel && propsOf<n8v_panel_options>(*n.kids[0]->node) &&
+                            propsOf<n8v_panel_options>(*n.kids[0]->node)->role == N8V_PANEL_ROLE_CARD;
+    if (o.opaque && !ownsBorder) content = ui::borderRounded(std::move(content));
     content = sized(std::move(content), o.width, ui::WIDTH);
     content = sized(std::move(content), o.height, ui::HEIGHT);
     NativeNode *parent = n.parent ? n.parent : &rootNode_;
-    return std::make_shared<OverlayNode>(std::move(content) | ui::reflect(n.box), overlays_, [&n, parent](int width, int height) {
+    return std::make_shared<OverlayNode>(std::move(content) | ui::reflect(n.box), overlays_, [&n, parent](int width, int height, const ui::Box &clip) {
       const auto &opts = *propsOf<n8v_floating_options>(*n.node);
       const ui::Dimensions term = ui::Terminal::Size();
       const ui::Box anchor = parent->kind() == Kind::Root ? ui::Box{0, term.dimx - 1, 0, term.dimy - 1} : parent->box;
+      if (parent->kind() != Kind::Root) {
+        const ui::Box seen = ui::Box::Intersection(anchor, clip);
+        if (seen.x_max < seen.x_min || seen.y_max < seen.y_min) return ui::Box{0, -1, 0, -1};
+      }
       const ui::Box own{0, std::max(0, width - 1), 0, std::max(0, height - 1)};
-      int x = anchorX(opts.parent_attach_point, anchor) - anchorX(opts.element_attach_point, own) + cellsX(opts.offset_x);
-      int y = anchorY(opts.parent_attach_point, anchor) - anchorY(opts.element_attach_point, own) + cellsY(opts.offset_y);
+      int x = anchorX(opts.parent_attach_point, anchor) - anchorX(opts.element_attach_point, own) + offsetX(opts.offset_x);
+      int y = anchorY(opts.parent_attach_point, anchor) - anchorY(opts.element_attach_point, own) + offsetY(opts.offset_y);
       if (opts.keep_on_screen) {
         x = std::clamp(x, 0, std::max(0, term.dimx - width));
         y = std::clamp(y, 0, std::max(0, term.dimy - height));
@@ -1200,7 +1274,7 @@ private:
 
     ui::Element e = ui::hbox({ui::text(" "), ui::vbox(std::move(lines)) | ui::xflex, ui::text(" ")}) | ui::underlined;
     if (focused) e = std::move(e) | ui::bold;
-    return std::move(e) | ui::xflex | ui::size(ui::WIDTH, ui::GREATER_THAN, kDefaultEntryColumns);
+    return std::move(e) | ui::size(ui::WIDTH, ui::GREATER_THAN, kDefaultEntryColumns) | ui::xflex;
   }
 
   ui::Element renderInlines(const std::vector<markdown::InlineRun> &runs, bool bold = false) {
@@ -1739,6 +1813,7 @@ private:
   std::atomic<bool> running_{false};
   std::atomic<int> busyTicks_{kBusyTicks};
   bool initialized_ = false;
+  int savedStderr_ = -1;
 
   NativeNode rootNode_;
   IconStyle iconStyle_ = detectIconStyle();
