@@ -125,6 +125,7 @@ if(NOT EMSCRIPTEN)
       SDL_SetTextureAlphaMod
       SDL_SetTextureColorMod
       SDL_ShowMessageBox
+      SDL_GetModState
   )
   target_include_directories(sdl2_lazy PUBLIC ${_N8V_SDL2_INCLUDE_DIRS})
 endif()

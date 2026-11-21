@@ -356,6 +356,18 @@ public:
 
   void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back(PendingScroll{request, emscripten_get_now()}); }
 
+  bool scrollState(std::string_view containerId, float &offsetX, float &offsetY, float &viewWidth, float &viewHeight) const override {
+    auto it = byId_.find(std::string(containerId));
+    if (it == byId_.end()) return false;
+    val el = it->second->outer;
+    if (el.isUndefined() || el.isNull()) return false;
+    offsetX = (float)el["scrollLeft"].as<double>();
+    offsetY = (float)el["scrollTop"].as<double>();
+    viewWidth = (float)el["clientWidth"].as<double>();
+    viewHeight = (float)el["clientHeight"].as<double>();
+    return viewWidth > 0.0f && viewHeight > 0.0f;
+  }
+
   void requestFocus(std::string_view id) override { pendingFocus_.push_back(PendingFocus{std::string(id), 0}); }
 
   bool showMessageDialog(const MessageDialogRequest &request, MessageDialogDone done) override {
@@ -500,6 +512,18 @@ public:
     case Kind::Text:
       if (type == "click") dispatch::activate(node);
       break;
+    case Kind::Image: {
+      float a = 0.0f, b = 0.0f, c = 0.0f;
+      if (type == "click") {
+        if (std::sscanf(value.c_str(), "%f,%f", &a, &b) == 2) dispatch::activateAt(node, a, b);
+        else dispatch::activate(node);
+      } else if (type == "drag" && std::sscanf(value.c_str(), "%f,%f", &a, &b) == 2) {
+        dispatch::drag(node, a, b);
+      } else if (type == "zoom" && std::sscanf(value.c_str(), "%f,%f,%f", &a, &b, &c) == 3) {
+        dispatch::zoom(node, a, b, c);
+      }
+      break;
+    }
     case Kind::Page:
       if (type == "click") {
         dispatch::selectPage(node);
@@ -1319,6 +1343,21 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
           break;
         }
         setClass(nn.outer, classFor(css::imageCss(radius)));
+        {
+          const bool clickable = o.on_click || o.on_click_at;
+          bindEvents(nn, nn.widget, clickable);
+          auto flag = [&](const char *name, bool on) {
+            if (on) setAttr(nn.widget, name, "1");
+            else nn.widget.call<void>("removeAttribute", std::string(name));
+          };
+          flag("data-n8v-at", o.on_click_at != nullptr);
+          flag("data-n8v-drag", o.on_drag != nullptr);
+          flag("data-n8v-zoom", o.on_zoom != nullptr);
+          val style = nn.widget["style"];
+          style.set("cursor", std::string(o.on_drag ? "grab" : clickable ? "pointer" : ""));
+          style.set("touchAction", std::string(o.on_drag || o.on_zoom ? "none" : ""));
+          nn.widget.set("draggable", false);
+        }
         setImage(nn.widget, decoded);
         if (decoded) {
           if (o.width.mode == N8V_SIZING_FIT && o.width.min <= 0.0f && o.width.max <= 0.0f) nn.widget.set("width", decoded->width);

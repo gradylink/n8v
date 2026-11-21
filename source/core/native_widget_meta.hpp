@@ -21,8 +21,14 @@ struct NativeWidgetMeta {
   NativeWidgetKind kind;
   int ordinal;
   std::string id;                                           // optional stable cross-frame identity; empty falls back to `ordinal`
-  n8v_click_fn onClick = nullptr;                           // Button/Link
-  void *onClickUserdata = nullptr;                          // Button/Link
+  n8v_click_fn onClick = nullptr;                           // Button/Link/Image
+  void *onClickUserdata = nullptr;                          // Button/Link/Image
+  n8v_point_fn onClickAt = nullptr;                         // Image only
+  void *onClickAtUserdata = nullptr;                        // Image only
+  n8v_zoom_fn onZoom = nullptr;                             // Image only
+  void *onZoomUserdata = nullptr;                           // Image only
+  n8v_point_fn onDrag = nullptr;                            // Image only
+  void *onDragUserdata = nullptr;                           // Image only
   std::string *url = nullptr;                               // Link only
   bool *checked = nullptr;                                  // Checkbox/Switch, and Button when it is a toggle button
   n8v_bool_change_fn onChange = nullptr;                    // Checkbox/Switch/toggle Button

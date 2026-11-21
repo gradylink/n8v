@@ -165,19 +165,50 @@ void KittyGraphics::beginFrame() {
   frameOpen_ = true;
 }
 
-void KittyGraphics::place(uint32_t id, int x, int y, int cellX0, int cellY0, int cellX1, int cellY1, int cols, int rows) {
-  if (!frameOpen_ || cellX1 <= cellX0 || cellY1 <= cellY0 || cols <= 0 || rows <= 0) return;
+bool KittyGraphics::makePlacement(Placement &out, uint32_t id, int x, int y, int cellX0, int cellY0, int cellX1, int cellY1, int cols, int rows) const {
+  if (cellX1 <= cellX0 || cellY1 <= cellY0 || cols <= 0 || rows <= 0) return false;
   const auto size = pixelSize_.find(id);
-  if (size == pixelSize_.end()) return;
-  Placement p{id, x, y, cellX1 - cellX0, cellY1 - cellY0, 0, 0, 0, 0};
+  if (size == pixelSize_.end()) return false;
+  out = Placement{id, x, y, cellX1 - cellX0, cellY1 - cellY0, 0, 0, 0, 0, cols, rows, cellX0, cellY0};
   if (cellX0 != 0 || cellY0 != 0 || cellX1 != cols || cellY1 != rows) {
     const auto [w, h] = size->second;
-    p.srcX = cellX0 * w / cols;
-    p.srcY = cellY0 * h / rows;
-    p.srcW = std::max(1, cellX1 * w / cols - p.srcX);
-    p.srcH = std::max(1, cellY1 * h / rows - p.srcY);
+    out.srcX = cellX0 * w / cols;
+    out.srcY = cellY0 * h / rows;
+    out.srcW = std::max(1, cellX1 * w / cols - out.srcX);
+    out.srcH = std::max(1, cellY1 * h / rows - out.srcY);
   }
-  placements_.push_back(p);
+  return true;
+}
+
+void KittyGraphics::place(uint32_t id, int x, int y, int cellX0, int cellY0, int cellX1, int cellY1, int cols, int rows) {
+  if (!frameOpen_) return;
+  Placement p;
+  if (makePlacement(p, id, x, y, cellX0, cellY0, cellX1, cellY1, cols, rows)) placements_.push_back(p);
+}
+
+void KittyGraphics::occlude(int left, int right, int top, int bottom) {
+  if (!frameOpen_ || placements_.empty()) return;
+  std::vector<Placement> kept;
+  kept.reserve(placements_.size());
+  for (const Placement &p : placements_) {
+    const int pl = p.x, pr = p.x + p.cols - 1, pt = p.y, pb = p.y + p.rows - 1;
+    if (pr < left || pl > right || pb < top || pt > bottom) {
+      kept.push_back(p);
+      continue;
+    }
+    auto band = [&](int x0, int x1, int y0, int y1) {
+      if (x1 < x0 || y1 < y0) return;
+      Placement piece;
+      if (makePlacement(piece, p.id, x0, y0, p.offX + (x0 - p.x), p.offY + (y0 - p.y), p.offX + (x1 - p.x) + 1, p.offY + (y1 - p.y) + 1, p.fullCols, p.fullRows))
+        kept.push_back(piece);
+    };
+    const int midTop = std::max(pt, top), midBottom = std::min(pb, bottom);
+    band(pl, pr, pt, std::min(pb, top - 1));
+    band(pl, pr, std::max(pt, bottom + 1), pb);
+    band(pl, std::min(pr, left - 1), midTop, midBottom);
+    band(std::max(pl, right + 1), pr, midTop, midBottom);
+  }
+  placements_ = std::move(kept);
 }
 
 void KittyGraphics::endFrame() {
@@ -205,7 +236,8 @@ void KittyGraphics::endFrame() {
     if (FILE *f = std::fopen(logPath, "a")) {
       std::fprintf(f, "frame: drop %zu, show %zu\n", shown_.size(), placements_.size());
       for (const Placement &old : shown_) std::fprintf(f, "  drop id=%u at=(%d,%d) %dx%d\n", old.id, old.x, old.y, old.cols, old.rows);
-      for (const Placement &p : placements_) std::fprintf(f, "  show id=%u at=(%d,%d) %dx%d crop=(%d,%d %dx%d)\n", p.id, p.x, p.y, p.cols, p.rows, p.srcX, p.srcY, p.srcW, p.srcH);
+      for (const Placement &p : placements_)
+        std::fprintf(f, "  show id=%u at=(%d,%d) %dx%d crop=(%d,%d %dx%d)\n", p.id, p.x, p.y, p.cols, p.rows, p.srcX, p.srcY, p.srcW, p.srcH);
       std::fclose(f);
     }
   }

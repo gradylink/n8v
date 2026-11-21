@@ -104,6 +104,9 @@ struct Backend {
 
   virtual void requestScroll(const NativeScrollRequest & /*request*/) {}
 
+  /** Where the container with this id is scrolled to and the size of its view, in pixels. False if there is no such container or the backend cannot say. */
+  virtual bool scrollState(std::string_view /*containerId*/, float & /*offsetX*/, float & /*offsetY*/, float & /*viewWidth*/, float & /*viewHeight*/) const { return false; }
+
   virtual bool visibleChildren(std::string_view /*containerId*/, float /*margin*/, const std::function<void(std::string_view, float, float)> & /*visit*/) const {
     return false;
   }

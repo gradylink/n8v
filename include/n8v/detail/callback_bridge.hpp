@@ -33,6 +33,8 @@ template <typename Ret, typename Closure, typename... Args> CFn<Ret, Args...> ma
 template <typename Closure> auto makeCFn(Closure &closure) -> decltype(makeCFnImpl(&closure, &Closure::operator())) { return makeCFnImpl(&closure, &Closure::operator()); }
 
 inline std::deque<std::function<void()>> clickClosures;
+inline std::deque<std::function<void(float, float)>> pointClosures;
+inline std::deque<std::function<void(float, float, float)>> zoomClosures;
 inline std::deque<std::function<void(bool)>> boolChangeClosures;
 inline std::deque<std::function<void(int)>> intChangeClosures;
 inline std::deque<std::function<void(float)>> floatChangeClosures;
@@ -44,6 +46,8 @@ inline std::deque<std::function<const char *(const char *)>> imageResolveClosure
 
 inline void clearCallbackStorage() {
   clickClosures.clear();
+  pointClosures.clear();
+  zoomClosures.clear();
   boolChangeClosures.clear();
   intChangeClosures.clear();
   floatChangeClosures.clear();

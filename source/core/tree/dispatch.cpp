@@ -4,6 +4,7 @@
 #include "core/tree/props.hpp"
 #include "core/ui_core_internal.hpp"
 
+#include <algorithm>
 #include <string>
 
 namespace n8v::detail::tree::dispatch {
@@ -25,7 +26,8 @@ void activate(PNode &node) {
     }
     if (button->on_click) button->on_click(button->on_click_userdata);
   } else if (auto *image = optionsOf<n8v_image_options>(node)) {
-    if (image->on_click) image->on_click(image->on_click_userdata);
+    if (image->on_click_at) image->on_click_at(0.5f, 0.5f, image->on_click_at_userdata);
+    else if (image->on_click) image->on_click(image->on_click_userdata);
   } else if (auto *text = optionsOf<n8v_text_options>(node)) {
     if (text->on_click) {
       text->on_click(text->on_click_userdata);
@@ -33,6 +35,22 @@ void activate(PNode &node) {
       openUrl(text->url);
     }
   }
+}
+
+void activateAt(PNode &node, float x, float y) {
+  if (auto *image = optionsOf<n8v_image_options>(node); image && image->on_click_at) {
+    image->on_click_at(std::clamp(x, 0.0f, 1.0f), std::clamp(y, 0.0f, 1.0f), image->on_click_at_userdata);
+    return;
+  }
+  activate(node);
+}
+
+void zoom(PNode &node, float factor, float x, float y) {
+  if (auto *image = optionsOf<n8v_image_options>(node); image && image->on_zoom) image->on_zoom(factor, std::clamp(x, 0.0f, 1.0f), std::clamp(y, 0.0f, 1.0f), image->on_zoom_userdata);
+}
+
+void drag(PNode &node, float dx, float dy) {
+  if (auto *image = optionsOf<n8v_image_options>(node); image && image->on_drag) image->on_drag(dx, dy, image->on_drag_userdata);
 }
 
 void dismiss(PNode &node) {

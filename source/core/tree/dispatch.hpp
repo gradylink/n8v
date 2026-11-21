@@ -11,6 +11,12 @@
 namespace n8v::detail::tree::dispatch {
 
 void activate(PNode &node);
+/** For an image: where in it (0 to 1 on each axis) the click landed. Anything else is a plain activate. */
+void activateAt(PNode &node, float x, float y);
+/** A zoom gesture over an image: the change since the last call, and where it is centered (0 to 1 on each axis). */
+void zoom(PNode &node, float factor, float x, float y);
+/** A drag over an image: the change in position since the last call, in pixels. */
+void drag(PNode &node, float dx, float dy);
 
 void dismiss(PNode &node);
 

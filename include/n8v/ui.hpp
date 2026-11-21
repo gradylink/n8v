@@ -888,6 +888,9 @@ inline void image(ImageOptions options) {
   c_opts.height = toC(options.height);
   c_opts.rounding = toC(options.rounding);
   if (options.onClick) callback_bridge::bridge(callback_bridge::clickClosures, std::move(options.onClick), c_opts.on_click, c_opts.on_click_userdata);
+  if (options.onClickAt) callback_bridge::bridge(callback_bridge::pointClosures, std::move(options.onClickAt), c_opts.on_click_at, c_opts.on_click_at_userdata);
+  if (options.onZoom) callback_bridge::bridge(callback_bridge::zoomClosures, std::move(options.onZoom), c_opts.on_zoom, c_opts.on_zoom_userdata);
+  if (options.onDrag) callback_bridge::bridge(callback_bridge::pointClosures, std::move(options.onDrag), c_opts.on_drag, c_opts.on_drag_userdata);
 
   n8v_image(c_opts);
 }
@@ -1141,6 +1144,27 @@ inline void scrollToRight(std::string_view containerId) {
   std::string storage(containerId);
   n8v_scroll_to_right(storage.c_str());
 }
+struct ScrollState {
+  float offsetX = 0.0f;
+  float offsetY = 0.0f;
+  float viewWidth = 0.0f;
+  float viewHeight = 0.0f;
+};
+
+/** Where a scrolling container (one with an id) is scrolled to and how big its view is, in pixels. Nothing if the backend cannot say. */
+inline std::optional<ScrollState> scrollState(std::string_view containerId) {
+  const std::string idStorage(containerId);
+  ScrollState state;
+  if (!n8v_scroll_state(idStorage.c_str(), &state.offsetX, &state.offsetY, &state.viewWidth, &state.viewHeight)) return std::nullopt;
+  return state;
+}
+
+/** Opens a link in the default application (the browser for a web address). */
+inline void openUrl(std::string_view url) {
+  const std::string urlStorage(url);
+  n8v_open_url(urlStorage.c_str());
+}
+
 inline void setScrollOffset(std::string_view containerId, float x, float y) {
   std::string storage(containerId);
   n8v_scroll_to_offset(storage.c_str(), x, y);
@@ -1195,6 +1219,13 @@ inline bool pumpEvents() { return n8v_pump_events(); }
 
 /** Whether the UI currently looks dark: the toolkit's theme for GTK and Qt, the active style's window color for the backends that draw it themselves. */
 inline bool isDarkTheme() { return n8v_is_dark_theme(); }
+
+/** The window's size in logical pixels, or nothing when the backend cannot say. */
+inline std::optional<std::pair<float, float>> windowSize() {
+  float width = 0.0f, height = 0.0f;
+  if (!n8v_window_size(&width, &height)) return std::nullopt;
+  return std::pair<float, float>{width, height};
+}
 
 inline void wake() { n8v_wake(); }
 

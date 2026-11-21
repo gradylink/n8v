@@ -3,6 +3,7 @@
 #include "core/backend.hpp"
 
 #include "core/clay_convert.hpp"
+#include "core/open_url.hpp"
 #include "core/text_style_flags.hpp"
 #include "core/tree/emit.hpp"
 #include "core/tree/node.hpp"
@@ -409,6 +410,7 @@ void openFloating(const n8v_floating_options &options) {
   decl.floating.attachPoints.element = n8v::detail::toClay(toAttachPoint(options.element_attach_point));
   decl.floating.attachPoints.parent = n8v::detail::toClay(toAttachPoint(options.parent_attach_point));
   decl.floating.offset = {options.offset_x + nudgeX, options.offset_y + nudgeY};
+  if (options.opaque) decl.backgroundColor = n8v::detail::toClay(n8v::activePaint().windowBackground());
 
   Clay__ConfigureOpenElement(decl);
 }
@@ -452,6 +454,32 @@ void n8v_scroll_to_offset(const char *container_id, float x, float y) {
   if (!container_id || !*container_id) return;
   if (forwardScrollToNative(n8v::NativeScrollRequest::Kind::Offset, container_id, {}, x, y, 0.0f, 0.0f)) return;
   pendingScrollTargets.push_back(PendingScrollTarget{container_id, PendingScrollTarget::Kind::Offset, {}, x, y, 0.0f, 0.0f, 0});
+}
+
+bool n8v_scroll_state(const char *container_id, float *offset_x, float *offset_y, float *view_width, float *view_height) {
+  if (!container_id || !*container_id) return false;
+  float ox = 0.0f, oy = 0.0f, vw = 0.0f, vh = 0.0f;
+  n8v::Backend &backend = n8v::activeBackend();
+  if (backend.rendersFromClay()) {
+    const Clay_ScrollContainerData data = Clay_GetScrollContainerData(Clay_GetElementId(toClayStr(std::string(container_id))));
+    if (!data.found || !backend.ownsScrollMath() || !data.scrollPosition) return false;
+    ox = -data.scrollPosition->x;
+    oy = -data.scrollPosition->y;
+    vw = data.scrollContainerDimensions.width;
+    vh = data.scrollContainerDimensions.height;
+  } else if (!backend.scrollState(container_id, ox, oy, vw, vh)) {
+    return false;
+  }
+  if (vw <= 0.0f || vh <= 0.0f) return false;
+  if (offset_x) *offset_x = ox;
+  if (offset_y) *offset_y = oy;
+  if (view_width) *view_width = vw;
+  if (view_height) *view_height = vh;
+  return true;
+}
+
+void n8v_open_url(const char *url) {
+  if (url && *url) n8v::detail::openUrl(url);
 }
 
 bool n8v_visible_children(const char *container_id, float margin, n8v_visible_child_fn visit, void *userdata) {

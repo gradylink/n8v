@@ -449,12 +449,37 @@ protected:
     QLabel::changeEvent(event);
     if (event->type() == QEvent::FontChange) hintDirty_ = true;
   }
+  void mousePressEvent(QMouseEvent *event) override {
+    QLabel::mousePressEvent(event);
+    dragFrom_ = event->position().toPoint();
+    dragLast_ = dragFrom_;
+    dragged_ = false;
+  }
+  void mouseMoveEvent(QMouseEvent *event) override {
+    QLabel::mouseMoveEvent(event);
+    const auto *image = node ? propsOf<n8v_image_options>(*node) : nullptr;
+    if (!image || !image->on_drag || !(event->buttons() & Qt::LeftButton)) return;
+    const QPoint here = event->position().toPoint();
+    if (!dragged_ && (here - dragFrom_).manhattanLength() < 4) return;
+    dragged_ = true;
+    dispatch::drag(*node, (float)(here.x() - dragLast_.x()), (float)(here.y() - dragLast_.y()));
+    dragLast_ = here;
+  }
   void mouseReleaseEvent(QMouseEvent *event) override {
     QLabel::mouseReleaseEvent(event);
-    if (clickable && node && event->button() == Qt::LeftButton) dispatch::activate(*node);
+    if (dragged_) {
+      dragged_ = false;
+      return;
+    }
+    if (clickable && node && event->button() == Qt::LeftButton) {
+      if (width() > 0 && height() > 0) dispatch::activateAt(*node, (float)event->position().x() / (float)width(), (float)event->position().y() / (float)height());
+      else dispatch::activate(*node);
+    }
   }
 
 private:
+  QPoint dragFrom_, dragLast_;
+  bool dragged_ = false;
   mutable bool hintDirty_ = true;
   mutable QSize idealHint_;
 };
@@ -928,6 +953,17 @@ public:
       if (top + height >= -margin && top <= viewHeight + margin) visit(id, (float)top, (float)height);
     }
     return true;
+  }
+
+  bool scrollState(std::string_view containerId, float &offsetX, float &offsetY, float &viewWidth, float &viewHeight) const override {
+    auto container = byId_.find(std::string(containerId));
+    if (container == byId_.end() || !container->second->scroll) return false;
+    const NativeNode &c = *container->second;
+    offsetX = (float)c.scroll->horizontalScrollBar()->value();
+    offsetY = (float)c.scroll->verticalScrollBar()->value();
+    viewWidth = (float)c.scroll->viewport()->width();
+    viewHeight = (float)c.scroll->viewport()->height();
+    return viewWidth > 0.0f && viewHeight > 0.0f;
   }
 
   void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back(PendingScroll{request, std::chrono::steady_clock::now()}); }
@@ -1617,7 +1653,7 @@ void QtTreeBackend::updateFloating() {
             : o->width.mode == N8V_SIZING_GROW    ? hostRect.width()
             : o->width.mode == N8V_SIZING_PERCENT ? (int)(o->width.value * hostRect.width())
                                                   : hint.width();
-    if (o->width.mode == N8V_SIZING_GROW) {
+    if (o->width.mode == N8V_SIZING_GROW || o->width.mode == N8V_SIZING_PERCENT) {
       if (o->width.max > 0.0f) w = std::min(w, (int)o->width.max);
       if (o->width.min > 0.0f) w = std::max(w, (int)o->width.min);
     }
@@ -1625,6 +1661,10 @@ void QtTreeBackend::updateFloating() {
             : o->height.mode == N8V_SIZING_GROW    ? hostRect.height()
             : o->height.mode == N8V_SIZING_PERCENT ? (int)(o->height.value * hostRect.height())
                                                    : hint.height();
+    if (o->height.mode == N8V_SIZING_GROW || o->height.mode == N8V_SIZING_PERCENT) {
+      if (o->height.max > 0.0f) h = std::min(h, (int)o->height.max);
+      if (o->height.min > 0.0f) h = std::max(h, (int)o->height.min);
+    }
     if (nn.outer->layout() && nn.outer->layout()->hasHeightForWidth() && o->height.mode != N8V_SIZING_FIXED) h = nn.outer->layout()->heightForWidth(w);
 
     double pfx = 0, pfy = 0, efx = 0, efy = 0;
@@ -2267,8 +2307,8 @@ void QtTreeBackend::apply(NativeNode &nn) {
       },
       [&](const n8v_image_options &o) {
         auto *labelWidget = static_cast<N8VLabel *>(nn.widget);
-        labelWidget->clickable = o.on_click != nullptr;
-        labelWidget->setCursor(o.on_click ? Qt::PointingHandCursor : Qt::ArrowCursor);
+        labelWidget->clickable = o.on_click != nullptr || o.on_click_at != nullptr;
+        labelWidget->setCursor(o.on_drag ? Qt::OpenHandCursor : labelWidget->clickable ? Qt::PointingHandCursor : Qt::ArrowCursor);
         const DecodedImage *decoded = getOrDecodeImage(o);
         if (!decoded) {
           labelWidget->clear();

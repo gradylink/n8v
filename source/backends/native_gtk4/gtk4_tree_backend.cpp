@@ -391,6 +391,19 @@ public:
     return true;
   }
 
+  bool scrollState(std::string_view containerId, float &offsetX, float &offsetY, float &viewWidth, float &viewHeight) const override {
+    auto container = byId_.find(std::string(containerId));
+    if (container == byId_.end() || !container->second->scrolled) return false;
+    GtkScrolledWindow *window = GTK_SCROLLED_WINDOW(container->second->scrolled);
+    GtkAdjustment *hadj = gtk_scrolled_window_get_hadjustment(window);
+    GtkAdjustment *vadj = gtk_scrolled_window_get_vadjustment(window);
+    offsetX = (float)gtk_adjustment_get_value(hadj);
+    offsetY = (float)gtk_adjustment_get_value(vadj);
+    viewWidth = (float)gtk_adjustment_get_page_size(hadj);
+    viewHeight = (float)gtk_adjustment_get_page_size(vadj);
+    return viewWidth > 0.0f && viewHeight > 0.0f;
+  }
+
   void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back(PendingScroll{request, std::chrono::steady_clock::now()}); }
 
   void requestFocus(std::string_view id) override { pendingFocus_.push_back(PendingFocus{std::string(id), 0}); }
@@ -686,13 +699,26 @@ private:
     GtkWidget *picked = gtk_widget_pick(self_->window_, x, y, GTK_PICK_DEFAULT);
     const GtkWidget *pressed = self_->pressedWidget_;
     self_->pressedWidget_ = nullptr;
+    if (dragMoved_) {
+      dragMoved_ = false;
+      return;
+    }
     if (!picked || picked != pressed) return;
     for (PNode *pn : self_->live_) {
       NativeNode *nn = self_->native(*pn);
       if (!nn || nn->widget != picked) continue;
       const auto *text = propsOf<n8v_text_options>(*pn);
       const auto *image = propsOf<n8v_image_options>(*pn);
-      if ((text && text->on_click && text->click_unstyled) || (image && image->on_click)) {
+      if ((text && text->on_click && text->click_unstyled) || (image && (image->on_click || image->on_click_at))) {
+        if (image && image->on_click_at) {
+          graphene_point_t window = GRAPHENE_POINT_INIT((float)x, (float)y);
+          graphene_point_t local = GRAPHENE_POINT_INIT(0.0f, 0.0f);
+          const int w = gtk_widget_get_width(picked), h = gtk_widget_get_height(picked);
+          if (w > 0 && h > 0 && gtk_widget_compute_point(self_->window_, picked, &window, &local)) {
+            dispatch::activateAt(*pn, local.x / (float)w, local.y / (float)h);
+            return;
+          }
+        }
         dispatch::activate(*pn);
         return;
       }
@@ -844,6 +870,99 @@ private:
     const guint offset = o && o->placeholder && *o->placeholder ? 1 : 0;
     if (selected != GTK_INVALID_LIST_POSITION && selected >= offset) dispatch::select(*node, (int)(selected - offset));
   }
+  static inline double pinchScale_ = 1.0;
+  static inline double pointerX_ = 0.0, pointerY_ = 0.0;
+
+  static void zoomImage(PNode &node, double factor, double x, double y) {
+    const auto *image = propsOf<n8v_image_options>(node);
+    NativeNode *nn = self_ ? self_->native(node) : nullptr;
+    if (!image || !image->on_zoom || !nn || !(factor > 0.0)) return;
+    const int w = gtk_widget_get_width(nn->widget), h = gtk_widget_get_height(nn->widget);
+    dispatch::zoom(node, (float)factor, w > 0 ? (float)(x / w) : 0.5f, h > 0 ? (float)(y / h) : 0.5f);
+  }
+
+  static inline double dragLastX_ = 0.0, dragLastY_ = 0.0, dragStartX_ = 0.0, dragStartY_ = 0.0;
+  static inline bool dragMoved_ = false;
+
+  static bool dragPointInWindow(GtkGesture *gesture, GtkWidget *widget, double &x, double &y) {
+    double localX = 0.0, localY = 0.0;
+    if (!self_ || !gtk_gesture_get_point(gesture, nullptr, &localX, &localY)) return false;
+    graphene_point_t local = GRAPHENE_POINT_INIT((float)localX, (float)localY);
+    graphene_point_t window = GRAPHENE_POINT_INIT(0.0f, 0.0f);
+    if (!gtk_widget_compute_point(widget, self_->window_, &local, &window)) return false;
+    x = window.x;
+    y = window.y;
+    return true;
+  }
+
+  static void onDragBegin(GtkGestureDrag *gesture, double, double, gpointer userData) {
+    dragMoved_ = false;
+    PNode *node = liveNode(userData);
+    NativeNode *nn = node && self_ ? self_->native(*node) : nullptr;
+    if (!nn || !dragPointInWindow(GTK_GESTURE(gesture), nn->widget, dragLastX_, dragLastY_)) dragLastX_ = dragLastY_ = 0.0;
+    dragStartX_ = dragLastX_;
+    dragStartY_ = dragLastY_;
+  }
+
+  static void onDragUpdate(GtkGestureDrag *gesture, double, double, gpointer userData) {
+    PNode *node = liveNode(userData);
+    const auto *image = node ? propsOf<n8v_image_options>(*node) : nullptr;
+    NativeNode *nn = node && self_ ? self_->native(*node) : nullptr;
+    if (!image || !image->on_drag || !nn) return;
+    double x = 0.0, y = 0.0;
+    if (!dragPointInWindow(GTK_GESTURE(gesture), nn->widget, x, y)) return;
+    if (!dragMoved_ && std::abs(x - dragStartX_) + std::abs(y - dragStartY_) < 4.0) return;
+    dragMoved_ = true;
+    dispatch::drag(*node, (float)(x - dragLastX_), (float)(y - dragLastY_));
+    dragLastX_ = x;
+    dragLastY_ = y;
+  }
+
+  static void onPinchBegin(GtkGesture *, GdkEventSequence *, gpointer) { pinchScale_ = 1.0; }
+
+  static void onPinchScale(GtkGestureZoom *gesture, double scale, gpointer userData) {
+    PNode *node = liveNode(userData);
+    if (!node || pinchScale_ <= 0.0) return;
+    const double factor = scale / pinchScale_;
+    pinchScale_ = scale;
+    double x = 0.0, y = 0.0;
+    if (!gtk_gesture_get_bounding_box_center(GTK_GESTURE(gesture), &x, &y) && !pointerInWidget(*node, x, y)) return;
+    zoomImage(*node, factor, x, y);
+  }
+
+  static gboolean onWheelZoom(GtkEventControllerScroll *controller, double, double dy, gpointer userData) {
+    if (!(gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(controller)) & GDK_CONTROL_MASK)) return FALSE;
+    PNode *node = liveNode(userData);
+    const auto *image = node ? propsOf<n8v_image_options>(*node) : nullptr;
+    if (!image || !image->on_zoom) return FALSE;
+    double x = 0.0, y = 0.0;
+    if (!pointerInWidget(*node, x, y)) return FALSE;
+    zoomImage(*node, std::exp(-dy * 0.1), x, y);
+    return TRUE;
+  }
+
+  static void onImageMotion(GtkEventControllerMotion *, double x, double y, gpointer userData) {
+    PNode *node = liveNode(userData);
+    NativeNode *nn = node && self_ ? self_->native(*node) : nullptr;
+    if (!nn) return;
+    graphene_point_t local = GRAPHENE_POINT_INIT((float)x, (float)y);
+    graphene_point_t window = GRAPHENE_POINT_INIT(0.0f, 0.0f);
+    if (!gtk_widget_compute_point(nn->widget, self_->window_, &local, &window)) return;
+    pointerX_ = window.x;
+    pointerY_ = window.y;
+  }
+
+  static bool pointerInWidget(PNode &node, double &x, double &y) {
+    NativeNode *nn = self_ ? self_->native(node) : nullptr;
+    if (!nn) return false;
+    graphene_point_t window = GRAPHENE_POINT_INIT((float)pointerX_, (float)pointerY_);
+    graphene_point_t local = GRAPHENE_POINT_INIT(0.0f, 0.0f);
+    if (!gtk_widget_compute_point(self_->window_, nn->widget, &window, &local)) return false;
+    x = local.x;
+    y = local.y;
+    return true;
+  }
+
   static void onSliderChanged(GtkRange *range, gpointer userData) {
     PNode *node = liveNode(userData);
     if (node && !self_->updating_) dispatch::setSlider(*node, (float)gtk_range_get_value(range));
@@ -1199,7 +1318,7 @@ gboolean Gtk4TreeBackend::onOverlayChildPosition(GtkOverlay *overlay, GtkWidget 
           : o->width.mode == N8V_SIZING_GROW    ? parentW
           : o->width.mode == N8V_SIZING_PERCENT ? (int)(o->width.value * parentW)
                                                 : natW;
-  if (o->width.mode == N8V_SIZING_GROW) {
+  if (o->width.mode == N8V_SIZING_GROW || o->width.mode == N8V_SIZING_PERCENT) {
     if (o->width.max > 0.0f) w = std::min(w, (int)o->width.max);
     if (o->width.min > 0.0f) w = std::max(w, (int)o->width.min);
   }
@@ -1209,6 +1328,10 @@ gboolean Gtk4TreeBackend::onOverlayChildPosition(GtkOverlay *overlay, GtkWidget 
           : o->height.mode == N8V_SIZING_GROW    ? parentH
           : o->height.mode == N8V_SIZING_PERCENT ? (int)(o->height.value * parentH)
                                                  : natH;
+  if (o->height.mode == N8V_SIZING_GROW || o->height.mode == N8V_SIZING_PERCENT) {
+    if (o->height.max > 0.0f) h = std::min(h, (int)o->height.max);
+    if (o->height.min > 0.0f) h = std::max(h, (int)o->height.min);
+  }
 
   double pfx = 0, pfy = 0, efx = 0, efy = 0;
   attachFraction(o->parent_attach_point, pfx, pfy);
@@ -1367,7 +1490,7 @@ void Gtk4TreeBackend::attach(NativeNode &parent, NativeNode &child, size_t index
     gtk_list_box_insert(GTK_LIST_BOX(parent.listBox), child.outer, (int)rowIndex(parent, child));
     return;
   }
-  if (child.floating && isPopover(child)) {
+  if (child.floating && (isPopover(child) || parent.kind() == Kind::Root)) {
     gtk_overlay_add_overlay(GTK_OVERLAY(rootOverlay_), child.outer);
     ++rootOverlayChildren_;
     return;
@@ -1681,7 +1804,6 @@ void Gtk4TreeBackend::applyAudio(NativeNode &nn, const n8v_audio_options &o) {
       g_object_unref(file);
     }
     gtk_media_controls_set_media_stream(GTK_MEDIA_CONTROLS(nn.widget), stream);
-    // The controls only borrow the stream, so tie its life to the widget's.
     g_object_set_data_full(G_OBJECT(nn.widget), "n8v-audio-stream", stream, g_object_unref);
   }
 
@@ -1967,6 +2089,22 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
     nn.outer = nn.widget = gtk_picture_new();
     gtk_picture_set_can_shrink(GTK_PICTURE(nn.widget), TRUE);
     gtk_picture_set_content_fit(GTK_PICTURE(nn.widget), GTK_CONTENT_FIT_FILL);
+    {
+      GtkGesture *pinch = gtk_gesture_zoom_new();
+      connect(pinch, "begin", &Gtk4TreeBackend::onPinchBegin, pn);
+      connect(pinch, "scale-changed", &Gtk4TreeBackend::onPinchScale, pn);
+      gtk_widget_add_controller(nn.widget, GTK_EVENT_CONTROLLER(pinch));
+      GtkEventController *wheel = gtk_event_controller_scroll_new(GTK_EVENT_CONTROLLER_SCROLL_VERTICAL);
+      connect(wheel, "scroll", &Gtk4TreeBackend::onWheelZoom, pn);
+      gtk_widget_add_controller(nn.widget, wheel);
+      GtkGesture *drag = gtk_gesture_drag_new();
+      connect(drag, "drag-begin", &Gtk4TreeBackend::onDragBegin, pn);
+      connect(drag, "drag-update", &Gtk4TreeBackend::onDragUpdate, pn);
+      gtk_widget_add_controller(nn.widget, GTK_EVENT_CONTROLLER(drag));
+      GtkEventController *motion = gtk_event_controller_motion_new();
+      connect(motion, "motion", &Gtk4TreeBackend::onImageMotion, pn);
+      gtk_widget_add_controller(nn.widget, motion);
+    }
     break;
   }
   case Kind::Icon: {
@@ -2593,6 +2731,8 @@ void Gtk4TreeBackend::apply(NativeNode &nn) {
         const int targetW = o.width.mode == N8V_SIZING_FIXED ? std::max(1, (int)o.width.value) : decoded->width;
         const int targetH = o.height.mode == N8V_SIZING_FIXED ? std::max(1, (int)o.height.value) : decoded->height;
         const DecodedImage *baked = getOrBakeRoundedImage(decoded, targetW, targetH, radius.topLeft, radius.topRight, radius.bottomLeft, radius.bottomRight);
+        if (baked == decoded && (targetW != decoded->width || targetH != decoded->height)) baked = getOrScaleImage(decoded, targetW, targetH);
+        gtk_widget_set_cursor_from_name(nn.widget, o.on_drag ? "grab" : (o.on_click || o.on_click_at) ? "pointer" : nullptr);
         if (nn.textureSource != baked) {
           GdkTexture *texture = makeTexture(baked);
           gtk_picture_set_paintable(GTK_PICTURE(nn.widget), GDK_PAINTABLE(texture));

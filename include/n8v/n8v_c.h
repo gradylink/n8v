@@ -164,6 +164,10 @@ N8V_API void n8v_string_buf_free(n8v_string_buf *buf);
 N8V_API const char *n8v_string_buf_cstr(const n8v_string_buf *buf);
 
 typedef void (*n8v_click_fn)(void *userdata);
+/** A position inside an element, each axis from 0 (left/top) to 1 (right/bottom). */
+typedef void (*n8v_point_fn)(float x, float y, void *userdata);
+/** A zoom gesture: `factor` is the change since the last call (above 1 zooms in), around the point (x, y) of the element, each axis from 0 to 1. */
+typedef void (*n8v_zoom_fn)(float factor, float x, float y, void *userdata);
 typedef void (*n8v_bool_change_fn)(bool value, void *userdata);
 typedef void (*n8v_int_change_fn)(int value, void *userdata);
 typedef void (*n8v_text_change_fn)(const char *text, size_t length, void *userdata);
@@ -360,6 +364,15 @@ typedef struct n8v_image_options {
   /** Makes the image clickable when set. */
   n8v_click_fn on_click;
   void *on_click_userdata;
+  /** Like on_click, but told where in the image it was clicked. Wins over on_click where the toolkit can say where. */
+  n8v_point_fn on_click_at;
+  void *on_click_at_userdata;
+  /** Pinch (trackpad or touch) and Ctrl+wheel zooming over the image, where the toolkit has them. */
+  n8v_zoom_fn on_zoom;
+  void *on_zoom_userdata;
+  /** Dragging over the image, with the change in position since the last call in pixels (x right, y down), for panning. Where the toolkit can drag, a drag is not also a click. */
+  n8v_point_fn on_drag;
+  void *on_drag_userdata;
 } n8v_image_options;
 
 typedef struct n8v_video_options {
@@ -725,6 +738,9 @@ N8V_API void n8v_raise_window(void);
 
 /** Whether the UI currently has a dark appearance: the toolkit's theme for native backends, the active style's window color for the others. */
 N8V_API bool n8v_is_dark_theme(void);
+
+/** The window's size in logical pixels (the terminal's, in cells times 8x16, for the terminal backend). False if the backend cannot say. */
+N8V_API bool n8v_window_size(float *width, float *height);
 N8V_API void n8v_shutdown(void);
 
 N8V_API void n8v_set_style_family(n8v_style_family family);
@@ -789,6 +805,10 @@ N8V_API void n8v_scroll_to_left(const char *container_id);
 N8V_API void n8v_scroll_to_right(const char *container_id);
 /** Scrolls the container to an absolute offset in pixels from the top-left of its content, each axis clamped independently to the container's valid scroll range. */
 N8V_API void n8v_scroll_to_offset(const char *container_id, float x, float y);
+/** Where a scrolling container is scrolled to, and how big its view is, all in pixels. False if there is no such container or the backend cannot say. */
+N8V_API bool n8v_scroll_state(const char *container_id, float *offset_x, float *offset_y, float *view_width, float *view_height);
+/** Opens a link in the default application (the browser for a web address). */
+N8V_API void n8v_open_url(const char *url);
 /** Scrolls the container so the element tagged with `element_id` is visible at the top-left of the container's viewport, offset by `padding_left`/`padding_top` pixels. */
 N8V_API void n8v_scroll_to_element(const char *container_id, const char *element_id, float padding_left, float padding_top);
 

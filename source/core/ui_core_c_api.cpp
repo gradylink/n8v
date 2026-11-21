@@ -66,6 +66,14 @@ void n8v_wake(void) { n8v::activeBackend().wake(); }
 
 void n8v_raise_window(void) { n8v::activeBackend().raiseWindow(); }
 
+bool n8v_window_size(float *width, float *height) {
+  const Clay_Dimensions size = n8v::activeBackend().windowSize();
+  if (size.width <= 0.0f || size.height <= 0.0f) return false;
+  if (width) *width = size.width;
+  if (height) *height = size.height;
+  return true;
+}
+
 bool n8v_is_dark_theme(void) { return n8v::activeBackend().prefersDark(); }
 
 void n8v_show_file_dialog(n8v_file_dialog_options options) {

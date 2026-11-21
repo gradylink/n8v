@@ -209,6 +209,12 @@ template <typename V> void visitFields(n8v_image_options &o, V &v) {
   v.num(o.rounding);
   v.ptr(o.on_click);
   v.ptr(o.on_click_userdata);
+  v.ptr(o.on_click_at);
+  v.ptr(o.on_click_at_userdata);
+  v.ptr(o.on_zoom);
+  v.ptr(o.on_zoom_userdata);
+  v.ptr(o.on_drag);
+  v.ptr(o.on_drag_userdata);
 }
 
 template <typename V> void visitFields(n8v_icon_options &o, V &v) {

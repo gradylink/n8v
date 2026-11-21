@@ -4,9 +4,10 @@
 #include "backends/clay_fallback/text/line_layout.hpp"
 #include "core/native_widget_meta.hpp"
 #include "core/open_url.hpp"
-#include "core/ui_core_internal.hpp"
+#include "core/pointer_input.hpp"
 #include "core/style.hpp"
 #include "core/text_style_flags.hpp"
+#include "core/ui_core_internal.hpp"
 
 #include <SDL2/SDL_video.h>
 
@@ -75,6 +76,10 @@ bool Sdl2Backend::pumpEvents() {
       }
       break;
     case SDL_MOUSEWHEEL:
+      if (SDL_GetModState() & KMOD_CTRL) {
+        ctrlWheelZoom += event.wheel.preciseY;
+        break;
+      }
       pendingScrollDelta_.x += (float)event.wheel.x * WheelScrollScale;
       pendingScrollDelta_.y += (float)event.wheel.y * WheelScrollScale;
       break;

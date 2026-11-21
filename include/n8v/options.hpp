@@ -179,6 +179,12 @@ struct ImageOptions {
   Rounding rounding = Rounding::styleDefault();
   /** Makes the image clickable when set. */
   std::function<void()> onClick = nullptr;
+  /** Like onClick, but told where in the image it was clicked: x and y each run from 0 (left/top) to 1 (right/bottom). Used instead of onClick where the toolkit knows the spot; elsewhere it is called for the middle. */
+  std::function<void(float x, float y)> onClickAt = nullptr;
+  /** Pinch (trackpad or touch) and Ctrl+wheel zoom over the image, where the toolkit has them. `factor` is the change since the last call (above 1 zooms in); x and y are where it is centered, 0 to 1. */
+  std::function<void(float factor, float x, float y)> onZoom = nullptr;
+  /** Dragging over the image, for panning: the change in position since the last call, in pixels (x right, y down). Where the toolkit can drag, a drag is not also a click. */
+  std::function<void(float dx, float dy)> onDrag = nullptr;
 };
 
 struct VideoOptions {

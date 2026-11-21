@@ -308,6 +308,7 @@ private:
 
 struct OverlayHost {
   std::vector<std::function<void(ui::Screen &)>> pending;
+  KittyGraphics *kitty = nullptr;
 };
 
 class OverlayNode final : public ui::Node {
@@ -328,6 +329,7 @@ public:
       const ui::Box placed = place_(inner.min_x, inner.min_y, clip);
       if (placed.x_max < placed.x_min || placed.y_max < placed.y_min) return;
       children_[0]->SetBox(placed);
+      if (host_.kitty) host_.kitty->occlude(placed.x_min, placed.x_max, placed.y_min, placed.y_max);
       const ui::Box saved = screen.stencil;
       screen.stencil = ui::Box::Intersection(saved, placed);
       children_[0]->Render(screen);
@@ -559,6 +561,7 @@ public:
     app_.emplace(ui::App::Fullscreen());
     app_->ForceHandleCtrlC(false);
     kitty_.setProtocol(imageProtocol_);
+    overlays_.kitty = &kitty_;
     root_ = ui::CatchEvent(ui::Renderer([this] { return renderRoot(); }), [this](ui::Event event) { return onEvent(std::move(event)); });
     loop_ = std::make_unique<ui::Loop>(&*app_, root_);
 
@@ -612,6 +615,17 @@ public:
   bool isHovered(std::string_view id) const override { return hoveredIds_.count(std::string(id)) != 0; }
 
   void requestScroll(const NativeScrollRequest &request) override { pendingScrolls_.push_back({request, 30}); }
+
+  bool scrollState(std::string_view containerId, float &offsetX, float &offsetY, float &viewWidth, float &viewHeight) const override {
+    auto it = byId_.find(std::string(containerId));
+    if (it == byId_.end() || !it->second->hasView) return false;
+    const NativeNode &n = *it->second;
+    offsetX = (float)n.scrollX * kCellWidthPx;
+    offsetY = (float)n.scrollY * kCellHeightPx;
+    viewWidth = (float)(n.view.x_max - n.view.x_min + 1) * kCellWidthPx;
+    viewHeight = (float)(n.view.y_max - n.view.y_min + 1) * kCellHeightPx;
+    return true;
+  }
 
   void requestFocus(std::string_view id) override {
     auto it = byId_.find(std::string(id));
@@ -686,6 +700,7 @@ public:
     }
     if (focused_ == nn) focused_ = nullptr;
     if (dragging_ == nn) dragging_ = nullptr;
+    if (dragImage_ == nn) dragImage_ = nullptr;
     std::erase(lastHoverPath_, nn);
     std::erase(focusables_, nn);
     std::erase(floatings_, nn);
@@ -991,6 +1006,17 @@ private:
         const ui::Box seen = ui::Box::Intersection(anchor, clip);
         if (seen.x_max < seen.x_min || seen.y_max < seen.y_min) return ui::Box{0, -1, 0, -1};
       }
+      auto span = [](const n8v_sizing &sizing, int natural, int available, float cellPx) {
+        int size = natural;
+        if (sizing.mode == N8V_SIZING_PERCENT) size = std::max(natural, (int)std::lround(sizing.value * available));
+        else if (sizing.mode == N8V_SIZING_GROW) size = std::max(natural, available);
+        else return natural;
+        if (sizing.max > 0.0f) size = std::min(size, std::max(natural, (int)std::lround(sizing.max / cellPx)));
+        if (sizing.min > 0.0f) size = std::max(size, (int)std::lround(sizing.min / cellPx));
+        return size;
+      };
+      width = span(opts.width, width, anchor.x_max - anchor.x_min + 1, kCellWidthPx);
+      height = span(opts.height, height, anchor.y_max - anchor.y_min + 1, kCellHeightPx);
       const ui::Box own{0, std::max(0, width - 1), 0, std::max(0, height - 1)};
       int x = anchorX(opts.parent_attach_point, anchor) - anchorX(opts.element_attach_point, own) + offsetX(opts.offset_x);
       int y = anchorY(opts.parent_attach_point, anchor) - anchorY(opts.element_attach_point, own) + offsetY(opts.offset_y);
@@ -1186,7 +1212,7 @@ private:
 
     const uint32_t kittyId = imageProtocol_ != ImageProtocol::Blocks ? kitty_.ensure(image, cols, rows) : 0;
     ui::Element e = std::make_shared<ImageNode>(image, cols, rows, kittyId, imageProtocol_ == ImageProtocol::KittyDirect ? &kitty_ : nullptr);
-    if (o.on_click) e = focusStyle(std::move(e), n);
+    if (o.on_click || o.on_click_at) e = focusStyle(std::move(e), n);
     return e;
   }
 
@@ -1454,12 +1480,29 @@ private:
     if (n && n->kind() == Kind::Entry) n->cursor = entryText(*n).size();
   }
 
+  const NativeNode *topDismissable() const {
+    for (auto it = floatings_.rbegin(); it != floatings_.rend(); ++it) {
+      const auto *opts = propsOf<n8v_floating_options>(*(*it)->node);
+      if (opts && opts->on_dismiss) return *it;
+    }
+    return nullptr;
+  }
+
   void moveFocus(int direction) {
-    if (focusables_.empty()) return;
-    auto it = std::find(focusables_.begin(), focusables_.end(), focused_);
-    size_t index = it == focusables_.end() ? (direction > 0 ? 0 : focusables_.size() - 1) : (size_t)(it - focusables_.begin());
-    if (it != focusables_.end()) index = (index + focusables_.size() + (size_t)direction) % focusables_.size();
-    focus(focusables_[index]);
+    std::vector<NativeNode *> candidates = focusables_;
+    if (const NativeNode *overlay = topDismissable()) {
+      std::erase_if(candidates, [&](NativeNode *n) {
+        for (const NativeNode *up = n; up; up = up->parent) {
+          if (up == overlay) return false;
+        }
+        return true;
+      });
+    }
+    if (candidates.empty()) return;
+    auto it = std::find(candidates.begin(), candidates.end(), focused_);
+    size_t index = it == candidates.end() ? (direction > 0 ? 0 : candidates.size() - 1) : (size_t)(it - candidates.begin());
+    if (it != candidates.end()) index = (index + candidates.size() + (size_t)direction) % candidates.size();
+    focus(candidates[index]);
   }
 
   void activate(NativeNode &n) {
@@ -1740,7 +1783,20 @@ private:
 
     if (m.button == ui::Mouse::Left && m.motion == ui::Mouse::Released) {
       dragging_ = nullptr;
+      if (NativeNode *image = std::exchange(dragImage_, nullptr)) {
+        if (!imageDragged_) activateImageAt(*image, dragFromX_, dragFromY_);
+        return true;
+      }
       return false;
+    }
+    if (m.motion == ui::Mouse::Moved && dragImage_ && m.button == ui::Mouse::Left) {
+      if (m.x != dragLastX_ || m.y != dragLastY_) {
+        imageDragged_ = true;
+        dispatch::drag(*dragImage_->node, (float)(m.x - dragLastX_) * kCellWidthPx, (float)(m.y - dragLastY_) * kCellHeightPx);
+        dragLastX_ = m.x;
+        dragLastY_ = m.y;
+      }
+      return true;
     }
     if (m.motion == ui::Mouse::Moved && dragging_ && m.button == ui::Mouse::Left) return setSliderFromX(*dragging_, m.x), true;
     if (!(m.button == ui::Mouse::Left && m.motion == ui::Mouse::Pressed)) return false;
@@ -1783,11 +1839,28 @@ private:
     case Kind::Entry:
       placeEntryCursor(*target, m.x, m.y);
       break;
+    case Kind::Image: {
+      if (propsOf<n8v_image_options>(*target->node)->on_drag) {
+        dragImage_ = target;
+        imageDragged_ = false;
+        dragFromX_ = dragLastX_ = m.x;
+        dragFromY_ = dragLastY_ = m.y;
+      } else {
+        activateImageAt(*target, m.x, m.y);
+      }
+      break;
+    }
     default:
       activate(*target);
       break;
     }
     return true;
+  }
+
+  void activateImageAt(NativeNode &image, int x, int y) {
+    const int w = image.box.x_max - image.box.x_min + 1, h = image.box.y_max - image.box.y_min + 1;
+    if (w > 0 && h > 0) dispatch::activateAt(*image.node, ((float)(x - image.box.x_min) + 0.5f) / (float)w, ((float)(y - image.box.y_min) + 0.5f) / (float)h);
+    else activate(image);
   }
 
   void placeEntryCursor(NativeNode &n, int x, int y) {
@@ -1830,6 +1903,9 @@ private:
   std::vector<PendingScroll> pendingScrolls_;
   NativeNode *focused_ = nullptr;
   NativeNode *dragging_ = nullptr;
+  NativeNode *dragImage_ = nullptr;
+  bool imageDragged_ = false;
+  int dragFromX_ = 0, dragFromY_ = 0, dragLastX_ = 0, dragLastY_ = 0;
   bool focusMoved_ = false;
   bool escapePressed_ = false;
   std::optional<DialogState> dialog_;

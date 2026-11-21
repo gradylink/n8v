@@ -30,6 +30,7 @@ public:
     frameOpen_ = protocol_ == ImageProtocol::KittyDirect;
   }
   void place(uint32_t id, int x, int y, int cellX0, int cellY0, int cellX1, int cellY1, int cols, int rows);
+  void occlude(int left, int right, int top, int bottom);
 
   static std::string placeholder(int row, int col);
 
@@ -40,6 +41,7 @@ private:
     uint32_t id;
     int x, y, cols, rows;
     int srcX, srcY, srcW, srcH;
+    int fullCols = 0, fullRows = 0, offX = 0, offY = 0;
 
     bool operator==(const Placement &o) const {
       return id == o.id && x == o.x && y == o.y && cols == o.cols && rows == o.rows && srcX == o.srcX && srcY == o.srcY && srcW == o.srcW && srcH == o.srcH;
@@ -47,6 +49,7 @@ private:
   };
 
   void forgetUnused();
+  bool makePlacement(Placement &out, uint32_t id, int x, int y, int cellX0, int cellY0, int cellX1, int cellY1, int cols, int rows) const;
 
   ImageProtocol protocol_ = ImageProtocol::Kitty;
   std::map<uint32_t, std::pair<int, int>> pixelSize_;

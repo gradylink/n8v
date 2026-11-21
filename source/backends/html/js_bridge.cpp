@@ -14,11 +14,65 @@ EM_JS(void, n8vHtmlInstallListeners, (), {
   });
   window.addEventListener('resize', bump);
 
+  var dragState = null, justDragged = false;
+  document.addEventListener('pointerdown', function(e) {
+    var el = e.target.closest ? e.target.closest('[data-n8v-drag]') : null;
+    if (!el || e.button != 0) return;
+    dragState = {el: el, startX: e.clientX, startY: e.clientY, lastX: e.clientX, lastY: e.clientY, moved: false};
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  document.addEventListener('pointermove', function(e) {
+    if (!dragState) return;
+    if (!dragState.moved && Math.abs(e.clientX - dragState.startX) + Math.abs(e.clientY - dragState.startY) < 4) return;
+    dragState.moved = true;
+    send(ordinalOf(dragState.el), 'drag', (e.clientX - dragState.lastX) + ',' + (e.clientY - dragState.lastY));
+    dragState.lastX = e.clientX;
+    dragState.lastY = e.clientY;
+  });
+  function endDrag() {
+    if (dragState && dragState.moved) {
+      justDragged = true;
+      setTimeout(function() { justDragged = false; }, 0);
+    }
+    dragState = null;
+  }
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
+
   document.addEventListener('click', function(e) {
     var el = e.target.closest ? e.target.closest('[data-n8v-click]') : null;
     if (!el) return;
     e.preventDefault();
-    send(ordinalOf(el), 'click', '');
+    if (justDragged) return;
+    var value = '';
+    if (el.hasAttribute('data-n8v-at')) {
+      var r = el.getBoundingClientRect();
+      value = ((e.clientX - r.left) / Math.max(1, r.width)) + ',' + ((e.clientY - r.top) / Math.max(1, r.height));
+    }
+    send(ordinalOf(el), 'click', value);
+  });
+
+  function zoomAt(el, factor, clientX, clientY) {
+    var r = el.getBoundingClientRect();
+    send(ordinalOf(el), 'zoom', factor + ',' + ((clientX - r.left) / Math.max(1, r.width)) + ',' + ((clientY - r.top) / Math.max(1, r.height)));
+  }
+  document.addEventListener('wheel', function(e) {
+    if (!e.ctrlKey) return;
+    var el = e.target.closest ? e.target.closest('[data-n8v-zoom]') : null;
+    if (!el) return;
+    e.preventDefault();
+    zoomAt(el, Math.exp(-e.deltaY * (Math.abs(e.deltaY) > 40 ? 0.002 : 0.01)), e.clientX, e.clientY);
+  }, {passive: false});
+  var gestureScale = 1;
+  document.addEventListener('gesturestart', function(e) {
+    if (e.target.closest && e.target.closest('[data-n8v-zoom]')) { e.preventDefault(); gestureScale = 1; }
+  });
+  document.addEventListener('gesturechange', function(e) {
+    var el = e.target.closest ? e.target.closest('[data-n8v-zoom]') : null;
+    if (!el) return;
+    e.preventDefault();
+    zoomAt(el, e.scale / gestureScale, e.clientX, e.clientY);
+    gestureScale = e.scale;
   });
 
   document.addEventListener('click', function(e) {
