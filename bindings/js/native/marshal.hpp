@@ -22,4 +22,7 @@ n8v_flex_options ReadFlexOptions(const Napi::Object &o);
 n8v_panel_options ReadPanelOptions(const Napi::Object &o);
 n8v_text_options ReadTextOptions(const Napi::Object &o, std::string &urlStorage);
 
+/** Registers setCustomPaint and the style*Paint queries (paint.cpp). */
+void InitPaint(Napi::Env env, Napi::Object exports);
+
 } // namespace n8v_napi

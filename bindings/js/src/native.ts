@@ -75,6 +75,20 @@ export interface NativeAddon {
   isDarkTheme(): boolean;
   windowSize(): { width: number; height: number } | null;
 
+  setCustomPaint(paint: object): void;
+  styleButtonPaint(family: number, ...args: unknown[]): object;
+  styleTextPaint(family: number, ...args: unknown[]): object;
+  styleCheckboxPaint(family: number, ...args: unknown[]): object;
+  styleRadioPaint(family: number, ...args: unknown[]): object;
+  styleTogglePaint(family: number, ...args: unknown[]): object;
+  styleEntryPaint(family: number, ...args: unknown[]): object;
+  styleDropdownPaint(family: number, ...args: unknown[]): object;
+  styleSliderPaint(family: number, ...args: unknown[]): object;
+  styleImagePaint(family: number, ...args: unknown[]): object;
+  styleIconPaint(family: number, ...args: unknown[]): object;
+  styleSidebarPaint(family: number, ...args: unknown[]): object;
+  stylePanelPaint(family: number, ...args: unknown[]): object;
+
   isHovered(id: string): boolean;
   scrollToBottom(containerId: string): void;
   scrollToTop(containerId: string): void;

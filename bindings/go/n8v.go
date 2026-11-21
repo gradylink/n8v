@@ -73,6 +73,8 @@ const (
 	Material
 	Cupertino
 	Fluent
+	// Custom is the style SetCustomPaint installs.
+	Custom
 )
 
 type Align int

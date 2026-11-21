@@ -30,7 +30,14 @@ import {
   type SubmitMode,
 } from "./types.ts";
 
+import {
+  builtinPaint as builtinPaintImpl,
+  type CustomPaint,
+  setCustomPaint as setCustomPaintImpl,
+} from "./paint.ts";
+
 export * from "./types.ts";
+export type * from "./paint.ts";
 export type { NativeRef };
 
 let native: NativeAddon | null = null;
@@ -90,6 +97,16 @@ export function pumpEvents(): boolean {
 
 export function shutdown(): void {
   n().shutdown();
+}
+
+/** Installs `paint` and switches to the "custom" style. Only the SDL2 and HTML backends use it. */
+export function setCustomPaint(paint: CustomPaint): void {
+  setCustomPaintImpl(n(), paint);
+}
+
+/** The paint of one of the bundled styles, for a custom style to delegate to for whatever it does not change. */
+export function builtinPaint(family: StyleFamily) {
+  return builtinPaintImpl(n(), family);
 }
 
 export function setStyleFamily(family: StyleFamily): void {

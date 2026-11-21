@@ -872,6 +872,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("scrollToOffset", Napi::Function::New(env, ScrollToOffset));
   exports.Set("scrollToElement", Napi::Function::New(env, ScrollToElement));
 
+  InitPaint(env, exports);
+
   return exports;
 }
 

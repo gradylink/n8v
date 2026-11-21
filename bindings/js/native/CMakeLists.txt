@@ -17,6 +17,7 @@ set(_N8V_NODE_ADDON_API_DIR ${CL_SOURCE_DIR})
 add_library(n8v_napi MODULE
   addon.cpp
   marshal.cpp
+  paint.cpp
 )
 
 set_target_properties(n8v_napi PROPERTIES
