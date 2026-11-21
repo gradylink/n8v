@@ -4,16 +4,20 @@ import type {
   DocumentOptions,
   DropdownOptions,
   EntryOptions,
+  DividerOptions,
   FlexOptions,
   FloatingOptions,
   IconOptions,
   ImageOptions,
   PageOptions,
   PanelOptions,
+  PopoverOptions,
   RadioOptions,
   SidebarOptions,
   SliderOptions,
   TextOptions,
+  VideoOptions,
+  AudioOptions,
 } from "./api.ts";
 import type { VNodeChild } from "./jsx.ts";
 
@@ -69,4 +73,9 @@ export const Document: IntrinsicComponent<DocumentOptions> = intrinsic(
 );
 export const Floating: IntrinsicComponent<FloatingOptions & WithChildren> =
   intrinsic("floating");
+export const Popover: IntrinsicComponent<PopoverOptions & WithChildren> =
+  intrinsic("popover");
+export const Video: IntrinsicComponent<VideoOptions> = intrinsic("video");
+export const Audio: IntrinsicComponent<AudioOptions> = intrinsic("audio");
+export const Divider: IntrinsicComponent<DividerOptions> = intrinsic("divider");
 export const Icon: IntrinsicComponent<IconOptions> = intrinsic("icon");

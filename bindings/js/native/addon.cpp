@@ -128,6 +128,55 @@ void TextChangeTrampoline(const char *text, size_t length, void *userdata) {
   ref->Call({Napi::String::New(ref->Env(), std::string(text, length))});
 }
 
+void PointTrampoline(float x, float y, void *userdata) {
+  auto *ref = static_cast<Napi::FunctionReference *>(userdata);
+  ref->Call({Napi::Number::New(ref->Env(), x), Napi::Number::New(ref->Env(), y)});
+}
+
+void ZoomTrampoline(float factor, float x, float y, void *userdata) {
+  auto *ref = static_cast<Napi::FunctionReference *>(userdata);
+  Napi::Env env = ref->Env();
+  ref->Call({Napi::Number::New(env, factor), Napi::Number::New(env, x), Napi::Number::New(env, y)});
+}
+
+bool KeyTrampoline(n8v_key key, unsigned mods, void *userdata) {
+  auto *ref = static_cast<Napi::FunctionReference *>(userdata);
+  Napi::Env env = ref->Env();
+  return ref->Call({Napi::Number::New(env, (int)key), Napi::Number::New(env, mods)}).ToBoolean().Value();
+}
+
+Napi::Array PathsToArray(Napi::Env env, const char *const *paths, size_t count) {
+  Napi::Array out = Napi::Array::New(env, count);
+  for (size_t i = 0; i < count; i++) out.Set((uint32_t)i, Napi::String::New(env, paths[i]));
+  return out;
+}
+
+void PasteFilesTrampoline(const char *const *paths, size_t count, void *userdata) {
+  auto *ref = static_cast<Napi::FunctionReference *>(userdata);
+  ref->Call({PathsToArray(ref->Env(), paths, count)});
+}
+
+bool LinkStyleTrampoline(const char *url, n8v_link_style *out, void *userdata) {
+  auto *ref = static_cast<Napi::FunctionReference *>(userdata);
+  Napi::Value v = ref->Call({Napi::String::New(ref->Env(), url ? url : "")});
+  if (!v.IsObject()) return false;
+  Napi::Object o = v.As<Napi::Object>();
+  out->foreground = ReadColor(o.Get("foreground"));
+  out->background = ReadColor(o.Get("background"));
+  out->bold = BoolOr(o, "bold", false);
+  out->clickable = BoolOr(o, "clickable", false);
+  return true;
+}
+
+const char *ImageResolveTrampoline(const char *src, void *userdata) {
+  static std::string buffer;
+  auto *ref = static_cast<Napi::FunctionReference *>(userdata);
+  Napi::Value v = ref->Call({Napi::String::New(ref->Env(), src ? src : "")});
+  if (!v.IsString()) return nullptr;
+  buffer = v.As<Napi::String>().Utf8Value();
+  return buffer.empty() ? nullptr : buffer.c_str();
+}
+
 template <typename Fn> void WireCallback(const Napi::Object &o, const char *key, Fn trampoline, Fn &outFn, void *&outUserdata) {
   Napi::Value v = o.Get(key);
   if (!v.IsFunction()) return;
@@ -195,6 +244,11 @@ Napi::Value CloseFlex(const Napi::CallbackInfo &info) {
 Napi::Value OpenPanel(const Napi::CallbackInfo &info) {
   Napi::Object o = info[0].As<Napi::Object>();
   n8v_panel_options p = ReadPanelOptions(o);
+  p.accent = ReadColor(o.Get("accent"));
+  if (o.Get("padding").IsObject()) {
+    p.has_padding = true;
+    p.padding = ReadPadding(o.Get("padding"));
+  }
   std::string idStorage;
   StrOr(o, "id", p.id, idStorage);
   n8v_open_panel(p);
@@ -216,11 +270,28 @@ Napi::Value OpenSidebar(const Napi::CallbackInfo &info) {
   s.min_width = NumberOr(o, "minWidth", 0.0f);
   s.max_width = NumberOr(o, "maxWidth", 0.0f);
   s.compact = BoolOr(o, "compact", false);
+  if (o.Get("collapsed").IsObject()) {
+    s.collapsed = UnwrapRef<BoolRef>(o.Get("collapsed"), "BoolRef")->Pointer();
+    WireCallback(o, "onCollapse", BoolChangeTrampoline, s.on_collapse, s.on_collapse_userdata);
+  }
   n8v_open_sidebar(s);
   return info.Env().Undefined();
 }
 Napi::Value CloseSidebar(const Napi::CallbackInfo &info) {
   n8v_close_sidebar();
+  return info.Env().Undefined();
+}
+
+Napi::Value SidebarSection(const Napi::CallbackInfo &info) {
+  std::string title = info[0].As<Napi::String>().Utf8Value();
+  n8v_sidebar_section_options s{};
+  s.title = title.c_str();
+  n8v_sidebar_section(s);
+  return info.Env().Undefined();
+}
+
+Napi::Value SidebarDivider(const Napi::CallbackInfo &info) {
+  n8v_sidebar_divider();
   return info.Env().Undefined();
 }
 
@@ -238,6 +309,7 @@ Napi::Value OpenPage(const Napi::CallbackInfo &info) {
   std::string badgeStorage;
   StrOr(o, "badge", p.badge, badgeStorage);
   p.badge_color = (n8v_badge_color)EnumOr(o, "badgeColor", N8V_BADGE_COLOR_DEFAULT);
+  p.image_size = NumberOr(o, "imageSize", 0.0f);
   return Napi::Boolean::New(info.Env(), n8v_open_page(p));
 }
 Napi::Value ClosePage(const Napi::CallbackInfo &info) {
@@ -272,6 +344,9 @@ Napi::Value Button(const Napi::CallbackInfo &info) {
   }
   std::string idStorage;
   StrOr(o, "id", b.id, idStorage);
+  std::string buttonImageStorage;
+  StrOr(o, "image", b.image, buttonImageStorage);
+  b.image_height = (int)EnumOr(o, "imageHeight", 0);
   _n8v_set_button_opts(b);
   _n8v_button_commit(label.c_str());
   return info.Env().Undefined();
@@ -331,6 +406,8 @@ Napi::Value Entry(const Napi::CallbackInfo &info) {
   e.match_entry_style = BoolOr(o, "matchEntryStyle", false);
   WireCallback(o, "onChange", TextChangeTrampoline, e.on_change, e.on_change_userdata);
   WireCallback(o, "onSubmit", ClickTrampoline, e.on_submit, e.on_submit_userdata);
+  WireCallback(o, "onKey", KeyTrampoline, e.on_key, e.on_key_userdata);
+  WireCallback(o, "onPasteFiles", PasteFilesTrampoline, e.on_paste_files, e.on_paste_files_userdata);
   std::string idStorage;
   StrOr(o, "id", e.id, idStorage);
   n8v_entry(e);
@@ -396,7 +473,54 @@ Napi::Value Image(const Napi::CallbackInfo &info) {
   img.width = ReadSizing(o.Get("width"));
   img.height = ReadSizing(o.Get("height"));
   img.rounding = ReadRounding(o.Get("rounding"));
+  WireCallback(o, "onClick", ClickTrampoline, img.on_click, img.on_click_userdata);
+  WireCallback(o, "onClickAt", PointTrampoline, img.on_click_at, img.on_click_at_userdata);
+  WireCallback(o, "onZoom", ZoomTrampoline, img.on_zoom, img.on_zoom_userdata);
+  WireCallback(o, "onDrag", PointTrampoline, img.on_drag, img.on_drag_userdata);
   n8v_image(img);
+  return info.Env().Undefined();
+}
+
+Napi::Value Video(const Napi::CallbackInfo &info) {
+  Napi::Object o = info[0].As<Napi::Object>();
+  n8v_video_options v{};
+  std::string sourceStorage;
+  StrOr(o, "source", v.source, sourceStorage);
+  v.width = ReadSizing(o.Get("width"));
+  v.height = ReadSizing(o.Get("height"));
+  v.rounding = ReadRounding(o.Get("rounding"));
+  v.autoplay = BoolOr(o, "autoplay", false);
+  v.loop = BoolOr(o, "loop", false);
+  v.muted = BoolOr(o, "muted", false);
+  v.controls = BoolOr(o, "controls", false);
+  std::string idStorage;
+  StrOr(o, "id", v.id, idStorage);
+  n8v_video(v);
+  return info.Env().Undefined();
+}
+
+Napi::Value Audio(const Napi::CallbackInfo &info) {
+  Napi::Object o = info[0].As<Napi::Object>();
+  n8v_audio_options a{};
+  std::string sourceStorage;
+  StrOr(o, "source", a.source, sourceStorage);
+  a.width = ReadSizing(o.Get("width"));
+  a.autoplay = BoolOr(o, "autoplay", false);
+  a.loop = BoolOr(o, "loop", false);
+  a.muted = BoolOr(o, "muted", false);
+  std::string idStorage;
+  StrOr(o, "id", a.id, idStorage);
+  n8v_audio(a);
+  return info.Env().Undefined();
+}
+
+Napi::Value Divider(const Napi::CallbackInfo &info) {
+  Napi::Object o = info[0].As<Napi::Object>();
+  n8v_divider_options d{};
+  d.color = ReadColor(o.Get("color"));
+  std::string idStorage;
+  StrOr(o, "id", d.id, idStorage);
+  n8v_divider(d);
   return info.Env().Undefined();
 }
 
@@ -422,6 +546,10 @@ Napi::Value Document(const Napi::CallbackInfo &info) {
   d.height = ReadSizing(o.Get("height"));
   std::string idStorage;
   StrOr(o, "id", d.id, idStorage);
+  std::string imageStateStorage;
+  StrOr(o, "imageState", d.image_state, imageStateStorage);
+  WireCallback(o, "linkStyle", LinkStyleTrampoline, d.link_style, d.link_style_userdata);
+  WireCallback(o, "imageResolver", ImageResolveTrampoline, d.image_resolver, d.image_resolver_userdata);
   n8v_document(d);
   return info.Env().Undefined();
 }
@@ -435,6 +563,10 @@ Napi::Value OpenFloating(const Napi::CallbackInfo &info) {
   f.parent_attach_point = (n8v_attach_point)EnumOr(o, "parentAttachPoint", N8V_ATTACH_POINT_RIGHT_TOP);
   f.offset_x = NumberOr(o, "offsetX", 0.0f);
   f.offset_y = NumberOr(o, "offsetY", 0.0f);
+  f.opaque = BoolOr(o, "opaque", false);
+  f.keep_on_screen = BoolOr(o, "keepOnScreen", false);
+  f.screen_margin = NumberOr(o, "screenMargin", 0.0f);
+  WireCallback(o, "onDismiss", ClickTrampoline, f.on_dismiss, f.on_dismiss_userdata);
   std::string idStorage;
   StrOr(o, "id", f.id, idStorage);
   n8v_open_floating(f);
@@ -442,6 +574,26 @@ Napi::Value OpenFloating(const Napi::CallbackInfo &info) {
 }
 Napi::Value CloseFloating(const Napi::CallbackInfo &info) {
   n8v_close_floating();
+  return info.Env().Undefined();
+}
+
+Napi::Value OpenPopover(const Napi::CallbackInfo &info) {
+  Napi::Object o = info[0].As<Napi::Object>();
+  n8v_popover_options p{};
+  p.side = (n8v_popover_side)EnumOr(o, "side", N8V_POPOVER_SIDE_BELOW);
+  p.align_end = BoolOr(o, "alignEnd", false);
+  p.width = ReadSizing(o.Get("width"));
+  p.height = ReadSizing(o.Get("height"));
+  p.gap = NumberOr(o, "gap", 0.0f);
+  p.screen_margin = NumberOr(o, "screenMargin", 0.0f);
+  WireCallback(o, "onDismiss", ClickTrampoline, p.on_dismiss, p.on_dismiss_userdata);
+  std::string idStorage;
+  StrOr(o, "id", p.id, idStorage);
+  n8v_open_popover(p);
+  return info.Env().Undefined();
+}
+Napi::Value ClosePopover(const Napi::CallbackInfo &info) {
+  n8v_close_popover();
   return info.Env().Undefined();
 }
 
@@ -469,13 +621,99 @@ Napi::Value ScrollToElement(const Napi::CallbackInfo &info) {
   return info.Env().Undefined();
 }
 
+Napi::Value Focus(const Napi::CallbackInfo &info) {
+  std::string id = info[0].As<Napi::String>().Utf8Value();
+  n8v_focus(id.c_str());
+  return info.Env().Undefined();
+}
+
+Napi::Value ScrollState(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+  std::string id = info[0].As<Napi::String>().Utf8Value();
+  float x = 0, y = 0, w = 0, h = 0;
+  if (!n8v_scroll_state(id.c_str(), &x, &y, &w, &h)) return env.Null();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("offsetX", x);
+  out.Set("offsetY", y);
+  out.Set("viewWidth", w);
+  out.Set("viewHeight", h);
+  return out;
+}
+
+Napi::Value OpenUrl(const Napi::CallbackInfo &info) {
+  std::string url = info[0].As<Napi::String>().Utf8Value();
+  n8v_open_url(url.c_str());
+  return info.Env().Undefined();
+}
+
+std::unique_ptr<Napi::FunctionReference> g_urlHandler;
+
+bool UrlHandlerTrampoline(const char *url, void *userdata) {
+  auto *ref = static_cast<Napi::FunctionReference *>(userdata);
+  return ref->Call({Napi::String::New(ref->Env(), url ? url : "")}).ToBoolean().Value();
+}
+
+Napi::Value SetUrlHandler(const Napi::CallbackInfo &info) {
+  if (!info[0].IsFunction()) {
+    n8v_set_url_handler(nullptr, nullptr);
+    g_urlHandler.reset();
+    return info.Env().Undefined();
+  }
+  auto next = std::make_unique<Napi::FunctionReference>(Napi::Persistent(info[0].As<Napi::Function>()));
+  n8v_set_url_handler(UrlHandlerTrampoline, next.get());
+  g_urlHandler = std::move(next);
+  return info.Env().Undefined();
+}
+
+struct VisibleChildren {
+  Napi::Env env;
+  Napi::Array out;
+};
+
+void VisibleChildTrampoline(const char *id, float top, float height, void *userdata) {
+  auto *v = static_cast<VisibleChildren *>(userdata);
+  Napi::Object child = Napi::Object::New(v->env);
+  child.Set("id", Napi::String::New(v->env, id));
+  child.Set("top", top);
+  child.Set("height", height);
+  v->out.Set(v->out.Length(), child);
+}
+
+Napi::Value VisibleChildrenOf(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+  std::string id = info[0].As<Napi::String>().Utf8Value();
+  VisibleChildren visible{env, Napi::Array::New(env)};
+  if (!n8v_visible_children(id.c_str(), info[1].As<Napi::Number>().FloatValue(), VisibleChildTrampoline, &visible)) return env.Null();
+  return visible.out;
+}
+
+Napi::Value Wake(const Napi::CallbackInfo &info) {
+  n8v_wake();
+  return info.Env().Undefined();
+}
+
+Napi::Value RaiseWindow(const Napi::CallbackInfo &info) {
+  n8v_raise_window();
+  return info.Env().Undefined();
+}
+
+Napi::Value IsDarkTheme(const Napi::CallbackInfo &info) { return Napi::Boolean::New(info.Env(), n8v_is_dark_theme()); }
+
+Napi::Value WindowSize(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+  float w = 0, h = 0;
+  if (!n8v_window_size(&w, &h)) return env.Null();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("width", w);
+  out.Set("height", h);
+  return out;
+}
+
 void FileDialogTrampoline(const char *const *paths, size_t count, void *userdata) {
   std::unique_ptr<Napi::FunctionReference> ref(static_cast<Napi::FunctionReference *>(userdata));
   Napi::Env env = ref->Env();
   Napi::HandleScope scope(env);
-  Napi::Array out = Napi::Array::New(env, count);
-  for (size_t i = 0; i < count; i++) out.Set((uint32_t)i, Napi::String::New(env, paths[i]));
-  ref->Call({out});
+  ref->Call({PathsToArray(env, paths, count)});
 }
 
 Napi::Value ShowFileDialog(const Napi::CallbackInfo &info) {
@@ -588,6 +826,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("closePanel", Napi::Function::New(env, ClosePanel));
   exports.Set("openSidebar", Napi::Function::New(env, OpenSidebar));
   exports.Set("closeSidebar", Napi::Function::New(env, CloseSidebar));
+  exports.Set("sidebarSection", Napi::Function::New(env, SidebarSection));
+  exports.Set("sidebarDivider", Napi::Function::New(env, SidebarDivider));
   exports.Set("openPage", Napi::Function::New(env, OpenPage));
   exports.Set("closePage", Napi::Function::New(env, ClosePage));
 
@@ -600,6 +840,9 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("dropdown", Napi::Function::New(env, Dropdown));
   exports.Set("slider", Napi::Function::New(env, Slider));
   exports.Set("image", Napi::Function::New(env, Image));
+  exports.Set("video", Napi::Function::New(env, Video));
+  exports.Set("audio", Napi::Function::New(env, Audio));
+  exports.Set("divider", Napi::Function::New(env, Divider));
   exports.Set("icon", Napi::Function::New(env, Icon));
   exports.Set("document", Napi::Function::New(env, Document));
 
@@ -608,6 +851,18 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 
   exports.Set("openFloating", Napi::Function::New(env, OpenFloating));
   exports.Set("closeFloating", Napi::Function::New(env, CloseFloating));
+  exports.Set("openPopover", Napi::Function::New(env, OpenPopover));
+  exports.Set("closePopover", Napi::Function::New(env, ClosePopover));
+
+  exports.Set("focus", Napi::Function::New(env, Focus));
+  exports.Set("scrollState", Napi::Function::New(env, ScrollState));
+  exports.Set("openUrl", Napi::Function::New(env, OpenUrl));
+  exports.Set("setUrlHandler", Napi::Function::New(env, SetUrlHandler));
+  exports.Set("visibleChildren", Napi::Function::New(env, VisibleChildrenOf));
+  exports.Set("wake", Napi::Function::New(env, Wake));
+  exports.Set("raiseWindow", Napi::Function::New(env, RaiseWindow));
+  exports.Set("isDarkTheme", Napi::Function::New(env, IsDarkTheme));
+  exports.Set("windowSize", Napi::Function::New(env, WindowSize));
 
   exports.Set("isHovered", Napi::Function::New(env, IsHovered));
   exports.Set("scrollToBottom", Napi::Function::New(env, ScrollSimple<n8v_scroll_to_bottom>));

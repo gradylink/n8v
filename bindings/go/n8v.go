@@ -22,6 +22,20 @@ extern void n8vGoBool(bool value, void *userdata);
 extern void n8vGoInt(int value, void *userdata);
 extern void n8vGoFileDialog(char **paths, size_t count, void *userdata);
 extern void n8vGoMessageDialog(int button, void *userdata);
+extern void n8vGoFloat(float value, void *userdata);
+extern void n8vGoText(char *text, size_t length, void *userdata);
+extern void n8vGoPoint(float x, float y, void *userdata);
+extern void n8vGoZoom(float factor, float x, float y, void *userdata);
+extern bool n8vGoKey(int key, unsigned mods, void *userdata);
+extern void n8vGoPasteFiles(char **paths, size_t count, void *userdata);
+extern bool n8vGoLinkStyle(char *url, n8v_link_style *out, void *userdata);
+extern char *n8vGoImageResolve(char *src, void *userdata);
+
+static void n8v_go_cb_text(const char *text, size_t length, void *userdata) { n8vGoText((char *)text, length, userdata); }
+static bool n8v_go_cb_key(n8v_key key, unsigned mods, void *userdata) { return n8vGoKey((int)key, mods, userdata); }
+static void n8v_go_cb_paste_files(const char *const *paths, size_t count, void *userdata) { n8vGoPasteFiles((char **)paths, count, userdata); }
+static bool n8v_go_cb_link_style(const char *url, n8v_link_style *out, void *userdata) { return n8vGoLinkStyle((char *)url, out, userdata); }
+static const char *n8v_go_cb_image_resolve(const char *src, void *userdata) { return n8vGoImageResolve((char *)src, userdata); }
 
 static void n8v_go_file_dialog_result(const char *const *paths, size_t count, void *userdata) { n8vGoFileDialog((char **)paths, count, userdata); }
 static void n8v_go_show_file_dialog(n8v_file_dialog_options o, uintptr_t h) {
@@ -111,6 +125,32 @@ type config struct {
 	attachElement          C.n8v_attach_point
 	attachParent           C.n8v_attach_point
 	offsetX, offsetY       float64
+
+	small, darken, large, clickUnstyled bool
+	accent                              C.n8v_color
+	hasPadding                          bool
+	buttonImage                         string
+	buttonImageHeight                   int
+	onToggle                            func(bool)
+	onSlide                             func(float64)
+	onInput                             func(string)
+	onKey                               func(Key, Mods) bool
+	onPasteFiles                        func([]string)
+	onClickAt                           func(x, y float64)
+	onZoom                              func(factor, x, y float64)
+	onDrag                              func(dx, dy float64)
+	autoplay, loop, muted, controls     bool
+	collapsed                           *Bool
+	pageImageSize                       float64
+	linkStyle                           func(url string) (LinkStyle, bool)
+	imageResolver                       func(src string) string
+	imageState                          string
+	opaque, keepOnScreen                bool
+	screenMargin                        float64
+	onDismiss                           func()
+	popoverSide                         PopoverSide
+	alignEnd                            bool
+	popoverGap                          float64
 }
 
 func Vertical() Option             { return func(c *config) { c.vertical = true } }
@@ -122,11 +162,11 @@ func AlignItems(h, v Align) Option { return func(c *config) { c.hAlign, c.vAlign
 func Clip(horizontal, vertical bool) Option {
 	return func(c *config) { c.clipH, c.clipV = horizontal, vertical }
 }
-func Bold() Option                   { return func(c *config) { c.bold = true } }
-func Italic() Option                 { return func(c *config) { c.italic = true } }
-func Strikethrough() Option          { return func(c *config) { c.strike = true } }
-func Link(url string) Option         { return func(c *config) { c.url = url } }
-func Icon(name string) Option        { return func(c *config) { c.icon = name } }
+func Bold() Option            { return func(c *config) { c.bold = true } }
+func Italic() Option          { return func(c *config) { c.italic = true } }
+func Strikethrough() Option   { return func(c *config) { c.strike = true } }
+func Link(url string) Option  { return func(c *config) { c.url = url } }
+func Icon(name string) Option { return func(c *config) { c.icon = name } }
 
 // BadgeColor is a named color resolved against the toolkit's palette where it has one.
 type BadgeColor int
@@ -228,6 +268,7 @@ func NoRounding() Option { return func(c *config) { c.rounding = C.n8v_rounding_
 func Padding(left, right, top, bottom int) Option {
 	return func(c *config) {
 		c.padding = C.n8v_padding{C.uint16_t(left), C.uint16_t(right), C.uint16_t(top), C.uint16_t(bottom)}
+		c.hasPadding = true
 	}
 }
 
@@ -241,6 +282,146 @@ func Rounded(topLeft, topRight, bottomLeft, bottomRight float64) Option {
 		c.rounding = C.n8v_rounding_fixed(C.float(topLeft), C.float(topRight), C.float(bottomLeft), C.float(bottomRight))
 	}
 }
+
+// Small and Darken make Text secondary: smaller and fainter, by whatever the style considers so. Large is jumbo text for things like a
+// message that is only emoji.
+func Small() Option  { return func(c *config) { c.small = true } }
+func Darken() Option { return func(c *config) { c.darken = true } }
+func Large() Option  { return func(c *config) { c.large = true } }
+
+// ClickUnstyled, with OnClick, keeps Text clickable but not painted as a link.
+func ClickUnstyled() Option { return func(c *config) { c.clickUnstyled = true } }
+
+// Accent draws a colored bar down a Panel's left edge. Alpha 0 means none. Channels range from 0 to 255.
+func Accent(r, g, b, a float64) Option {
+	return func(c *config) { c.accent = C.n8v_color{C.float(r), C.float(g), C.float(b), C.float(a)} }
+}
+
+// ThemeColor is a color that follows the active theme where the toolkit has a palette. It sets the same color Color does.
+func ThemeColor(name BadgeColor) Option { return func(c *config) { c.color = themeColor(name) } }
+
+// AccentTheme is Accent with a theme color.
+func AccentTheme(name BadgeColor) Option { return func(c *config) { c.accent = themeColor(name) } }
+
+func themeColor(name BadgeColor) C.n8v_color { return C.n8v_color_theme(C.n8v_named_color(name)) }
+
+// ButtonImage shows an image in a Button instead of an icon, height pixels tall (0 for the usual size).
+func ButtonImage(path string, height int) Option {
+	return func(c *config) { c.buttonImage, c.buttonImageHeight = path, height }
+}
+
+// OnToggle is called with the new value when a Checkbox, Toggle or ToggleButton flips, or when a Sidebar is collapsed or expanded.
+func OnToggle(fn func(bool)) Option { return func(c *config) { c.onToggle = fn } }
+
+// OnSlide is called with the new value when a Slider moves.
+func OnSlide(fn func(float64)) Option { return func(c *config) { c.onSlide = fn } }
+
+// OnInput is called with the new text when an Entry's value changes.
+func OnInput(fn func(string)) Option { return func(c *config) { c.onInput = fn } }
+
+// Key is a key an Entry can offer to OnKey.
+type Key int
+
+const (
+	KeyUp Key = iota
+	KeyDown
+	KeyEscape
+)
+
+// Mods is a combination of ModShift, ModCtrl and ModAlt.
+type Mods uint
+
+const (
+	ModShift Mods = 1
+	ModCtrl  Mods = 2
+	ModAlt   Mods = 4
+)
+
+// OnKey lets an Entry's owner handle some keys first: return true to stop the entry acting on the key. Multiline entries only, so far,
+// and not in every backend.
+func OnKey(fn func(key Key, mods Mods) bool) Option { return func(c *config) { c.onKey = fn } }
+
+// OnPasteFiles is called with the paths when files are pasted into an Entry. Multiline entries only, so far, and not in every backend.
+func OnPasteFiles(fn func(paths []string)) Option { return func(c *config) { c.onPasteFiles = fn } }
+
+// OnClickAt makes an Image clickable and tells where in it (each axis from 0 to 1). It wins over OnClick where the toolkit can say where.
+func OnClickAt(fn func(x, y float64)) Option { return func(c *config) { c.onClickAt = fn } }
+
+// OnZoom handles pinch and Ctrl+wheel zooming over an Image: factor is the change since the last call (above 1 zooms in) around the
+// point (x, y) of the image, each axis from 0 to 1.
+func OnZoom(fn func(factor, x, y float64)) Option { return func(c *config) { c.onZoom = fn } }
+
+// OnDrag handles dragging over an Image with the change in position since the last call in pixels, for panning.
+func OnDrag(fn func(dx, dy float64)) Option { return func(c *config) { c.onDrag = fn } }
+
+// Autoplay, Loop, Muted and Controls configure Video and Audio.
+func Autoplay() Option { return func(c *config) { c.autoplay = true } }
+func Loop() Option     { return func(c *config) { c.loop = true } }
+func Muted() Option    { return func(c *config) { c.muted = true } }
+
+// Controls shows play/pause and a seek bar on a Video.
+func Controls() Option { return func(c *config) { c.controls = true } }
+
+// Collapsible lets the user fold a Sidebar to a narrow strip of icons. The initial state is read from collapsed and every toggle is
+// written back to it, so the caller can persist it. Use OnToggle to be told when it changes.
+func Collapsible(collapsed *Bool) Option { return func(c *config) { c.collapsed = collapsed } }
+
+// PageImageSize sets the size of a Page's image in pixels; 0 for the usual size.
+func PageImageSize(px float64) Option { return func(c *config) { c.pageImageSize = px } }
+
+// LinkStyle is how a Document draws one link.
+type LinkStyle struct {
+	Foreground, Background Rgba
+	Bold                   bool
+	// Clickable keeps the link clickable (a styled link is otherwise plain text).
+	Clickable bool
+}
+
+// Rgba is a color with channels from 0 to 255 (alpha too).
+type Rgba struct{ R, G, B, A float64 }
+
+// DocumentLinkStyle lets a Document restyle chosen links: return false to leave a link alone.
+func DocumentLinkStyle(fn func(url string) (LinkStyle, bool)) Option {
+	return func(c *config) { c.linkStyle = fn }
+}
+
+// ImageResolver maps the src of each image in a Document to something n8v can load (a file path, say). Return "" for none.
+func ImageResolver(fn func(src string) string) Option {
+	return func(c *config) { c.imageResolver = fn }
+}
+
+// ImageState names where a Document keeps what it has loaded for its images.
+func ImageState(name string) Option { return func(c *config) { c.imageState = name } }
+
+// Opaque makes a Floating element swallow the pointer instead of letting it through to what is under it.
+func Opaque() Option { return func(c *config) { c.opaque = true } }
+
+// OnDismiss is called when the user clicks outside a Floating element or Popover.
+func OnDismiss(fn func()) Option { return func(c *config) { c.onDismiss = fn } }
+
+// KeepOnScreen nudges a Floating element back inside the window, margin pixels from its edges. It also sets a Popover's margin.
+func KeepOnScreen(margin float64) Option {
+	return func(c *config) { c.keepOnScreen, c.screenMargin = true, margin }
+}
+
+// PopoverSide is which side of its parent a Popover opens on.
+type PopoverSide int
+
+const (
+	Below PopoverSide = iota
+	Above
+	ToRight
+	ToLeft
+)
+
+// Side picks which side of its parent a Popover opens on (Below by default).
+func Side(s PopoverSide) Option { return func(c *config) { c.popoverSide = s } }
+
+// AlignEnd lines a Popover's far edge, not its near one, up with its parent's.
+func AlignEnd() Option { return func(c *config) { c.alignEnd = true } }
+
+// PopoverGap is the space in pixels between a Popover and its parent.
+func PopoverGap(px float64) Option { return func(c *config) { c.popoverGap = px } }
 
 func apply(opts []Option) config {
 	c := config{
@@ -301,6 +482,33 @@ func callback(fn func()) (C.n8v_click_fn, unsafe.Pointer) {
 	h := cgo.NewHandle(fn)
 	frameHandles = append(frameHandles, h)
 	return C.n8v_click_fn(C.n8vGoClick), C.n8v_go_handle(C.uintptr_t(h))
+}
+
+func floatCallback(fn func(float64)) (C.n8v_float_change_fn, unsafe.Pointer) {
+	if fn == nil {
+		return nil, nil
+	}
+	h := cgo.NewHandle(fn)
+	frameHandles = append(frameHandles, h)
+	return C.n8v_float_change_fn(C.n8vGoFloat), C.n8v_go_handle(C.uintptr_t(h))
+}
+
+func textCallback(fn func(string)) (C.n8v_text_change_fn, unsafe.Pointer) {
+	if fn == nil {
+		return nil, nil
+	}
+	h := cgo.NewHandle(fn)
+	frameHandles = append(frameHandles, h)
+	return C.n8v_text_change_fn(C.n8v_go_cb_text), C.n8v_go_handle(C.uintptr_t(h))
+}
+
+func pointCallback(fn func(x, y float64)) (C.n8v_point_fn, unsafe.Pointer) {
+	if fn == nil {
+		return nil, nil
+	}
+	h := cgo.NewHandle(fn)
+	frameHandles = append(frameHandles, h)
+	return C.n8v_point_fn(C.n8vGoPoint), C.n8v_go_handle(C.uintptr_t(h))
 }
 
 func Init(width, height int, title string) bool {
@@ -367,7 +575,7 @@ func Panel(body func(), opts ...Option) {
 		h_align: C.n8v_align(c.hAlign), v_align: C.n8v_align(c.vAlign),
 		width: c.width.s, height: c.height.s,
 		clip_horizontal: C.bool(c.clipH), clip_vertical: C.bool(c.clipV),
-		id: cstr(c.id),
+		id: cstr(c.id), accent: c.accent, has_padding: C.bool(c.hasPadding), padding: c.padding,
 	})
 	body()
 	C.n8v_close_panel()
@@ -377,18 +585,32 @@ func Panel(body func(), opts ...Option) {
 func Sidebar(title string, selected *Int, body func(), opts ...Option) {
 	c := apply(opts)
 	fn, ud := intCallback(c.onChange)
-	C.n8v_open_sidebar(C.n8v_sidebar_options{
+	collapse, collapseData := boolCallback(c.onToggle)
+	o := C.n8v_sidebar_options{
 		title: cstr(title), selected: selected.p, on_change: fn, on_change_userdata: ud,
 		width: c.width.s, min_width: C.float(c.minWidth), max_width: C.float(c.maxWidth), compact: C.bool(c.compact),
-	})
+		on_collapse: collapse, on_collapse_userdata: collapseData,
+	}
+	if c.collapsed != nil {
+		o.collapsed = c.collapsed.p
+	}
+	C.n8v_open_sidebar(o)
 	body()
 	C.n8v_close_sidebar()
 }
 
+// SidebarSection adds a titled heading between a Sidebar's pages. Only valid inside a Sidebar.
+func SidebarSection(title string) {
+	C.n8v_sidebar_section(C.n8v_sidebar_section_options{title: cstr(title)})
+}
+
+// SidebarDivider adds a rule between a Sidebar's pages. Only valid inside a Sidebar.
+func SidebarDivider() { C.n8v_sidebar_divider() }
+
 // Page adds a sidebar entry and runs body when it is the selected page.
 func Page(name string, body func(), opts ...Option) {
 	c := apply(opts)
-	if C.n8v_open_page(C.n8v_page_options{name: cstr(name), icon: cstr(c.icon), image: cstr(c.image), image_rounding: c.rounding, notify: C.bool(c.notify), badge: cstr(c.badge), badge_color: c.badgeColor}) {
+	if C.n8v_open_page(C.n8v_page_options{name: cstr(name), icon: cstr(c.icon), image: cstr(c.image), image_rounding: c.rounding, notify: C.bool(c.notify), badge: cstr(c.badge), badge_color: c.badgeColor, image_size: C.float(c.pageImageSize)}) {
 		body()
 		C.n8v_close_page()
 	}
@@ -399,7 +621,8 @@ func Text(label string, opts ...Option) {
 	fn, ud := callback(c.onClick)
 	C.n8v_go_text(C.n8v_text_options{
 		bold: C.bool(c.bold), italic: C.bool(c.italic), strikethrough: C.bool(c.strike),
-		url: cstr(c.url), color: c.color, on_click: fn, on_click_userdata: ud,
+		small: C.bool(c.small), darken: C.bool(c.darken), large: C.bool(c.large),
+		url: cstr(c.url), color: c.color, on_click: fn, on_click_userdata: ud, click_unstyled: C.bool(c.clickUnstyled),
 	}, cstr(label))
 }
 
@@ -420,6 +643,7 @@ func Button(label string, onClick func(), opts ...Option) {
 	C.n8v_go_button(C.n8v_button_options{
 		style: c.buttonStyle, on_click: fn, on_click_userdata: ud,
 		icon: cstr(c.icon), icon_variant: c.iconVariant(), icon_position: pos, id: cstr(c.id),
+		image: cstr(c.buttonImage), image_height: C.int(c.buttonImageHeight),
 	}, cstr(label))
 }
 
@@ -431,26 +655,31 @@ func ToggleButton(label string, checked *Bool, opts ...Option) {
 	if c.trailing {
 		pos = C.N8V_ICON_POSITION_TRAILING
 	}
+	change, changeData := boolCallback(c.onToggle)
 	C.n8v_go_button(C.n8v_button_options{
-		style: c.buttonStyle, checked: checked.p,
+		style: c.buttonStyle, checked: checked.p, on_change: change, on_change_userdata: changeData,
 		icon: cstr(c.icon), icon_variant: c.iconVariant(), icon_position: pos, id: cstr(c.id),
+		image: cstr(c.buttonImage), image_height: C.int(c.buttonImageHeight),
 	}, cstr(label))
 }
 
 func Checkbox(label string, checked *Bool, opts ...Option) {
 	c := apply(opts)
-	C.n8v_go_checkbox(C.n8v_checkbox_options{checked: checked.p, id: cstr(c.id)}, cstr(label))
+	fn, ud := boolCallback(c.onToggle)
+	C.n8v_go_checkbox(C.n8v_checkbox_options{checked: checked.p, on_change: fn, on_change_userdata: ud, id: cstr(c.id)}, cstr(label))
 }
 
 func Toggle(label string, checked *Bool, opts ...Option) {
 	c := apply(opts)
-	C.n8v_go_toggle(C.n8v_toggle_options{checked: checked.p, id: cstr(c.id)}, cstr(label))
+	fn, ud := boolCallback(c.onToggle)
+	C.n8v_go_toggle(C.n8v_toggle_options{checked: checked.p, on_change: fn, on_change_userdata: ud, id: cstr(c.id)}, cstr(label))
 }
 
 // Radio selects value in selected when clicked.
 func Radio(label string, selected *Int, value int, opts ...Option) {
 	c := apply(opts)
-	C.n8v_go_radio(C.n8v_radio_options{selected: selected.p, value: C.int(value), id: cstr(c.id)}, cstr(label))
+	fn, ud := intCallback(c.onChange)
+	C.n8v_go_radio(C.n8v_radio_options{selected: selected.p, value: C.int(value), on_change: fn, on_change_userdata: ud, id: cstr(c.id)}, cstr(label))
 }
 
 func Entry(value *String, opts ...Option) {
@@ -460,12 +689,24 @@ func Entry(value *String, opts ...Option) {
 	if c.submitCtrlEnter {
 		mode = C.N8V_SUBMIT_ON_CTRL_ENTER
 	}
-	C.n8v_entry(C.n8v_entry_options{
+	o := C.n8v_entry_options{
 		value: value.p, placeholder: cstr(c.placeholder), password: C.bool(c.password),
 		on_submit: fn, on_submit_userdata: ud, id: cstr(c.id),
 		multiline: C.bool(c.multiline), submit_mode: mode, match_entry_style: C.bool(c.matchEntryStyle),
 		min_lines: C.uint16_t(max(c.minLines, 0)), max_lines: C.uint16_t(max(c.maxLines, 0)),
-	})
+	}
+	o.on_change, o.on_change_userdata = textCallback(c.onInput)
+	if c.onKey != nil {
+		h := cgo.NewHandle(c.onKey)
+		frameHandles = append(frameHandles, h)
+		o.on_key, o.on_key_userdata = C.n8v_key_fn(C.n8v_go_cb_key), C.n8v_go_handle(C.uintptr_t(h))
+	}
+	if c.onPasteFiles != nil {
+		h := cgo.NewHandle(c.onPasteFiles)
+		frameHandles = append(frameHandles, h)
+		o.on_paste_files, o.on_paste_files_userdata = C.n8v_paste_files_fn(C.n8v_go_cb_paste_files), C.n8v_go_handle(C.uintptr_t(h))
+	}
+	C.n8v_entry(o)
 }
 
 // Dropdown shows items and stores the chosen index in selected. -1 shows the placeholder.
@@ -479,23 +720,37 @@ func Dropdown(items []string, selected *Int, opts ...Option) {
 			unsafe.Slice(list, len(items))[i] = cstr(item)
 		}
 	}
+	fn, ud := intCallback(c.onChange)
 	C.n8v_dropdown(C.n8v_dropdown_options{
-		items: list, item_count: C.size_t(len(items)), selected: selected.p, placeholder: cstr(c.placeholder), id: cstr(c.id),
+		items: list, item_count: C.size_t(len(items)), selected: selected.p, placeholder: cstr(c.placeholder),
+		on_change: fn, on_change_userdata: ud, id: cstr(c.id),
 	})
 }
 
 func Slider(value *Float, min, max float64, opts ...Option) {
 	c := apply(opts)
-	C.n8v_slider(C.n8v_slider_options{value: value.p, min: C.float(min), max: C.float(max), id: cstr(c.id)})
+	fn, ud := floatCallback(c.onSlide)
+	C.n8v_slider(C.n8v_slider_options{value: value.p, min: C.float(min), max: C.float(max), on_change: fn, on_change_userdata: ud, id: cstr(c.id)})
 }
 
-// Image draws a PNG, JPEG or SVG file.
+// imageOptions fills in what every image source shares: size, rounding and the pointer callbacks.
+func (c config) imageOptions(o C.n8v_image_options) C.n8v_image_options {
+	o.width, o.height, o.rounding = c.width.s, c.height.s, c.rounding
+	o.on_click, o.on_click_userdata = callback(c.onClick)
+	o.on_click_at, o.on_click_at_userdata = pointCallback(c.onClickAt)
+	o.on_drag, o.on_drag_userdata = pointCallback(c.onDrag)
+	if c.onZoom != nil {
+		h := cgo.NewHandle(c.onZoom)
+		frameHandles = append(frameHandles, h)
+		o.on_zoom, o.on_zoom_userdata = C.n8v_zoom_fn(C.n8vGoZoom), C.n8v_go_handle(C.uintptr_t(h))
+	}
+	return o
+}
+
+// Image draws a PNG, JPEG or SVG file. OnClick, OnClickAt, OnZoom and OnDrag make it interactive.
 func Image(path string, opts ...Option) {
 	c := apply(opts)
-	C.n8v_image(C.n8v_image_options{
-		source_kind: C.N8V_IMAGE_SOURCE_PATH, path: cstr(path),
-		width: c.width.s, height: c.height.s, rounding: c.rounding,
-	})
+	C.n8v_image(c.imageOptions(C.n8v_image_options{source_kind: C.N8V_IMAGE_SOURCE_PATH, path: cstr(path)}))
 }
 
 // ImageBytes draws encoded image data.
@@ -506,10 +761,46 @@ func ImageBytes(data []byte, opts ...Option) {
 		p = C.CBytes(data)
 		frameAllocs = append(frameAllocs, p)
 	}
-	C.n8v_image(C.n8v_image_options{
+	C.n8v_image(c.imageOptions(C.n8v_image_options{
 		source_kind: C.N8V_IMAGE_SOURCE_ENCODED, encoded_data: (*C.uint8_t)(p), encoded_size: C.size_t(len(data)),
-		width: c.width.s, height: c.height.s, rounding: c.rounding,
+	}))
+}
+
+// ImageRGBA draws width*height pixels of 8-bit RGBA, row by row from the top left.
+func ImageRGBA(pixels []byte, width, height int, opts ...Option) {
+	c := apply(opts)
+	if len(pixels) < width*height*4 {
+		return
+	}
+	p := C.CBytes(pixels[:width*height*4])
+	frameAllocs = append(frameAllocs, p)
+	C.n8v_image(c.imageOptions(C.n8v_image_options{
+		source_kind: C.N8V_IMAGE_SOURCE_RGBA, pixels: (*C.uint8_t)(p), pixel_width: C.int(width), pixel_height: C.int(height),
+	}))
+}
+
+// Video plays a file or URL (anything with a scheme, like https://).
+func Video(source string, opts ...Option) {
+	c := apply(opts)
+	C.n8v_video(C.n8v_video_options{
+		source: cstr(source), width: c.width.s, height: c.height.s, rounding: c.rounding,
+		autoplay: C.bool(c.autoplay), loop: C.bool(c.loop), muted: C.bool(c.muted), controls: C.bool(c.controls), id: cstr(c.id),
 	})
+}
+
+// Audio shows a player bar (play/pause, a seek bar and the time) for a file or URL. Fit width means 320.
+func Audio(source string, opts ...Option) {
+	c := apply(opts)
+	C.n8v_audio(C.n8v_audio_options{
+		source: cstr(source), width: c.width.s,
+		autoplay: C.bool(c.autoplay), loop: C.bool(c.loop), muted: C.bool(c.muted), id: cstr(c.id),
+	})
+}
+
+// Divider draws a rule. Color overrides the style's own divider color.
+func Divider(opts ...Option) {
+	c := apply(opts)
+	C.n8v_divider(C.n8v_divider_options{color: c.color, id: cstr(c.id)})
 }
 
 // IconImage draws a bundled icon such as "settings", "star" or "heart".
@@ -530,19 +821,46 @@ func Document(markdown string, opts ...Option) {
 	if h.s == (C.n8v_sizing{}) {
 		h = Grow(0, 0)
 	}
-	C.n8v_document(C.n8v_document_options{markdown: cstr(markdown), width: w.s, height: h.s, id: cstr(c.id)})
+	o := C.n8v_document_options{markdown: cstr(markdown), width: w.s, height: h.s, id: cstr(c.id), image_state: cstr(c.imageState)}
+	if c.linkStyle != nil {
+		hd := cgo.NewHandle(c.linkStyle)
+		frameHandles = append(frameHandles, hd)
+		o.link_style, o.link_style_userdata = C.n8v_link_style_fn(C.n8v_go_cb_link_style), C.n8v_go_handle(C.uintptr_t(hd))
+	}
+	if c.imageResolver != nil {
+		hd := cgo.NewHandle(c.imageResolver)
+		frameHandles = append(frameHandles, hd)
+		o.image_resolver, o.image_resolver_userdata = C.n8v_image_resolve_fn(C.n8v_go_cb_image_resolve), C.n8v_go_handle(C.uintptr_t(hd))
+	}
+	C.n8v_document(o)
 }
 
 // Floating layers body over the enclosing element without affecting its layout. Use Attach and Offset to place it.
 func Floating(body func(), opts ...Option) {
 	c := apply(opts)
+	dismiss, dismissData := callback(c.onDismiss)
 	C.n8v_open_floating(C.n8v_floating_options{
 		width: c.width.s, height: c.height.s,
 		element_attach_point: c.attachElement, parent_attach_point: c.attachParent,
-		offset_x: C.float(c.offsetX), offset_y: C.float(c.offsetY), id: cstr(c.id),
+		offset_x: C.float(c.offsetX), offset_y: C.float(c.offsetY), opaque: C.bool(c.opaque), id: cstr(c.id),
+		on_dismiss: dismiss, on_dismiss_userdata: dismissData,
+		keep_on_screen: C.bool(c.keepOnScreen), screen_margin: C.float(c.screenMargin),
 	})
 	body()
 	C.n8v_close_floating()
+}
+
+// Popover opens body beside the enclosing element: Side, AlignEnd and PopoverGap place it, and OnDismiss fires on a click outside.
+func Popover(body func(), opts ...Option) {
+	c := apply(opts)
+	dismiss, dismissData := callback(c.onDismiss)
+	C.n8v_open_popover(C.n8v_popover_options{
+		side: C.n8v_popover_side(c.popoverSide), align_end: C.bool(c.alignEnd),
+		width: c.width.s, height: c.height.s, gap: C.float(c.popoverGap), screen_margin: C.float(c.screenMargin),
+		on_dismiss: dismiss, on_dismiss_userdata: dismissData, id: cstr(c.id),
+	})
+	body()
+	C.n8v_close_popover()
 }
 
 // IsHovered reports whether the pointer was over the element with this ID as of the last completed frame.

@@ -111,6 +111,18 @@ function renderNode(node: VNode): void {
     case "floating":
       api.floating(props as api.FloatingOptions, body);
       return;
+    case "popover":
+      api.popover(props as api.PopoverOptions, body);
+      return;
+    case "video":
+      api.video(props as unknown as api.VideoOptions);
+      return;
+    case "audio":
+      api.audio(props as unknown as api.AudioOptions);
+      return;
+    case "divider":
+      api.divider(props as api.DividerOptions);
+      return;
     case "icon":
       api.icon(props as unknown as api.IconOptions);
       return;

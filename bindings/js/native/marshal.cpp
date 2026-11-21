@@ -108,6 +108,10 @@ n8v_text_options ReadTextOptions(const Napi::Object &o, std::string &urlStorage)
   t.bold = BoolOr(o, "bold", false);
   t.italic = BoolOr(o, "italic", false);
   t.strikethrough = BoolOr(o, "strikethrough", false);
+  t.small = BoolOr(o, "small", false);
+  t.darken = BoolOr(o, "darken", false);
+  t.large = BoolOr(o, "large", false);
+  t.click_unstyled = BoolOr(o, "clickUnstyled", false);
   Napi::Value url = o.Get("url");
   if (url.IsString()) {
     urlStorage = url.As<Napi::String>().Utf8Value();

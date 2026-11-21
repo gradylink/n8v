@@ -24,6 +24,8 @@ export interface NativeAddon {
   closePanel(): void;
   openSidebar(opts: object): void;
   closeSidebar(): void;
+  sidebarSection(title: string): void;
+  sidebarDivider(): void;
   openPage(opts: object): boolean;
   closePage(): void;
 
@@ -36,6 +38,9 @@ export interface NativeAddon {
   dropdown(opts: object): void;
   slider(opts: object): void;
   image(opts: object): void;
+  video(opts: object): void;
+  audio(opts: object): void;
+  divider(opts: object): void;
   icon(opts: object): void;
   document(opts: object): void;
   showFileDialog(
@@ -49,6 +54,26 @@ export interface NativeAddon {
 
   openFloating(opts: object): void;
   closeFloating(): void;
+  openPopover(opts: object): void;
+  closePopover(): void;
+
+  focus(id: string): void;
+  scrollState(containerId: string): {
+    offsetX: number;
+    offsetY: number;
+    viewWidth: number;
+    viewHeight: number;
+  } | null;
+  openUrl(url: string): void;
+  setUrlHandler(handler: ((url: string) => boolean) | null): void;
+  visibleChildren(
+    containerId: string,
+    margin: number,
+  ): { id: string; top: number; height: number }[] | null;
+  wake(): void;
+  raiseWindow(): void;
+  isDarkTheme(): boolean;
+  windowSize(): { width: number; height: number } | null;
 
   isHovered(id: string): boolean;
   scrollToBottom(containerId: string): void;

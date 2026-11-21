@@ -5,6 +5,16 @@ export type PanelRole = "card" | "listItem";
 export type IconVariant = "outline" | "filled";
 export type IconPosition = "leading" | "trailing";
 export type SubmitMode = "enter" | "ctrlEnter";
+export type PopoverSide = "below" | "above" | "right" | "left";
+export type NamedColor =
+  | "default"
+  | "red"
+  | "orange"
+  | "yellow"
+  | "green"
+  | "blue"
+  | "purple"
+  | "pink";
 export type AttachPoint =
   | "leftTop"
   | "leftCenter"
@@ -55,6 +65,22 @@ export const ATTACH_POINT: Record<AttachPoint, number> = {
   rightTop: 6,
   rightCenter: 7,
   rightBottom: 8,
+};
+export const POPOVER_SIDE: Record<PopoverSide, number> = {
+  below: 0,
+  above: 1,
+  right: 2,
+  left: 3,
+};
+export const NAMED_COLOR: Record<NamedColor, number> = {
+  default: 0,
+  red: 1,
+  orange: 2,
+  yellow: 3,
+  green: 4,
+  blue: 5,
+  purple: 6,
+  pink: 7,
 };
 export const STYLE_FAMILY: Record<StyleFamily, number> = {
   plain: 0,
@@ -114,6 +140,11 @@ export interface Color {
 
 export function rgba(r: number, g: number, b: number, a = 1): Color {
   return { r, g, b, a };
+}
+
+/** A color that follows the active theme where the toolkit has a palette, usable anywhere a `Color` is. */
+export function themeColor(name: NamedColor): Color {
+  return { r: NAMED_COLOR[name], g: 0, b: 0, a: -1 };
 }
 
 export interface Padding {

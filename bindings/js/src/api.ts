@@ -13,11 +13,15 @@ import {
   ICON_VARIANT,
   type IconPosition,
   type IconVariant,
+  NAMED_COLOR,
   type NativeRounding,
   type NativeSizing,
+  type NamedColor,
   type Padding,
   PANEL_ROLE,
   type PanelRole,
+  POPOVER_SIDE,
+  type PopoverSide,
   Sizing,
   STYLE_FAMILY,
   type StyleFamily,
@@ -175,6 +179,10 @@ export interface PanelOptions {
   clipHorizontal?: boolean;
   clipVertical?: boolean;
   id?: string;
+  /** A colored bar down the panel's left edge. Alpha 0 means none. */
+  accent?: Color;
+  /** Overrides the style's padding for this panel. */
+  padding?: Padding;
 }
 
 export function panel(opts: PanelOptions, body: () => void): void {
@@ -190,6 +198,8 @@ export function panel(opts: PanelOptions, body: () => void): void {
     clipHorizontal: o.clipHorizontal ?? false,
     clipVertical: o.clipVertical ?? false,
     id: o.id,
+    accent: o.accent,
+    padding: o.padding,
   });
   body();
   n().closePanel();
@@ -203,6 +213,9 @@ export interface SidebarOptions {
   minWidth?: number;
   maxWidth?: number;
   compact?: boolean;
+  /** Makes the sidebar collapsible to a strip of icons: read for the initial state and written on every toggle, so you can persist it. */
+  collapsed?: Ref<boolean>;
+  onCollapse?: (collapsed: boolean) => void;
 }
 
 export function sidebar(opts: SidebarOptions, body: () => void): void {
@@ -214,31 +227,24 @@ export function sidebar(opts: SidebarOptions, body: () => void): void {
     minWidth: opts.minWidth ?? 0,
     maxWidth: opts.maxWidth ?? 0,
     compact: opts.compact ?? false,
+    collapsed: opts.collapsed,
+    onCollapse: opts.onCollapse,
   });
   body();
   n().closeSidebar();
 }
 
-export type BadgeColor =
-  | "default"
-  | "red"
-  | "orange"
-  | "yellow"
-  | "green"
-  | "blue"
-  | "purple"
-  | "pink";
+/** A titled heading between a sidebar's pages. Only valid inside `sidebar`. */
+export function sidebarSection(title: string): void {
+  n().sidebarSection(title);
+}
 
-const BADGE_COLORS = {
-  default: 0,
-  red: 1,
-  orange: 2,
-  yellow: 3,
-  green: 4,
-  blue: 5,
-  purple: 6,
-  pink: 7,
-} as const;
+/** A rule between a sidebar's pages. Only valid inside `sidebar`. */
+export function sidebarDivider(): void {
+  n().sidebarDivider();
+}
+
+export type BadgeColor = NamedColor;
 
 export interface PageOptions {
   name?: string;
@@ -251,13 +257,15 @@ export interface PageOptions {
   badge?: string;
   /** Resolved against the toolkit's palette where it has one. */
   badgeColor?: BadgeColor;
+  /** Size of `image` in pixels; 0 or omitted for the usual size. */
+  imageSize?: number;
 }
 
 export function page(opts: PageOptions, body: () => void): boolean {
   const selected = n().openPage({
     ...opts,
     imageRounding: opts.imageRounding,
-    badgeColor: BADGE_COLORS[opts.badgeColor ?? "default"],
+    badgeColor: NAMED_COLOR[opts.badgeColor ?? "default"],
   });
   if (selected) {
     body();
@@ -270,8 +278,17 @@ export interface TextOptions {
   bold?: boolean;
   italic?: boolean;
   strikethrough?: boolean;
+  /** Secondary text: smaller than normal, by whatever the style considers small. */
+  small?: boolean;
+  /** Secondary text: fainter than normal. */
+  darken?: boolean;
+  /** Jumbo text, for things like a message that is only emoji. */
+  large?: boolean;
   url?: string;
+  /** Paints the text as a link and fires on click instead of opening `url`. */
   onClick?: () => void;
+  /** With `onClick`, keeps the text's own look instead of painting it as a link. */
+  clickUnstyled?: boolean;
   color?: Color;
 }
 
@@ -286,6 +303,10 @@ export interface ButtonOptions {
   iconPosition?: IconPosition;
   onClick?: () => void;
   id?: string;
+  /** An image path shown in place of an icon. */
+  image?: string;
+  /** Height of `image` in pixels; 0 or omitted for the usual size. */
+  imageHeight?: number;
 }
 
 export function button(label: string, opts: ButtonOptions = {}): void {
@@ -297,6 +318,8 @@ export function button(label: string, opts: ButtonOptions = {}): void {
       iconPosition: ICON_POSITION[opts.iconPosition ?? "leading"],
       onClick: opts.onClick,
       id: opts.id,
+      image: opts.image,
+      imageHeight: opts.imageHeight ?? 0,
     },
     label,
   );
@@ -319,6 +342,8 @@ export function toggleButton(label: string, opts: ToggleButtonOptions): void {
       checked: opts.checked,
       onChange: opts.onChange,
       id: opts.id,
+      image: opts.image,
+      imageHeight: opts.imageHeight ?? 0,
     },
     label,
   );
@@ -361,11 +386,32 @@ export interface EntryOptions {
   minLines?: number;
   maxLines?: number;
   matchEntryStyle?: boolean;
+  /** Return true to stop the entry acting on the key. Multiline entries only, so far, and not in every backend. */
+  onKey?: (key: Key, mods: KeyMods) => boolean;
+  /** Called with the paths when files are pasted. Multiline entries only, so far, and not in every backend. */
+  onPasteFiles?: (paths: string[]) => void;
 }
 
+export type Key = "up" | "down" | "escape";
+
+export interface KeyMods {
+  shift: boolean;
+  ctrl: boolean;
+  alt: boolean;
+}
+
+const KEYS: Key[] = ["up", "down", "escape"];
+
 export function entry(opts: EntryOptions): void {
+  const { onKey } = opts;
   n().entry({
     ...opts,
+    onKey: onKey && ((key: number, mods: number) =>
+      onKey(KEYS[key], {
+        shift: (mods & 1) !== 0,
+        ctrl: (mods & 2) !== 0,
+        alt: (mods & 4) !== 0,
+      })),
     submitMode: SUBMIT_MODE[opts.submitMode ?? "enter"],
     minLines: opts.minLines ?? 0,
     maxLines: opts.maxLines ?? 0,
@@ -406,6 +452,14 @@ export interface ImageOptions {
   width?: NativeSizing;
   height?: NativeSizing;
   rounding?: NativeRounding;
+  /** Makes the image clickable. */
+  onClick?: () => void;
+  /** Like `onClick`, but told where in the image (each axis from 0 to 1). Wins over `onClick` where the toolkit can say where. */
+  onClickAt?: (x: number, y: number) => void;
+  /** Pinch and Ctrl+wheel zoom: `factor` is the change since the last call (above 1 zooms in) around (x, y), each from 0 to 1. */
+  onZoom?: (factor: number, x: number, y: number) => void;
+  /** Dragging, with the change in position in pixels since the last call, for panning. */
+  onDrag?: (dx: number, dy: number) => void;
 }
 
 export function image(opts: ImageOptions): void {
@@ -424,7 +478,59 @@ export function image(opts: ImageOptions): void {
     width: opts.width ?? Sizing.fit(),
     height: opts.height ?? Sizing.fit(),
     rounding: opts.rounding,
+    onClick: opts.onClick,
+    onClickAt: opts.onClickAt,
+    onZoom: opts.onZoom,
+    onDrag: opts.onDrag,
   });
+}
+
+export interface VideoOptions {
+  /** A file path, or a URL (anything with a scheme, like https://). */
+  source: string;
+  width?: NativeSizing;
+  height?: NativeSizing;
+  rounding?: NativeRounding;
+  autoplay?: boolean;
+  loop?: boolean;
+  muted?: boolean;
+  /** Show play/pause and a seek bar. */
+  controls?: boolean;
+  id?: string;
+}
+
+export function video(opts: VideoOptions): void {
+  n().video({
+    ...opts,
+    width: opts.width ?? Sizing.fit(),
+    height: opts.height ?? Sizing.fit(),
+  });
+}
+
+export interface AudioOptions {
+  /** A file path, or a URL (anything with a scheme, like https://). */
+  source: string;
+  /** Fit means 320 wide. */
+  width?: NativeSizing;
+  autoplay?: boolean;
+  loop?: boolean;
+  muted?: boolean;
+  id?: string;
+}
+
+/** A player bar: play/pause, a seek bar and the time. */
+export function audio(opts: AudioOptions): void {
+  n().audio({ ...opts, width: opts.width ?? Sizing.fit() });
+}
+
+export interface DividerOptions {
+  /** Alpha 0 (the default) means the style's own divider color. */
+  color?: Color;
+  id?: string;
+}
+
+export function divider(opts: DividerOptions = {}): void {
+  n().divider(opts);
 }
 
 export interface IconOptions {
@@ -450,6 +556,20 @@ export interface DocumentOptions {
   width?: NativeSizing;
   height?: NativeSizing;
   id?: string;
+  /** Restyle chosen links; return nothing to leave a link alone. */
+  linkStyle?: (url: string) => LinkStyle | null | undefined;
+  /** Maps each image `src` to something n8v can load (a file path, say); return "" for none. */
+  imageResolver?: (src: string) => string;
+  /** Names where the document keeps what it has loaded for its images. */
+  imageState?: string;
+}
+
+export interface LinkStyle {
+  foreground?: Color;
+  background?: Color;
+  bold?: boolean;
+  /** Keeps the link clickable (a styled link is otherwise plain text). */
+  clickable?: boolean;
 }
 
 export function document(opts: DocumentOptions): void {
@@ -458,6 +578,9 @@ export function document(opts: DocumentOptions): void {
     width: opts.width ?? Sizing.grow(),
     height: opts.height ?? Sizing.grow(),
     id: opts.id,
+    linkStyle: opts.linkStyle,
+    imageResolver: opts.imageResolver,
+    imageState: opts.imageState,
   });
 }
 
@@ -468,6 +591,13 @@ export interface FloatingOptions {
   parentAttachPoint?: AttachPoint;
   offsetX?: number;
   offsetY?: number;
+  /** Swallows the pointer instead of letting it through to what is underneath. */
+  opaque?: boolean;
+  /** Fires on a click outside the element. */
+  onDismiss?: () => void;
+  /** Nudges the element back inside the window, `screenMargin` pixels from its edges. */
+  keepOnScreen?: boolean;
+  screenMargin?: number;
   id?: string;
 }
 
@@ -479,10 +609,108 @@ export function floating(opts: FloatingOptions, body: () => void): void {
     parentAttachPoint: ATTACH_POINT[opts.parentAttachPoint ?? "rightTop"],
     offsetX: opts.offsetX ?? 0,
     offsetY: opts.offsetY ?? 0,
+    opaque: opts.opaque ?? false,
+    onDismiss: opts.onDismiss,
+    keepOnScreen: opts.keepOnScreen ?? false,
+    screenMargin: opts.screenMargin ?? 0,
     id: opts.id,
   });
   body();
   n().closeFloating();
+}
+
+export interface PopoverOptions {
+  /** Which side of its parent it opens on. Defaults to "below". */
+  side?: PopoverSide;
+  /** Lines the far edge, not the near one, up with the parent's. */
+  alignEnd?: boolean;
+  width?: NativeSizing;
+  height?: NativeSizing;
+  /** Space in pixels between the popover and its parent. */
+  gap?: number;
+  screenMargin?: number;
+  /** Fires on a click outside. */
+  onDismiss?: () => void;
+  id?: string;
+}
+
+/** Opens `body` beside the enclosing element, layered on top of everything else. */
+export function popover(opts: PopoverOptions, body: () => void): void {
+  n().openPopover({
+    side: POPOVER_SIDE[opts.side ?? "below"],
+    alignEnd: opts.alignEnd ?? false,
+    width: opts.width ?? Sizing.fit(),
+    height: opts.height ?? Sizing.fit(),
+    gap: opts.gap ?? 0,
+    screenMargin: opts.screenMargin ?? 0,
+    onDismiss: opts.onDismiss,
+    id: opts.id,
+  });
+  body();
+  n().closePopover();
+}
+
+/** Gives keyboard focus to the widget with this id. */
+export function focus(id: string): void {
+  n().focus(id);
+}
+
+export interface ScrollState {
+  offsetX: number;
+  offsetY: number;
+  viewWidth: number;
+  viewHeight: number;
+}
+
+/** Where a scrolling container is scrolled to and how big its view is, in pixels; null if there is no such container or the backend cannot say. */
+export function scrollState(containerId: string): ScrollState | null {
+  return n().scrollState(containerId);
+}
+
+export interface VisibleChild {
+  id: string;
+  top: number;
+  height: number;
+}
+
+/** The id'd children of a scrolling container in view or within `margin` pixels of it; null if there is no such container or the backend cannot say. */
+export function visibleChildren(
+  containerId: string,
+  margin = 0,
+): VisibleChild[] | null {
+  return n().visibleChildren(containerId, margin);
+}
+
+/** Opens a link in the default application (the browser for a web address). */
+export function openUrl(url: string): void {
+  n().openUrl(url);
+}
+
+/** Sees every link before it is opened: return true to say it was handled, false to let n8v open it. Pass null to remove it. */
+export function setUrlHandler(
+  handler: ((url: string) => boolean) | null,
+): void {
+  n().setUrlHandler(handler);
+}
+
+/** Makes `pumpEvents` return promptly, e.g. when a timer or network callback has work for the UI. */
+export function wake(): void {
+  n().wake();
+}
+
+/** Brings the window to the front. */
+export function raiseWindow(): void {
+  n().raiseWindow();
+}
+
+/** Whether the UI currently has a dark appearance. */
+export function isDarkTheme(): boolean {
+  return n().isDarkTheme();
+}
+
+/** The window's size in logical pixels; null if the backend cannot say. */
+export function windowSize(): { width: number; height: number } | null {
+  return n().windowSize();
 }
 
 export function isHovered(id: string): boolean {
