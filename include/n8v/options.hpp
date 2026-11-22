@@ -274,6 +274,13 @@ struct PageOptions {
   /** Short text shown in a pill on the right of the row (e.g. a count). Empty shows nothing. */
   std::string_view badge = {};
   BadgeColor badgeColor = BadgeColor::Default;
+  /**
+   * Names the page, so it stays the same page when others around it come and go. Without one, pages are told apart by their order: a page
+   * inserted above takes over what the ones below showed, content and scroll position included. Unique among the sidebar's pages.
+   */
+  std::string_view id = {};
+  /** Extra space before the row's content, in pixels, to set it in under the rows above (a server inside a folder, say). Not every backend draws it. */
+  float indent = 0.0f;
 };
 
 struct LinkStyle {

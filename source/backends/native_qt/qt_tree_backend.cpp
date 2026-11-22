@@ -1975,6 +1975,7 @@ void QtTreeBackend::build(NativeNode &nn) {
     panelLayout->setSpacing(0);
     nn.titleLabel = new QLabel();
     nn.titleLabel->setAlignment(Qt::AlignCenter);
+    nn.titleLabel->setWordWrap(true);
     nn.titleLabel->setContentsMargins(0, 12, 0, 12);
     QFont titleFont = nn.titleLabel->font();
     titleFont.setBold(true);

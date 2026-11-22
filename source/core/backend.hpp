@@ -56,6 +56,9 @@ struct Backend {
   /** Whether the window has the user's focus. Backends that cannot tell say yes: the user is assumed to be there. */
   virtual bool windowFocused() const { return true; }
 
+  /** What a named theme color is in the current theme, opaque. Toolkits with a palette answer from it; the rest from the built-in table. */
+  virtual n8v_color namedColor(n8v_named_color name) const;
+
   /** @return Whether the primary pointer button is held this frame. */
   virtual bool pointerDown() const = 0;
 

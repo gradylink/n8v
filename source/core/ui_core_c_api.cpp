@@ -70,6 +70,8 @@ void n8v_raise_window(void) { n8v::activeBackend().raiseWindow(); }
 
 bool n8v_window_focused(void) { return n8v::activeBackend().windowFocused(); }
 
+n8v_color n8v_theme_color(n8v_named_color name) { return n8v::activeBackend().namedColor(name); }
+
 bool n8v_window_size(float *width, float *height) {
   const Clay_Dimensions size = n8v::activeBackend().windowSize();
   if (size.width <= 0.0f || size.height <= 0.0f) return false;

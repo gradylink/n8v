@@ -352,6 +352,8 @@ bool n8v_is_hovered(const char *id) {
 
 namespace n8v {
 
+n8v_color Backend::namedColor(n8v_named_color name) const { return n8v::detail::builtinThemeColor(name, prefersDark()); }
+
 bool Backend::prefersDark() const {
   const Color window = activePaint().windowBackground();
   return (0.2126f * window.r + 0.7152f * window.g + 0.0722f * window.b) < 128.0f;

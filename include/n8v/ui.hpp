@@ -677,6 +677,9 @@ inline bool openPage(const PageOptions &options) {
   c_opts.notify = options.notify;
   c_opts.badge = badgeStorage.empty() ? nullptr : badgeStorage.c_str();
   c_opts.badge_color = static_cast<n8v_badge_color>(options.badgeColor);
+  std::string idStorage(options.id);
+  c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
+  c_opts.indent = options.indent;
   return n8v_open_page(c_opts);
 }
 
@@ -1261,6 +1264,12 @@ inline void raiseWindow() { n8v_raise_window(); }
 
 /** Whether the window has the user's focus right now (true where the backend cannot tell: the user is assumed to be there). */
 inline bool windowFocused() { return n8v_window_focused(); }
+
+/** The color a named theme color has in the current theme, as an opaque RGB: for drawing with one yourself (an image, say). */
+inline Color themeColor(NamedColor name) {
+  const n8v_color c = n8v_theme_color(static_cast<n8v_named_color>(name));
+  return Color{c.r, c.g, c.b, c.a};
+}
 
 /** Whether the system can show notifications (Linux: a notification service on the session bus; the web: the Notification API). */
 inline bool notificationsAvailable() { return n8v_notifications_available(); }

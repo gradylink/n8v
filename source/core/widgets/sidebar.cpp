@@ -392,6 +392,7 @@ bool openPage(const n8v_page_options &opts, int rowOrdinal) {
     const n8v::Padding rowPadding = n8v::activePaint().sidebar().rowPadding;
     if (rowPadding.left || rowPadding.right || rowPadding.top || rowPadding.bottom) paint.padding = rowPadding;
   }
+  if (!ctx.collapsed && opts.indent > 0.0f) paint.padding.left += opts.indent;
   {
     const n8v::SidebarPaint rows = n8v::activePaint().sidebar();
     const n8v::Color rowBackground = selected && rows.rowSelectedBackground.a > 0.0f ? rows.rowSelectedBackground

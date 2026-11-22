@@ -293,11 +293,15 @@ public:
       ".n8v-badge-pink { background: #d6428f; }\n"
 #endif
       ".n8v-sidebar-decoration, .n8v-sidebar-decoration:hover, .n8v-sidebar-decoration:selected { background: none; box-shadow: none; }\n"
-      ".n8v-sidebar-divider { min-height: 0; padding: 0; }\n"
       ".n8v-notify-bar { background: currentColor; border-radius: 2px; min-width: 3px; min-height: 16px; }\n"
       ".n8v-notify-label, .n8v-notify-label label { font-weight: bold; }\n"
     );
     gtk_style_context_add_provider_for_display(gtk_widget_get_display(window_), GTK_STYLE_PROVIDER(cardCss_), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+    GtkCssProvider *dividerCss = gtk_css_provider_new();
+    gtk_css_provider_load_from_string(dividerCss, "list.navigation-sidebar > row.n8v-sidebar-divider { min-height: 0; padding: 0; margin-top: 0; margin-bottom: 0; }\n");
+    gtk_style_context_add_provider_for_display(gtk_widget_get_display(window_), GTK_STYLE_PROVIDER(dividerCss), GTK_STYLE_PROVIDER_PRIORITY_USER);
+    g_object_unref(dividerCss);
 
     GtkCssProvider *namedCss = gtk_css_provider_new();
     gtk_css_provider_load_from_string(namedCss, namedColorCss().c_str());
@@ -344,6 +348,42 @@ public:
     if (window_) gtk_window_present(GTK_WINDOW(window_));
   }
   bool windowFocused() const override { return window_ && gtk_window_is_active(GTK_WINDOW(window_)); }
+
+  n8v_color namedColor(n8v_named_color name) const override {
+#ifdef N8V_HAVE_ADWAITA
+    auto lookup = [&](const char *colorName, GdkRGBA &out) { return window_ && gtk_style_context_lookup_color(gtk_widget_get_style_context(window_), colorName, &out); };
+    GdkRGBA a{}, b{};
+    bool found = false;
+    switch (name) {
+    case N8V_NAMED_COLOR_RED:
+      found = lookup("error_bg_color", a);
+      break;
+    case N8V_NAMED_COLOR_ORANGE:
+      found = lookup("orange_3", a);
+      break;
+    case N8V_NAMED_COLOR_YELLOW:
+      found = lookup("warning_bg_color", a);
+      break;
+    case N8V_NAMED_COLOR_GREEN:
+      found = lookup("success_bg_color", a);
+      break;
+    case N8V_NAMED_COLOR_BLUE:
+      found = lookup("accent_bg_color", a);
+      break;
+    case N8V_NAMED_COLOR_PURPLE:
+      found = lookup("purple_3", a);
+      break;
+    case N8V_NAMED_COLOR_PINK:
+      found = lookup("purple_3", a) && lookup("red_3", b);
+      if (found) a = GdkRGBA{(a.red + b.red) / 2, (a.green + b.green) / 2, (a.blue + b.blue) / 2, 1.0f};
+      break;
+    default:
+      break;
+    }
+    if (found) return n8v_color{a.red * 255.0f, a.green * 255.0f, a.blue * 255.0f, 255.0f};
+#endif
+    return Backend::namedColor(name);
+  }
 
   bool prefersDark() const override {
     GdkRGBA text;
@@ -2168,6 +2208,11 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
   case Kind::Sidebar: {
     nn.titleLabel = gtk_label_new("");
     gtk_widget_add_css_class(nn.titleLabel, "heading");
+    gtk_label_set_wrap(GTK_LABEL(nn.titleLabel), TRUE);
+    gtk_label_set_wrap_mode(GTK_LABEL(nn.titleLabel), PANGO_WRAP_WORD_CHAR);
+    gtk_label_set_justify(GTK_LABEL(nn.titleLabel), GTK_JUSTIFY_CENTER);
+    gtk_label_set_lines(GTK_LABEL(nn.titleLabel), 2);
+    gtk_label_set_ellipsize(GTK_LABEL(nn.titleLabel), PANGO_ELLIPSIZE_END);
     gtk_widget_set_margin_top(nn.titleLabel, 12);
     gtk_widget_set_margin_bottom(nn.titleLabel, 12);
 
@@ -2275,8 +2320,8 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
     gtk_widget_set_valign(line, GTK_ALIGN_CENTER); // otherwise it stretches to fill the whole row
     gtk_widget_set_margin_start(line, 12);
     gtk_widget_set_margin_end(line, 12);
-    gtk_widget_set_margin_top(line, 6);
-    gtk_widget_set_margin_bottom(line, 6);
+    gtk_widget_set_margin_top(line, 4);
+    gtk_widget_set_margin_bottom(line, 4);
     gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), line);
     nn.outer = nn.widget = row;
     break;
@@ -2424,6 +2469,10 @@ void Gtk4TreeBackend::applySidebar(NativeNode &nn, const n8v_sidebar_options &o)
   gtk_widget_set_visible(nn.collapseButton, o.collapsed != nullptr && !collapsed);
   gtk_widget_set_visible(nn.collapseButtonBottom, o.collapsed != nullptr && collapsed);
   gtk_widget_set_tooltip_text(nn.collapseButton, "Collapse");
+  // The buttons sit over the ends of the title row: the title keeps clear of both, evenly, so it stays centred.
+  const bool anyButton = o.collapsed != nullptr || (o.left_button.icon && *o.left_button.icon) || (o.right_button.icon && *o.right_button.icon);
+  gtk_widget_set_margin_start(nn.titleLabel, anyButton ? 44 : 0);
+  gtk_widget_set_margin_end(nn.titleLabel, anyButton ? 44 : 0);
   for (int right = 0; right < 2; ++right) {
     const n8v_sidebar_button &b = right ? o.right_button : o.left_button;
     const bool used = b.icon && *b.icon && !(right && o.collapsed);
@@ -2455,11 +2504,9 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   const auto *sidebarProps = propsOf<n8v_sidebar_options>(*sidebar.node);
   const bool compact = sidebarProps && sidebarProps->compact;
   const bool collapsed = sidebarProps && sidebarProps->collapsed && *sidebarProps->collapsed;
-#ifdef N8V_HAVE_ADWAITA
-  const bool wantAdw = !compact && !collapsed;
-#else
+  // Not an AdwActionRow, even where there is one: its title and its height are worked out separately, and for a name right at the edge of
+  // wrapping the row ends up two lines tall with one line in it. The row here is a plain label that wraps to two lines and then ellipsizes.
   const bool wantAdw = false;
-#endif
 
   const bool needsBuild = !nn.widget || nn.adwRow != wantAdw || nn.collapsedRow != collapsed;
   if (needsBuild) {
@@ -2502,6 +2549,13 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
       gtk_widget_set_halign(nn.rowLabel, GTK_ALIGN_START);
       gtk_label_set_ellipsize(GTK_LABEL(nn.rowLabel), PANGO_ELLIPSIZE_END);
       gtk_label_set_xalign(GTK_LABEL(nn.rowLabel), 0.0f);
+      if (!compact && !collapsed) {
+        gtk_widget_set_size_request(row, -1, 50);
+        gtk_widget_set_halign(nn.rowLabel, GTK_ALIGN_FILL);
+        gtk_label_set_wrap(GTK_LABEL(nn.rowLabel), TRUE);
+        gtk_label_set_wrap_mode(GTK_LABEL(nn.rowLabel), PANGO_WRAP_WORD_CHAR);
+        gtk_label_set_lines(GTK_LABEL(nn.rowLabel), 2);
+      }
       if (collapsed) {
         gtk_widget_set_margin_start(hbox, 0);
         gtk_widget_set_margin_end(hbox, 0);
@@ -2553,6 +2607,8 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   if (nn.rowLabel) {
     gtk_label_set_text(GTK_LABEL(nn.rowLabel), name.c_str());
     gtk_widget_set_visible(nn.rowLabel, !collapsed);
+    if (!collapsed)
+      if (GtkWidget *box = gtk_widget_get_parent(nn.rowLabel)) gtk_widget_set_margin_start(box, 12 + (int)o.indent);
   }
   gtk_widget_set_tooltip_text(nn.outer, collapsed ? name.c_str() : nullptr);
 

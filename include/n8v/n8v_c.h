@@ -585,6 +585,13 @@ typedef struct n8v_page_options {
   n8v_badge_color badge_color;
   /** Size of `image` in pixels; 0 for the usual size. Added last so bindings that zero the struct keep working. */
   float image_size;
+  /** Names the page, so it stays the same page when the others around it come and go (without one, pages are told apart by their order,
+      and a page inserted above takes over what the ones below showed: their content and scroll position). Unique among the sidebar's
+      pages. May be NULL. */
+  const char *id;
+  /** Extra space before the row's content, in pixels, to set it in under the rows above (a server inside a folder, say). Not every
+      backend draws it. */
+  float indent;
 } n8v_page_options;
 
 typedef struct n8v_button_paint {
@@ -770,6 +777,10 @@ N8V_API void n8v_raise_window(void);
 
 /** Whether the window has the user's focus right now (true where the backend cannot tell: the user is assumed to be there). */
 N8V_API bool n8v_window_focused(void);
+
+/** The color a named theme color has in the current theme, as an opaque RGB (the toolkit's own palette where it has one, a built-in one
+    where it doesn't). Named colors in options follow the theme by themselves; this is for drawing with one yourself (an image, say). */
+N8V_API n8v_color n8v_theme_color(n8v_named_color name);
 
 typedef enum n8v_notification_urgency {
   N8V_NOTIFICATION_URGENCY_LOW,
