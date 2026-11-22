@@ -241,6 +241,15 @@ bool n8v_open_page(n8v_page_options options) {
     return false;
   }
   SidebarFrame &sidebar = sidebarFrames.back();
+  if (options.action) {
+    options.name = own(options.name);
+    options.icon = own(options.icon);
+    options.image = own(options.image);
+    options.badge = own(options.badge);
+    options.id = own(options.id);
+    append(options);
+    return false;
+  }
   const int index = sidebar.nextPage++;
   const bool selected = sidebar.selected ? (*sidebar.selected == index) : (index == 0);
 
@@ -261,6 +270,24 @@ void n8v_close_page(void) { closeContainer(); }
 void _n8v_set_button_opts(n8v_button_options opts) { pendingButtonOpts = opts; }
 void _n8v_button_commit(const char *label) {
   n8v_button_options opts = pendingButtonOpts;
+  if (!sidebarFrames.empty() && std::holds_alternative<n8v_sidebar_options>(parent().props)) {
+    n8v_page_options row{};
+    row.name = own(label);
+    row.icon = own(opts.icon);
+    row.image = own(opts.image);
+    row.image_rounding = opts.image_rounding;
+    row.image_size = (float)opts.image_height;
+    row.notify = opts.notify;
+    row.badge = own(opts.badge);
+    row.badge_color = opts.badge_color;
+    row.id = own(opts.id);
+    row.indent = opts.indent;
+    row.action = true;
+    row.on_click = opts.on_click;
+    row.on_click_userdata = opts.on_click_userdata;
+    append(row);
+    return;
+  }
   opts.icon = own(opts.icon);
   opts.image = own(opts.image);
   opts.id = own(opts.id);

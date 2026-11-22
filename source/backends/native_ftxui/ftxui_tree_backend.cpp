@@ -1045,12 +1045,12 @@ private:
     int widest = 0;
     for (NativeNode *kid : n.kids) {
       if (kid->kind() == Kind::Page) {
-        const bool isSelected = pageIndex == selected;
+        const auto &page = *propsOf<n8v_page_options>(*kid->node);
+        const bool isSelected = !page.action && pageIndex == selected;
         if (isSelected) content = kid;
         rows.push_back(renderPageRow(*kid, isSelected, collapsed));
-        const auto &page = *propsOf<n8v_page_options>(*kid->node);
         widest = std::max(widest, ui::string_width(page.name ? page.name : "") + 8);
-        ++pageIndex;
+        if (!page.action) ++pageIndex;
       } else {
         rows.push_back(render(*kid));
       }

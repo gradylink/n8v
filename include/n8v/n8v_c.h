@@ -241,6 +241,18 @@ typedef enum n8v_icon_position {
   N8V_ICON_POSITION_TRAILING,
 } n8v_icon_position;
 
+/** Named colors that follow the active theme where the toolkit has a palette. See n8v_color_theme. */
+typedef enum n8v_named_color {
+  N8V_NAMED_COLOR_DEFAULT,
+  N8V_NAMED_COLOR_RED,
+  N8V_NAMED_COLOR_ORANGE,
+  N8V_NAMED_COLOR_YELLOW,
+  N8V_NAMED_COLOR_GREEN,
+  N8V_NAMED_COLOR_BLUE,
+  N8V_NAMED_COLOR_PURPLE,
+  N8V_NAMED_COLOR_PINK,
+} n8v_named_color;
+
 typedef struct n8v_button_options {
   n8v_button_style style;
   n8v_click_fn on_click;
@@ -256,6 +268,12 @@ typedef struct n8v_button_options {
   void *on_change_userdata;
   const char *image;
   int image_height;
+  /** The rest is for a button inside a sidebar, where it is a row that can be clicked but never selected, with the options a page has. */
+  bool notify;
+  const char *badge;
+  n8v_named_color badge_color;
+  n8v_rounding image_rounding;
+  float indent;
 } n8v_button_options;
 
 typedef struct n8v_checkbox_options {
@@ -544,17 +562,7 @@ typedef struct n8v_popover_options {
 N8V_API void n8v_open_popover(n8v_popover_options options);
 N8V_API void n8v_close_popover(void);
 
-/** Named colors that follow the active theme where the toolkit has a palette. See n8v_color_theme. */
-typedef enum n8v_named_color {
-  N8V_NAMED_COLOR_DEFAULT,
-  N8V_NAMED_COLOR_RED,
-  N8V_NAMED_COLOR_ORANGE,
-  N8V_NAMED_COLOR_YELLOW,
-  N8V_NAMED_COLOR_GREEN,
-  N8V_NAMED_COLOR_BLUE,
-  N8V_NAMED_COLOR_PURPLE,
-  N8V_NAMED_COLOR_PINK,
-} n8v_named_color;
+
 
 /** The old name, from when only badges had them. */
 typedef n8v_named_color n8v_badge_color;
@@ -592,6 +600,11 @@ typedef struct n8v_page_options {
   /** Extra space before the row's content, in pixels, to set it in under the rows above (a server inside a folder, say). Not every
       backend draws it. */
   float indent;
+  /** Makes the row an action: it looks like a page (and takes the same options) but it is never opened or selected, and it doesn't count
+      in the numbering of the sidebar's pages. Clicking it calls `on_click`. This is what a button inside a sidebar becomes. */
+  bool action;
+  n8v_click_fn on_click;
+  void *on_click_userdata;
 } n8v_page_options;
 
 typedef struct n8v_button_paint {

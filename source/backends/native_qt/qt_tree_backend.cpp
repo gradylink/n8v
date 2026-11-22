@@ -1144,6 +1144,10 @@ private:
   BoundValue readWidget(NativeNode &nn);
 
   static bool isSidebarDecoration(NativeKind kind) { return kind == NativeKind::SidebarSection || kind == NativeKind::SidebarDivider; }
+  static bool isActionPage(const NativeNode &node) {
+    const auto *o = node.node ? std::get_if<n8v_page_options>(&node.node->current.props) : nullptr;
+    return o && o->action;
+  }
   size_t rowIndex(NativeNode &sidebar, NativeNode &child) const;
   void pollNative();
   void updateMultilineHeight(NativeNode &nn);
@@ -1218,7 +1222,7 @@ size_t QtTreeBackend::pageIndex(NativeNode &sidebar, NativeNode &page) const {
   size_t index = 0;
   for (NativeNode *kid : sidebar.kids) {
     if (kid == &page) break;
-    if (kid->kind() == Kind::Page) ++index;
+    if (kid->kind() == Kind::Page && !isActionPage(*kid)) ++index;
   }
   return index;
 }
@@ -1386,7 +1390,7 @@ void QtTreeBackend::syncSidebarSelection(NativeNode &sidebar) {
   if (const int *bound = std::get_if<int>(&sidebar.node->bound)) selected = *bound;
   int pageNumber = 0;
   for (NativeNode *kid : sidebar.kids) {
-    if (kid->kind() != Kind::Page) continue;
+    if (kid->kind() != Kind::Page || isActionPage(*kid)) continue;
     if (pageNumber++ == selected) {
       sidebar.list->setCurrentItem(kid->item);
       break;
@@ -1490,7 +1494,7 @@ BoundValue QtTreeBackend::readWidget(NativeNode &nn) {
     if (!nn.list) return 0;
     int pageNumber = 0;
     for (NativeNode *kid : nn.kids) {
-      if (kid->kind() != Kind::Page) continue;
+      if (kid->kind() != Kind::Page || isActionPage(*kid)) continue;
       if (kid->item == nn.list->currentItem()) return pageNumber;
       ++pageNumber;
     }
@@ -1566,6 +1570,19 @@ void QtTreeBackend::pollNative() {
       continue;
     }
     if (nn.kind() == Kind::Entry) updateMultilineHeight(nn);
+    if (nn.kind() == Kind::Sidebar && nn.list) {
+      bool clicked = false;
+      for (NativeNode *kid : nn.kids)
+        if (kid->kind() == Kind::Page && isActionPage(*kid) && kid->item == nn.list->currentItem()) {
+          clicked = true;
+          dispatch::selectPage(*kid->node);
+          break;
+        }
+      if (clicked) {
+        if (live_.count(pn)) syncSidebarSelection(nn);
+        continue;
+      }
+    }
     BoundValue current = readWidget(nn);
     if (current == nn.lastValue) continue;
     nn.lastValue = current;
@@ -1598,7 +1615,7 @@ void QtTreeBackend::pollNative() {
       const int row = std::get<int>(current);
       int index = 0;
       for (NativeNode *kid : nn.kids) {
-        if (kid->kind() != Kind::Page) continue;
+        if (kid->kind() != Kind::Page || isActionPage(*kid)) continue;
         if (index++ == row) {
           dispatch::selectPage(*kid->node);
           break;
@@ -2215,6 +2232,7 @@ void QtTreeBackend::applySidebar(NativeNode &nn, const n8v_sidebar_options &o) {
 
 void QtTreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   if (!nn.item) return;
+  nn.item->setFlags(o.action ? (nn.item->flags() & ~Qt::ItemIsSelectable) : (nn.item->flags() | Qt::ItemIsSelectable));
   NativeNode *sidebar = nn.node->parent ? native(*nn.node->parent) : nullptr;
   const auto *sidebarProps = sidebar && sidebar->node ? propsOf<n8v_sidebar_options>(*sidebar->node) : nullptr;
   const bool compact = sidebarProps && sidebarProps->compact;

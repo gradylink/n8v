@@ -67,6 +67,9 @@ struct TextOptions {
   Color color = {0, 0, 0, 255};
 };
 
+/** What badges called their named colors; they are the same as any other theme color now. */
+using BadgeColor = NamedColor;
+
 struct ButtonOptions {
   ButtonStyle style = ButtonStyle::Secondary;
   /** Fires on press, not release. */
@@ -77,6 +80,16 @@ struct ButtonOptions {
   std::string_view id = {};
   std::string image = {};
   int imageHeight = 0;
+  /**
+   * The rest is for a button inside a sidebar(), where it is a row that can be clicked but never selected, set out like a page (`icon` or `image`,
+   * the label as its name) and with these. Such a button doesn't count among the sidebar's pages, so it leaves its `selected` alone. Give it an `id`
+   * to keep it the same row while others come and go. Backends without a native sidebar list may not draw it.
+   */
+  bool notify = false;
+  std::string_view badge = {};
+  BadgeColor badgeColor = BadgeColor::Default;
+  Rounding imageRounding = Rounding::styleDefault();
+  float indent = 0.0f;
 };
 
 struct CheckboxOptions {
@@ -255,9 +268,6 @@ struct SidebarOptions {
   std::optional<SidebarButton> leftButton = std::nullopt;
   std::optional<SidebarButton> rightButton = std::nullopt;
 };
-
-/** What badges called their named colors; they are the same as any other theme color now. */
-using BadgeColor = NamedColor;
 
 struct PageOptions {
   std::string_view name = {};

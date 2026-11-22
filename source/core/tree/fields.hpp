@@ -89,6 +89,9 @@ template <typename V> void visitFields(n8v_page_options &o, V &v) {
   v.num(o.image_size);
   v.str(o.id);
   v.num(o.indent);
+  v.num(o.action);
+  v.ptr(o.on_click);
+  v.ptr(o.on_click_userdata);
 }
 
 template <typename V> void visitFields(n8v_button_options &o, V &v) {
@@ -104,6 +107,11 @@ template <typename V> void visitFields(n8v_button_options &o, V &v) {
   v.ptr(o.on_change_userdata);
   v.str(o.image);
   v.num(o.image_height);
+  v.num(o.notify);
+  v.str(o.badge);
+  v.num(o.badge_color);
+  v.num(o.image_rounding);
+  v.num(o.indent);
 }
 
 template <typename V> void visitFields(n8v_text_options &o, V &v) {

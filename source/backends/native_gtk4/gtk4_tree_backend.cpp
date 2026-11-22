@@ -661,8 +661,11 @@ public:
 private:
   using Kind = NativeKind;
 
-  /** Sections and dividers are rows of the sidebar's list like pages are, but have no content and can't be selected. */
   static bool isSidebarDecoration(Kind kind) { return kind == Kind::SidebarSection || kind == Kind::SidebarDivider; }
+  static bool isActionPage(const NativeNode &node) {
+    const auto *o = node.node ? std::get_if<n8v_page_options>(&node.node->current.props) : nullptr;
+    return o && o->action;
+  }
 
   NativeNode *native(PNode &node) const { return static_cast<NativeNode *>(node.handle); }
   NativeNode &nativeOrRoot(PNode &node) { return node.parent ? *native(node) : root_; }
@@ -1022,7 +1025,12 @@ private:
   }
   static void onRowActivated(GtkListBox *, GtkListBoxRow *row, gpointer) {
     auto *nn = static_cast<NativeNode *>(g_object_get_data(G_OBJECT(row), "n8v-node"));
-    if (nn && self_ && self_->live_.count(nn->node)) dispatch::selectPage(*nn->node);
+    if (!nn || !self_ || !self_->live_.count(nn->node)) return;
+    if (isActionPage(*nn)) return;
+    dispatch::selectPage(*nn->node);
+  }
+  static void onActionReleased(GtkGestureClick *, int, double, double, gpointer userData) {
+    if (PNode *node = liveNode(userData)) dispatch::selectPage(*node);
   }
   static void onMotionEnter(GtkEventControllerMotion *, gdouble, gdouble, gpointer userData) { self_->setHover(static_cast<PNode *>(userData), true); }
   static void onMotionLeave(GtkEventControllerMotion *, gpointer userData) { self_->setHover(static_cast<PNode *>(userData), false); }
@@ -1514,7 +1522,7 @@ size_t Gtk4TreeBackend::pageIndex(NativeNode &sidebar, NativeNode &page) {
   size_t index = 0;
   for (NativeNode *kid : sidebar.kids) {
     if (kid == &page) break;
-    if (kid->kind() == Kind::Page) ++index;
+    if (kid->kind() == Kind::Page && !isActionPage(*kid)) ++index;
   }
   return index;
 }
@@ -1669,7 +1677,7 @@ void Gtk4TreeBackend::syncSidebarSelection(NativeNode &sidebar) {
   if (const int *bound = std::get_if<int>(&sidebar.node->bound)) selected = *bound;
   int pageNumber = 0;
   for (NativeNode *kid : sidebar.kids) {
-    if (kid->kind() != Kind::Page) continue;
+    if (kid->kind() != Kind::Page || isActionPage(*kid)) continue;
     if (pageNumber++ == selected) {
       gtk_list_box_select_row(GTK_LIST_BOX(sidebar.listBox), GTK_LIST_BOX_ROW(kid->outer));
       break;
@@ -2317,7 +2325,7 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
     gtk_widget_add_css_class(row, "n8v-sidebar-decoration");
     gtk_widget_add_css_class(row, "n8v-sidebar-divider");
     GtkWidget *line = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
-    gtk_widget_set_valign(line, GTK_ALIGN_CENTER); // otherwise it stretches to fill the whole row
+    gtk_widget_set_valign(line, GTK_ALIGN_CENTER);
     gtk_widget_set_margin_start(line, 12);
     gtk_widget_set_margin_end(line, 12);
     gtk_widget_set_margin_top(line, 4);
@@ -2469,7 +2477,6 @@ void Gtk4TreeBackend::applySidebar(NativeNode &nn, const n8v_sidebar_options &o)
   gtk_widget_set_visible(nn.collapseButton, o.collapsed != nullptr && !collapsed);
   gtk_widget_set_visible(nn.collapseButtonBottom, o.collapsed != nullptr && collapsed);
   gtk_widget_set_tooltip_text(nn.collapseButton, "Collapse");
-  // The buttons sit over the ends of the title row: the title keeps clear of both, evenly, so it stays centred.
   const bool anyButton = o.collapsed != nullptr || (o.left_button.icon && *o.left_button.icon) || (o.right_button.icon && *o.right_button.icon);
   gtk_widget_set_margin_start(nn.titleLabel, anyButton ? 44 : 0);
   gtk_widget_set_margin_end(nn.titleLabel, anyButton ? 44 : 0);
@@ -2504,8 +2511,6 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   const auto *sidebarProps = propsOf<n8v_sidebar_options>(*sidebar.node);
   const bool compact = sidebarProps && sidebarProps->compact;
   const bool collapsed = sidebarProps && sidebarProps->collapsed && *sidebarProps->collapsed;
-  // Not an AdwActionRow, even where there is one: its title and its height are worked out separately, and for a name right at the edge of
-  // wrapping the row ends up two lines tall with one line in it. The row here is a plain label that wraps to two lines and then ellipsizes.
   const bool wantAdw = false;
 
   const bool needsBuild = !nn.widget || nn.adwRow != wantAdw || nn.collapsedRow != collapsed;
@@ -2598,6 +2603,15 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
     if (attached) gtk_list_box_insert(GTK_LIST_BOX(sidebar.listBox), row, position);
     g_object_unref(oldRow);
     nn.owned.erase(std::remove(nn.owned.begin(), nn.owned.end(), oldRow), nn.owned.end());
+  }
+
+  gtk_list_box_row_set_selectable(GTK_LIST_BOX_ROW(nn.outer), !o.action);
+  if (o.action && !g_object_get_data(G_OBJECT(nn.outer), "n8v-action-click")) {
+    GtkGesture *click = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(click), 1);
+    connect(click, "released", &Gtk4TreeBackend::onActionReleased, *nn.node);
+    gtk_widget_add_controller(nn.outer, GTK_EVENT_CONTROLLER(click));
+    g_object_set_data(G_OBJECT(nn.outer), "n8v-action-click", GINT_TO_POINTER(1));
   }
 
   const std::string name = o.name ? o.name : "";

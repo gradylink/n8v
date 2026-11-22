@@ -100,12 +100,18 @@ struct PageClickState {
   int *selectedPtr = nullptr;
   std::function<void(int)> onChange;
   int value = 0;
+  n8v_click_fn action = nullptr;
+  void *actionUserdata = nullptr;
 };
 
 std::unordered_map<int, PageClickState> pageClickStates;
 
 void dispatchPageClick(void *userdata) {
   auto *state = static_cast<PageClickState *>(userdata);
+  if (state && state->action) {
+    state->action(state->actionUserdata);
+    return;
+  }
   if (!state || !state->selectedPtr || *state->selectedPtr == state->value) return;
   *state->selectedPtr = state->value;
   if (state->onChange) state->onChange(state->value);
@@ -369,7 +375,7 @@ bool openPage(const n8v_page_options &opts, int rowOrdinal) {
     return false;
   }
   SidebarContext &ctx = sidebarStack.back();
-  const int thisOrdinal = ctx.pageOrdinal++;
+  const int thisOrdinal = opts.action ? -1 : ctx.pageOrdinal++;
 
   std::string_view nameView = toView(opts.name);
   std::string_view iconView = toView(opts.icon);
@@ -380,7 +386,7 @@ bool openPage(const n8v_page_options &opts, int rowOrdinal) {
   }
   const bool hasIcon = !iconView.empty();
   const bool hasImage = !imageView.empty();
-  const bool selected = ctx.selectedPtr ? (*ctx.selectedPtr == thisOrdinal) : (thisOrdinal == 0);
+  const bool selected = !opts.action && (ctx.selectedPtr ? (*ctx.selectedPtr == thisOrdinal) : (thisOrdinal == 0));
 
   Clay__OpenElement();
 
@@ -467,6 +473,8 @@ bool openPage(const n8v_page_options &opts, int rowOrdinal) {
   clickState->selectedPtr = ctx.selectedPtr;
   clickState->onChange = ctx.onChange;
   clickState->value = thisOrdinal;
+  clickState->action = opts.action ? opts.on_click : nullptr;
+  clickState->actionUserdata = opts.on_click_userdata;
 
   widgetMetaStorage.push_back(n8v::detail::NativeWidgetMeta{});
   n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();

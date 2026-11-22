@@ -707,6 +707,12 @@ struct LeafBuilder {
       std::string imageStorage(buttonOptions.image);
       c_opts.image = imageStorage.empty() ? nullptr : imageStorage.c_str();
       c_opts.image_height = buttonOptions.imageHeight;
+      std::string badgeStorage(buttonOptions.badge);
+      c_opts.notify = buttonOptions.notify;
+      c_opts.badge = badgeStorage.empty() ? nullptr : badgeStorage.c_str();
+      c_opts.badge_color = static_cast<n8v_named_color>(buttonOptions.badgeColor);
+      c_opts.image_rounding = toC(buttonOptions.imageRounding);
+      c_opts.indent = buttonOptions.indent;
       _n8v_set_button_opts(c_opts);
       _n8v_button_commit(labelStorage.c_str());
     } else {

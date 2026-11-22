@@ -814,7 +814,8 @@ size_t HtmlTreeBackend::pageIndex(NativeNode &sidebar, NativeNode &page) const {
   size_t index = 0;
   for (NativeNode *kid : sidebar.kids) {
     if (kid == &page) break;
-    if (kid->kind() == Kind::Page) ++index;
+    const auto *o = kid->kind() == Kind::Page ? propsOf<n8v_page_options>(*kid->node) : nullptr;
+    if (o && !o->action) ++index;
   }
   return index;
 }
@@ -1133,7 +1134,7 @@ void HtmlTreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   if (sidebar) {
     if (const int *bound = std::get_if<int>(&sidebar->node->bound)) selected = *bound;
   }
-  const bool isSelected = sidebar && (int)pageIndex(*const_cast<NativeNode *>(sidebar), nn) == selected;
+  const bool isSelected = sidebar && !o.action && (int)pageIndex(*const_cast<NativeNode *>(sidebar), nn) == selected;
   const ButtonStyle style = isSelected ? ButtonStyle::Primary : ButtonStyle::Secondary;
   bool collapsed = false;
   if (sidebar && sidebar->node) {
@@ -1238,7 +1239,9 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
         nn.titleText.set("textContent", title);
         setCss(
           nn.titleEl,
-          std::string("display:") + ((title.empty() && !collapsible && !(o.left_button.icon && *o.left_button.icon) && !(o.right_button.icon && *o.right_button.icon)) || collapsed ? "none" : "flex") +
+          std::string("display:") +
+            ((title.empty() && !collapsible && !(o.left_button.icon && *o.left_button.icon) && !(o.right_button.icon && *o.right_button.icon)) || collapsed ? "none"
+                                                                                                                                                            : "flex") +
             ";position:relative;align-items:center;justify-content:center;font-weight:bold;color:" + css::cssColor(tp.color) + ";font-family:" + css::cssFontFamily(tp.font) +
             ";font-size:" + css::cssNumber(tp.fontSize) + "px;padding:6px 36px 12px;flex:none;"
         );
@@ -1254,8 +1257,8 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
           const n8v_sidebar_button &b = right ? o.right_button : o.left_button;
           const bool used = b.icon && *b.icon && !(right && collapsible);
           val &el = nn.headerButtons[right];
-          std::string css = arrowCss + "position:absolute;" + (right ? "right" : "left") + ":6px;top:50%;transform:translateY(-50%);display:" +
-                            (used && !collapsed ? "block" : "none") + ";";
+          std::string css =
+            arrowCss + "position:absolute;" + (right ? "right" : "left") + ":6px;top:50%;transform:translateY(-50%);display:" + (used && !collapsed ? "block" : "none") + ";";
           if (used)
             if (const DecodedImage *icon = getOrDecodeIcon(b.icon, 16, tp.color)) css += "background-image:url(\"" + html_assets::imageDataUri(*icon) + "\");";
           setCss(el, css);

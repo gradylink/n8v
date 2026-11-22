@@ -46,7 +46,8 @@ void activateAt(PNode &node, float x, float y) {
 }
 
 void zoom(PNode &node, float factor, float x, float y) {
-  if (auto *image = optionsOf<n8v_image_options>(node); image && image->on_zoom) image->on_zoom(factor, std::clamp(x, 0.0f, 1.0f), std::clamp(y, 0.0f, 1.0f), image->on_zoom_userdata);
+  if (auto *image = optionsOf<n8v_image_options>(node); image && image->on_zoom)
+    image->on_zoom(factor, std::clamp(x, 0.0f, 1.0f), std::clamp(y, 0.0f, 1.0f), image->on_zoom_userdata);
 }
 
 void drag(PNode &node, float dx, float dy) {
@@ -96,10 +97,14 @@ void select(PNode &node, int index) {
 
 void selectPage(PNode &page) {
   if (!std::holds_alternative<n8v_page_options>(page.current.props) || !page.parent) return;
+  if (const auto *action = std::get_if<n8v_page_options>(&page.current.props); action && action->action) {
+    if (action->on_click) action->on_click(action->on_click_userdata);
+    return;
+  }
   int index = 0;
   for (const auto &sibling : page.parent->children) {
     if (sibling.get() == &page) break;
-    if (std::holds_alternative<n8v_page_options>(sibling->current.props)) ++index;
+    if (const auto *other = std::get_if<n8v_page_options>(&sibling->current.props); other && !other->action) ++index;
   }
   select(*page.parent, index);
 }
