@@ -425,6 +425,7 @@ if(N8V_SANITIZE)
 endif()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/dialogs.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/webp.cmake")
 
 set(N8V_SOURCES
   ${N8V_DIALOG_SOURCES}
@@ -434,6 +435,7 @@ set(N8V_SOURCES
   source/core/ui_core_c_api.cpp
   source/core/n8v_ffi.c
   source/core/image_loader.cpp
+  source/core/webp_decode.cpp
   source/core/icon_registry.cpp
   source/core/icon_loader.cpp
   source/core/tree/recorder.cpp
@@ -553,6 +555,10 @@ foreach(_n8v_target ${_n8v_targets})
   if(N8V_HAVE_DBUS)
     target_link_libraries(${_n8v_target} PUBLIC dbus_lazy)
   endif()
+  if(N8V_HAVE_WEBP)
+    target_link_libraries(${_n8v_target} PUBLIC webp_lazy webpdemux_lazy)
+    target_compile_definitions(${_n8v_target} PRIVATE N8V_HAVE_WEBP)
+  endif()
   if(WIN32)
     target_link_libraries(${_n8v_target} PRIVATE ole32 shell32 uuid)
   elseif(APPLE)
@@ -617,6 +623,9 @@ if(N8V_INSTALL AND NOT EMSCRIPTEN)
   set(_n8v_lazy_export_targets sdl2_lazy)
   if(N8V_HAVE_DBUS)
     list(APPEND _n8v_lazy_export_targets dbus_lazy)
+  endif()
+  if(N8V_HAVE_WEBP)
+    list(APPEND _n8v_lazy_export_targets webp_lazy webpdemux_lazy)
   endif()
   if(N8V_HAVE_GTK4)
     list(APPEND _n8v_lazy_export_targets gtk4_lazy gobject_lazy glib_lazy gio_lazy pango_lazy)

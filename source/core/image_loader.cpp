@@ -1,5 +1,7 @@
 #include "core/image_loader.hpp"
 
+#include "core/webp_decode.hpp"
+
 #define STB_IMAGE_STATIC
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_NO_STDIO
@@ -27,6 +29,14 @@ std::unordered_map<const void *, DecodedImage> encodedCache;
 std::unordered_map<const void *, DecodedImage> rgbaCache;
 
 bool decodeInto(const uint8_t *bytes, size_t size, DecodedImage &out) {
+  if (looksLikeWebp(bytes, size)) {
+    int width = 0, height = 0;
+    if (!decodeWebp(bytes, size, out.owned, width, height)) return false;
+    out.rgba = out.owned.data();
+    out.width = width;
+    out.height = height;
+    return true;
+  }
   int w = 0, h = 0, channels = 0;
   unsigned char *decoded = stbi_load_from_memory(bytes, (int)size, &w, &h, &channels, 4);
   if (!decoded) return false;
