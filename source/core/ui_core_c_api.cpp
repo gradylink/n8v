@@ -3,6 +3,7 @@
 #include "core/backend.hpp"
 #include "core/dialogs/file_dialog.hpp"
 #include "core/dialogs/message_dialog.hpp"
+#include "core/notifications/notification.hpp"
 #include "core/style.hpp"
 
 #include "core/ui_core_internal.hpp"
@@ -59,12 +60,15 @@ bool n8v_pump_events(void) {
   const bool keepOpen = n8v::activeBackend().pumpEvents();
   n8v::detail::pumpFileDialogs();
   n8v::detail::pumpMessageDialogs();
+  n8v::detail::pumpNotifications();
   return keepOpen;
 }
 
 void n8v_wake(void) { n8v::activeBackend().wake(); }
 
 void n8v_raise_window(void) { n8v::activeBackend().raiseWindow(); }
+
+bool n8v_window_focused(void) { return n8v::activeBackend().windowFocused(); }
 
 bool n8v_window_size(float *width, float *height) {
   const Clay_Dimensions size = n8v::activeBackend().windowSize();

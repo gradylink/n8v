@@ -296,6 +296,8 @@ public:
     return true;
   }
 
+  bool windowFocused() const override { return val(doc_).call<bool>("hasFocus"); }
+
   bool pumpEvents() override {
     constexpr double busyFrameMs = 1000.0 / 60.0, idleFrameMs = 250.0, sliceMs = 8.0;
     constexpr int settleFrames = 4;

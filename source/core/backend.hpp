@@ -53,6 +53,9 @@ struct Backend {
   /** Brings the window to the front, restoring it if it was minimized. Call from the UI thread. */
   virtual void raiseWindow() {}
 
+  /** Whether the window has the user's focus. Backends that cannot tell say yes: the user is assumed to be there. */
+  virtual bool windowFocused() const { return true; }
+
   /** @return Whether the primary pointer button is held this frame. */
   virtual bool pointerDown() const = 0;
 

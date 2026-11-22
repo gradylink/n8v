@@ -768,6 +768,46 @@ N8V_API void n8v_wake(void);
 /** Brings the window to the front. Call from the UI thread. */
 N8V_API void n8v_raise_window(void);
 
+/** Whether the window has the user's focus right now (true where the backend cannot tell: the user is assumed to be there). */
+N8V_API bool n8v_window_focused(void);
+
+typedef enum n8v_notification_urgency {
+  N8V_NOTIFICATION_URGENCY_LOW,
+  N8V_NOTIFICATION_URGENCY_NORMAL,
+  N8V_NOTIFICATION_URGENCY_CRITICAL,
+} n8v_notification_urgency;
+
+/** Called once when a notification is over: `clicked` is true when the user activated it, false when it was dismissed, expired,
+    replaced or closed. */
+typedef void (*n8v_notification_done_fn)(bool clicked, void *userdata);
+
+typedef struct n8v_notification_options {
+  const char *title;
+  const char *body;
+  /** A picture for it: the path of an image file (not a URL). May be NULL. */
+  const char *icon;
+  /** A notification with the same id replaces the one shown before (one per conversation, say); n8v_close_notification takes it back. May be NULL. */
+  const char *id;
+  n8v_notification_urgency urgency;
+  /** Shown without a sound, where the system lets it be. */
+  bool silent;
+  n8v_notification_done_fn on_done;
+  void *on_done_userdata;
+} n8v_notification_options;
+
+/** Whether the system can show notifications at all (Linux: a notification service on the session bus; the web: the Notification API).
+    Not on Windows and macOS yet. */
+N8V_API bool n8v_notifications_available(void);
+
+/** Names the app in the notification service. `desktop_entry` is the name of its .desktop file without the extension, which lets the
+    desktop group the notifications under the app and apply its settings. Both may be NULL. */
+N8V_API void n8v_set_notification_app(const char *name, const char *desktop_entry);
+
+/** Shows a system notification. Returns false (and does not call `on_done`) when none could be shown. Must be called from the UI thread;
+    `on_done` is called from n8v_pump_events. */
+N8V_API bool n8v_notify(n8v_notification_options options);
+N8V_API void n8v_close_notification(const char *id);
+
 /** Whether the UI currently has a dark appearance: the toolkit's theme for native backends, the active style's window color for the others. */
 N8V_API bool n8v_is_dark_theme(void);
 

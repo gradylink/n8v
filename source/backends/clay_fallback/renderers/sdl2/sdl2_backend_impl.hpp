@@ -30,6 +30,7 @@ public:
     SDL_RestoreWindow(window_);
     SDL_RaiseWindow(window_);
   }
+  bool windowFocused() const override { return window_ && (SDL_GetWindowFlags(window_) & SDL_WINDOW_INPUT_FOCUS) != 0; }
   bool showMessageDialog(const MessageDialogRequest &request, MessageDialogDone done) override;
   bool pointerDown() const override { return pointerDown_; }
   bool isEntryFocused(int ordinal) const override { return entry_.ordinal == ordinal; }

@@ -343,6 +343,7 @@ public:
   void raiseWindow() override {
     if (window_) gtk_window_present(GTK_WINDOW(window_));
   }
+  bool windowFocused() const override { return window_ && gtk_window_is_active(GTK_WINDOW(window_)); }
 
   bool prefersDark() const override {
     GdkRGBA text;

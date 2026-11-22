@@ -1259,6 +1259,46 @@ inline void wake() { n8v_wake(); }
 /** Brings the window to the front, restoring it if it was minimized. */
 inline void raiseWindow() { n8v_raise_window(); }
 
+/** Whether the window has the user's focus right now (true where the backend cannot tell: the user is assumed to be there). */
+inline bool windowFocused() { return n8v_window_focused(); }
+
+/** Whether the system can show notifications (Linux: a notification service on the session bus; the web: the Notification API). */
+inline bool notificationsAvailable() { return n8v_notifications_available(); }
+
+/** Names the app in the notification service; `desktopEntry` is its .desktop file's name without the extension. */
+inline void setNotificationApp(std::string_view name, std::string_view desktopEntry = {}) {
+  std::string nameStorage(name), entryStorage(desktopEntry);
+  n8v_set_notification_app(nameStorage.c_str(), entryStorage.empty() ? nullptr : entryStorage.c_str());
+}
+
+/** Shows a system notification; false when none could be shown. Call it from the UI thread. */
+inline bool notify(NotificationOptions options) {
+  struct Click {
+    std::function<void()> onClick;
+  };
+  n8v_notification_options c_opts{};
+  c_opts.title = options.title.c_str();
+  c_opts.body = options.body.c_str();
+  c_opts.icon = options.icon.empty() ? nullptr : options.icon.c_str();
+  c_opts.id = options.id.empty() ? nullptr : options.id.c_str();
+  c_opts.urgency = static_cast<n8v_notification_urgency>(options.urgency);
+  c_opts.silent = options.silent;
+  auto *click = new Click{std::move(options.onClick)};
+  c_opts.on_done = [](bool clicked, void *userdata) {
+    std::unique_ptr<Click> owned(static_cast<Click *>(userdata));
+    if (clicked && owned->onClick) owned->onClick();
+  };
+  c_opts.on_done_userdata = click;
+  if (n8v_notify(c_opts)) return true;
+  delete click;
+  return false;
+}
+
+inline void closeNotification(std::string_view id) {
+  std::string storage(id);
+  n8v_close_notification(storage.c_str());
+}
+
 inline void shutdown() { n8v_shutdown(); }
 
 inline void setStyleFamily(StyleFamily family) { n8v_set_style_family(detail::toC(family)); }

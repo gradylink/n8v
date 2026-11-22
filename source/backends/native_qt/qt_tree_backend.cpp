@@ -908,6 +908,8 @@ public:
     if (app_) QMetaObject::invokeMethod(app_.get(), [] {}, Qt::QueuedConnection);
   }
 
+  bool windowFocused() const override { return window_ && window_->isActiveWindow(); }
+
   void raiseWindow() override {
     if (!window_) return;
     window_->setWindowState(window_->windowState() & ~Qt::WindowMinimized);

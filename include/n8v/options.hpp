@@ -377,6 +377,22 @@ struct MessageButton {
   MessageButton(const char *label, bool destructive = false) : label(label), destructive(destructive) {}
 };
 
+enum class NotificationUrgency { Low, Normal, Critical };
+
+struct NotificationOptions {
+  std::string title;
+  std::string body;
+  /** The path of an image file to show with it (not a URL). */
+  std::string icon;
+  /** Notifications with the same id replace each other (one per conversation, say); closeNotification(id) takes it back. */
+  std::string id;
+  NotificationUrgency urgency = NotificationUrgency::Normal;
+  /** Shown without a sound, where the system lets it be. */
+  bool silent = false;
+  /** Called when the user activates the notification (not when it is dismissed or expires). */
+  std::function<void()> onClick = nullptr;
+};
+
 struct MessageDialogOptions {
   std::string title = {};
   std::string message = {};
