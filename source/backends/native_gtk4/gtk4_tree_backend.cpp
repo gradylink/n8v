@@ -2446,6 +2446,7 @@ void Gtk4TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
 #ifdef N8V_HAVE_ADWAITA
     if (wantAdw) {
       row = adw_action_row_new();
+      adw_preferences_row_set_use_markup(ADW_PREFERENCES_ROW(row), FALSE);
       nn.image = gtk_image_new();
       adw_action_row_add_prefix(ADW_ACTION_ROW(row), nn.image);
       adw_action_row_add_prefix(ADW_ACTION_ROW(row), nn.notifyBar);
