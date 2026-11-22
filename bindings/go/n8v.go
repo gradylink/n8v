@@ -209,7 +209,7 @@ func StickToBottom() Option { return func(c *config) { c.stickToBottom = true } 
 // OnHover fires on both hover enter and leave. Requires ID.
 func OnHover(fn func(bool)) Option { return func(c *config) { c.onHover = fn } }
 
-// Multiline makes an Entry a soft-wrapping text area (Password is ignored). Milsko has no multi-line widget, so there it stays single-line.
+// Multiline makes an Entry a soft-wrapping text area (Password is ignored).
 func Multiline() Option { return func(c *config) { c.multiline = true } }
 
 // SubmitOnCtrlEnter makes a multiline Entry submit on Ctrl+Enter (Cmd+Enter on macOS) and insert a newline on Enter. Without it, Enter

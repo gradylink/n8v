@@ -17,5 +17,5 @@ function(_recipe_md4c_source)
   add_library(md4c STATIC "${CL_SOURCE_DIR}/src/md4c.c")
   set_target_properties(md4c PROPERTIES POSITION_INDEPENDENT_CODE ON)
   target_include_directories(md4c PUBLIC $<BUILD_INTERFACE:${CL_SOURCE_DIR}/src>)
-  target_compile_definitions(md4c PUBLIC md_parse=n8v_vendored_md_parse) # Avoid (potential) milsko conflict
+  target_compile_definitions(md4c PUBLIC md_parse=n8v_vendored_md_parse) # Avoid (potential) conflicts
 endfunction()

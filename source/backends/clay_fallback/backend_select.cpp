@@ -19,18 +19,8 @@
 #include "qt6widgets_lazy_vars.h"
 #endif
 
-#ifdef N8V_HAS_MILSKO_BACKEND
-#include "backends/native_milsko/milsko_backend.hpp"
-#include "milsko_lazy_vars.h"
-#endif
-
 #ifdef N8V_HAS_FTXUI_BACKEND
 #include "backends/native_ftxui/ftxui_tree_backend.hpp"
-#endif
-
-#ifdef N8V_HAS_FLTK_BACKEND
-#include "backends/native_fltk/fltk_backend.hpp"
-#include "fltk_lazy_vars.h"
 #endif
 
 #include <cstdio>
@@ -69,16 +59,6 @@ std::unique_ptr<Backend> selectBackend() {
 #ifdef N8V_HAS_QT_BACKEND
   if ((!preferredBackend || std::strcmp(preferredBackend, "qt") == 0 || std::strcmp(preferredBackend, "qt6") == 0) && lzy_qt6widgets_lazy_is_available()) {
     return detail::makeQtTreeBackend();
-  }
-#endif
-#ifdef N8V_HAS_MILSKO_BACKEND
-  if ((!preferredBackend || std::strcmp(preferredBackend, "milsko") == 0 || std::strcmp(preferredBackend, "mw") == 0) && lzy_milsko_lazy_is_available()) {
-    return detail::makeMilskoBackend();
-  }
-#endif
-#ifdef N8V_HAS_FLTK_BACKEND
-  if ((!preferredBackend || std::strcmp(preferredBackend, "fltk") == 0) && lzy_fltk_lazy_is_available()) {
-    return detail::makeFltkBackend();
   }
 #endif
 #ifdef N8V_HAS_FTXUI_BACKEND
