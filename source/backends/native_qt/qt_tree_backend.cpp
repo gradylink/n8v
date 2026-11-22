@@ -720,6 +720,8 @@ struct NativeNode {
   N8VSidebarDelegate *sidebarDelegate = nullptr;
   QWidget *titleRow = nullptr;
   QWidget *titleSpacer = nullptr;
+  QWidget *rightSpacer = nullptr;
+  N8VCollapseButton *headerButtons[2] = {nullptr, nullptr}; // left, right
   QListWidget *list = nullptr;
   QWidget *contentArea = nullptr;
   QBoxLayout *contentLayout = nullptr;
@@ -1154,7 +1156,8 @@ private:
       if (!nn.outer) continue;
       if (!escape) {
         auto inside = [&](QWidget *w) { return w && under && (under == w || w->isAncestorOf(under)); };
-        QWidget *host = nn.parentNode ? (nn.parentNode->outer ? nn.parentNode->outer : nn.parentNode->content) : nullptr;
+        const bool atTop = !nn.parentNode || nn.parentNode->kind() == Kind::Root;
+        QWidget *host = atTop ? nullptr : (nn.parentNode->outer ? nn.parentNode->outer : nn.parentNode->content);
         if (inside(nn.outer) || inside(host)) continue;
       }
       dismissed.push_back(pn);
@@ -1682,6 +1685,12 @@ void QtTreeBackend::updateFloating() {
     if (o->keep_on_screen && window_->isVisible()) nn.outer->setVisible(hostWidget->isVisible());
     nn.outer->raise();
   }
+  for (PNode *pn : live_) {
+    const auto *o = propsOf<n8v_floating_options>(*pn);
+    if (!o || o->scrim) continue;
+    NativeNode &nn = *native(*pn);
+    if (nn.floating && nn.outer && o->keep_on_screen) nn.outer->raise();
+  }
 }
 
 void QtTreeBackend::applyStickyBottom() {
@@ -1995,9 +2004,27 @@ void QtTreeBackend::build(NativeNode &nn) {
     titleLayout->setSpacing(0);
     nn.titleSpacer = new QWidget(); // as wide as the button, so the title stays centred
     nn.titleSpacer->setFixedWidth(28);
+    nn.rightSpacer = new QWidget();
+    nn.rightSpacer->setFixedWidth(28);
+    nn.rightSpacer->setVisible(false);
+    for (int right = 0; right < 2; ++right) {
+      nn.headerButtons[right] = new N8VCollapseButton();
+      nn.headerButtons[right]->setFlat(true);
+      nn.headerButtons[right]->setFixedSize(28, 28);
+      nn.headerButtons[right]->setVisible(false);
+      nn.headerButtons[right]->onClick = [node = &pn, right] {
+        const auto *o = propsOf<n8v_sidebar_options>(*node);
+        if (!o) return;
+        const n8v_sidebar_button &b = right ? o->right_button : o->left_button;
+        if (b.on_click) b.on_click(b.on_click_userdata);
+      };
+    }
+    titleLayout->addWidget(nn.headerButtons[0], 0, Qt::AlignVCenter);
     titleLayout->addWidget(nn.titleSpacer);
     titleLayout->addWidget(nn.titleLabel, 1);
     titleLayout->addWidget(nn.collapseButton, 0, Qt::AlignVCenter);
+    titleLayout->addWidget(nn.headerButtons[1], 0, Qt::AlignVCenter);
+    titleLayout->addWidget(nn.rightSpacer);
     nn.sidebarDelegate = new N8VSidebarDelegate(nn.list);
     nn.list->setItemDelegate(nn.sidebarDelegate);
     panelLayout->addWidget(nn.titleRow);
@@ -2146,7 +2173,19 @@ void QtTreeBackend::applySidebar(NativeNode &nn, const n8v_sidebar_options &o) {
   nn.titleLabel->setText(qstr(title));
   nn.titleLabel->setVisible(!title.empty() && !collapsed);
   nn.titleRow->setVisible(!collapsed);
-  nn.titleSpacer->setVisible(o.collapsed != nullptr);
+  const bool hasLeft = o.left_button.icon && *o.left_button.icon;
+  const bool hasRight = !o.collapsed && o.right_button.icon && *o.right_button.icon;
+  const bool anySlot = o.collapsed != nullptr || hasLeft || hasRight;
+  nn.titleSpacer->setVisible(anySlot && !hasLeft);
+  nn.rightSpacer->setVisible(anySlot && !o.collapsed && !hasRight);
+  for (int right = 0; right < 2; ++right) {
+    const n8v_sidebar_button &b = right ? o.right_button : o.left_button;
+    const bool used = right ? hasRight : hasLeft;
+    nn.headerButtons[right]->setVisible(used);
+    if (!used) continue;
+    nn.headerButtons[right]->setIcon(iconFor(b.icon, kDefaultIconSize, nn.headerButtons[right], n8v::Color{0, 0, 0, 0}));
+    nn.headerButtons[right]->setToolTip(b.tooltip ? qstr(b.tooltip) : QString());
+  }
   nn.collapseButton->setVisible(o.collapsed != nullptr && !collapsed);
   nn.collapseButtonBottom->setVisible(o.collapsed != nullptr && collapsed);
   nn.collapseButton->setIcon(iconFor("chevron-left", kDefaultIconSize, nn.collapseButton, n8v::Color{0, 0, 0, 0}));
@@ -2240,6 +2279,10 @@ void QtTreeBackend::apply(NativeNode &nn) {
       [&](const n8v_panel_options &o) { applyPanel(nn, o); },
       [&](const n8v_floating_options &o) {
         if (nn.outer) nn.outer->setAutoFillBackground(o.opaque);
+        if (nn.outer && o.scrim) {
+          nn.outer->setAttribute(Qt::WA_StyledBackground, true);
+          nn.outer->setStyleSheet("background-color: rgba(0, 0, 0, 115);");
+        }
       },
       [&](const n8v_sidebar_options &o) { applySidebar(nn, o); },
       [&](const n8v_page_options &o) { applyPage(nn, o); },

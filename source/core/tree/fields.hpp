@@ -53,6 +53,7 @@ template <typename V> void visitFields(n8v_floating_options &o, V &v) {
   v.ptr(o.on_dismiss_userdata);
   v.num(o.keep_on_screen);
   v.num(o.screen_margin);
+  v.num(o.scrim);
 }
 
 template <typename V> void visitFields(n8v_sidebar_options &o, V &v) {
@@ -67,6 +68,14 @@ template <typename V> void visitFields(n8v_sidebar_options &o, V &v) {
   v.ptr(o.collapsed);
   v.ptr(o.on_collapse);
   v.ptr(o.on_collapse_userdata);
+  v.str(o.left_button.icon);
+  v.str(o.left_button.tooltip);
+  v.ptr(o.left_button.on_click);
+  v.ptr(o.left_button.on_click_userdata);
+  v.str(o.right_button.icon);
+  v.str(o.right_button.tooltip);
+  v.ptr(o.right_button.on_click);
+  v.ptr(o.right_button.on_click_userdata);
 }
 
 template <typename V> void visitFields(n8v_page_options &o, V &v) {

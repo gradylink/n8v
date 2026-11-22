@@ -220,6 +220,15 @@ struct DividerOptions {
   std::string_view id = {};
 };
 
+/** A small icon button in a sidebar's header, beside the title. */
+struct SidebarButton {
+  /** The icon's name, as for ButtonOptions. */
+  std::string icon;
+  /** Shown on hover. */
+  std::string tooltip;
+  std::function<void()> onClick = nullptr;
+};
+
 struct SidebarOptions {
   std::string_view title = {};
   int *selected = nullptr;
@@ -238,6 +247,13 @@ struct SidebarOptions {
    */
   bool *collapsed = nullptr;
   std::function<void(bool)> onCollapse = nullptr;
+  /**
+   * Buttons in the header, one slot on each side of the title (neither shows while the sidebar is collapsed). The collapse arrow
+   * of `collapsed` takes the right slot, so setting `rightButton` together with `collapsed` is an error: it is reported on stderr
+   * and the button is not shown. (n8v has no exceptions to throw: this is called from inside toolkit callbacks.)
+   */
+  std::optional<SidebarButton> leftButton = std::nullopt;
+  std::optional<SidebarButton> rightButton = std::nullopt;
 };
 
 /** What badges called their named colors; they are the same as any other theme color now. */
@@ -291,6 +307,19 @@ struct FloatingOptions {
   std::function<void()> onDismiss = nullptr;
   bool keepOnScreen = false;
   float screenMargin = 0.0f;
+  std::string_view id = {};
+};
+
+/**
+ * A titled card centred over the window, above a dimmed backdrop that blocks the rest of the UI until it is closed. It is a layer in
+ * the same window (not a window of its own), so it works on every backend. Draw it only while it should be open.
+ */
+struct ModalOptions {
+  std::string_view title = {};
+  Sizing width = Sizing::fixed(480.0f);
+  Sizing height = Sizing::fit();
+  /** Fired by Escape, a click on the dimmed area and the close button: stop drawing the modal in answer. */
+  std::function<void()> onClose = nullptr;
   std::string_view id = {};
 };
 

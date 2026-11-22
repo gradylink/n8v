@@ -65,6 +65,18 @@ struct CollapseState {
 
 std::unordered_map<int, CollapseState> collapseStates;
 
+struct HeaderButtonState {
+  n8v_click_fn onClick = nullptr;
+  void *userdata = nullptr;
+};
+
+std::unordered_map<int, HeaderButtonState> headerButtonStates;
+
+void dispatchHeaderButton(void *userdata) {
+  auto *state = static_cast<HeaderButtonState *>(userdata);
+  if (state && state->onClick) state->onClick(state->userdata);
+}
+
 void dispatchCollapse(void *userdata) {
   auto *state = static_cast<CollapseState *>(userdata);
   if (!state || !state->collapsed) return;
@@ -105,8 +117,7 @@ void dispatchRowHover(Clay_ElementId /*elementId*/, Clay_PointerData pointerData
   if (meta && meta->onClick) meta->onClick(meta->onClickUserdata);
 }
 
-/** The arrow button that folds and unfolds a sidebar: a small hoverable square with a chevron. */
-void emitCollapseButton(const SidebarContext &ctx, int key, bool pointsRight) {
+void emitHeaderButton(const char *iconName, int key, void (*onClick)(void *), void *userdata) {
   const n8v::ButtonPaint paint = n8v::activePaint().button(n8v::ButtonStyle::Ghost, false, false);
   Clay__OpenElement();
   const bool hovered = Clay_Hovered();
@@ -124,14 +135,14 @@ void emitCollapseButton(const SidebarContext &ctx, int key, bool pointsRight) {
   n8v::detail::NativeWidgetMeta &meta = widgetMetaStorage.back();
   meta.kind = n8v::NativeWidgetKind::Button;
   meta.ordinal = key;
-  meta.onClick = &dispatchCollapse;
-  meta.onClickUserdata = &collapseStates[ctx.ordinal];
+  meta.onClick = onClick;
+  meta.onClickUserdata = userdata;
   decl.userData = &meta;
   Clay__ConfigureOpenElement(decl);
   Clay_OnHover(dispatchRowHover, &meta);
 
   const int iconSize = (int)(paint.fontSize + 2);
-  const n8v::detail::DecodedImage *chevron = n8v::detail::getOrDecodeIcon(pointsRight ? "chevron-right" : "chevron-left", (uint16_t)iconSize, paint.textColor);
+  const n8v::detail::DecodedImage *chevron = n8v::detail::getOrDecodeIcon(iconName, (uint16_t)iconSize, paint.textColor);
   if (chevron) {
     Clay__OpenElement();
     Clay_ElementDeclaration iconDecl = {};
@@ -143,13 +154,31 @@ void emitCollapseButton(const SidebarContext &ctx, int key, bool pointsRight) {
     iconMeta.kind = n8v::NativeWidgetKind::Icon;
     iconMeta.ordinal = key + 1;
     iconMeta.image = chevron;
-    iconMeta.iconName = pointsRight ? "chevron-right" : "chevron-left";
+    iconMeta.iconName = iconName;
     iconMeta.iconTint = paint.textColor;
     iconDecl.userData = &iconMeta;
     Clay__ConfigureOpenElement(iconDecl);
     Clay__CloseElement();
   }
   Clay__CloseElement();
+}
+
+void emitCollapseButton(const SidebarContext &ctx, int key, bool pointsRight) {
+  emitHeaderButton(pointsRight ? "chevron-right" : "chevron-left", key, &dispatchCollapse, &collapseStates[ctx.ordinal]);
+}
+
+void emitHeaderSlot(const n8v_sidebar_button &button, int ordinal, bool right) {
+  if (!button.icon || !*button.icon) {
+    Clay__OpenElement();
+    Clay_ElementDeclaration spacer = {};
+    spacer.layout.sizing.width = CLAY_SIZING_FIXED(kCollapseButtonSize);
+    Clay__ConfigureOpenElement(spacer);
+    Clay__CloseElement();
+    return;
+  }
+  const int slot = ordinal * 2 + (right ? 1 : 0);
+  headerButtonStates[slot] = HeaderButtonState{button.on_click, button.on_click_userdata};
+  emitHeaderButton(button.icon, ordinal + (right ? 5003 : 5005), &dispatchHeaderButton, &headerButtonStates[slot]);
 }
 
 } // namespace
@@ -159,6 +188,8 @@ namespace n8v::detail::ui_internal {
 void releaseSidebarState(int ordinal) {
   pageClickStates.erase(ordinal);
   collapseStates.erase(ordinal);
+  headerButtonStates.erase(ordinal * 2);
+  headerButtonStates.erase(ordinal * 2 + 1);
 }
 
 void resetSidebarFrameState() { sidebarStack.clear(); }
@@ -241,21 +272,18 @@ void openSidebar(const n8v_sidebar_options &opts, int ordinal) {
   SidebarContext context{opts.selected, n8v::detail::toStdFunction(opts.on_change, opts.on_change_userdata), 0, ordinal, opts.compact, contentWidth, collapsible, collapsed};
 
   std::string_view titleView = toView(opts.title);
-  if (!collapsed && (!titleView.empty() || collapsible)) {
+  const bool hasLeft = opts.left_button.icon && *opts.left_button.icon;
+  const bool hasRight = !collapsible && opts.right_button.icon && *opts.right_button.icon;
+  const bool slots = collapsible || hasLeft || hasRight;
+  if (!collapsed && (!titleView.empty() || slots)) {
     Clay__OpenElement();
     Clay_ElementDeclaration headerDecl = {};
     headerDecl.layout.layoutDirection = CLAY_LEFT_TO_RIGHT;
     headerDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
     headerDecl.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
-    headerDecl.layout.padding = {0, 0, 0, 8}; // a little air between the title and the first row
+    headerDecl.layout.padding = {0, 0, 0, 8};
     Clay__ConfigureOpenElement(headerDecl);
-    if (collapsible) {
-      Clay__OpenElement();
-      Clay_ElementDeclaration spacer = {};
-      spacer.layout.sizing.width = CLAY_SIZING_FIXED(kCollapseButtonSize);
-      Clay__ConfigureOpenElement(spacer);
-      Clay__CloseElement();
-    }
+    if (slots) emitHeaderSlot(opts.left_button, ordinal, false);
     Clay__OpenElement();
     Clay_ElementDeclaration titleDecl = {};
     titleDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
@@ -268,6 +296,7 @@ void openSidebar(const n8v_sidebar_options &opts, int ordinal) {
     }
     Clay__CloseElement();
     if (collapsible) emitCollapseButton(context, ordinal + 5001, false);
+    else if (slots) emitHeaderSlot(opts.right_button, ordinal, true);
     Clay__CloseElement();
   }
 
@@ -375,7 +404,9 @@ bool openPage(const n8v_page_options &opts, int rowOrdinal) {
   }
 
   const bool collapsed = ctx.collapsed;
-  const float iconSlotSize = collapsed ? (hasImage ? kCollapsedIconSize : kCollapsedGlyphSize) : hasImage ? (opts.image_size > 0.0f ? opts.image_size : (float)paint.fontSize * 2.0f) : (float)paint.fontSize;
+  const float iconSlotSize = collapsed  ? (hasImage ? kCollapsedIconSize : kCollapsedGlyphSize)
+                             : hasImage ? (opts.image_size > 0.0f ? opts.image_size : (float)paint.fontSize * 2.0f)
+                                        : (float)paint.fontSize;
 
   std::string imagePathStorage(imageView);
   const n8v::detail::DecodedImage *rowImage = nullptr;

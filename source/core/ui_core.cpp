@@ -411,6 +411,7 @@ void openFloating(const n8v_floating_options &options) {
   decl.floating.attachPoints.parent = n8v::detail::toClay(toAttachPoint(options.parent_attach_point));
   decl.floating.offset = {options.offset_x + nudgeX, options.offset_y + nudgeY};
   if (options.opaque) decl.backgroundColor = n8v::detail::toClay(n8v::activePaint().windowBackground());
+  if (options.scrim) decl.backgroundColor = {0, 0, 0, 115};
 
   Clay__ConfigureOpenElement(decl);
 }

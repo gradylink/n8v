@@ -187,6 +187,8 @@ struct NativeNode {
   GtkWidget *titleLabel = nullptr;
   GtkWidget *collapseButton = nullptr;
   GtkWidget *collapseButtonBottom = nullptr;
+  GtkWidget *headerButtons[2] = {nullptr, nullptr}; // left, right
+  GtkWidget *headerImages[2] = {nullptr, nullptr};
   bool collapsedRow = false;
   GtkWidget *titleRow = nullptr;
   GtkWidget *contentArea = nullptr;
@@ -682,6 +684,16 @@ private:
   static gboolean onCloseRequest(GtkWindow *, gpointer userData) {
     static_cast<Gtk4TreeBackend *>(userData)->closeRequested_ = true;
     return TRUE;
+  }
+
+  static void onHeaderButtonClicked(GtkButton *button, gpointer userData) {
+    PNode *node = liveNode(userData);
+    if (!node) return;
+    const auto *o = propsOf<n8v_sidebar_options>(*node);
+    if (!o) return;
+    const bool right = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(button), "n8v-header-right")) != 0;
+    const n8v_sidebar_button &b = right ? o->right_button : o->left_button;
+    if (b.on_click) b.on_click(b.on_click_userdata);
   }
 
   static void onCollapseClicked(GtkButton *, gpointer userData) {
@@ -2170,6 +2182,21 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
     gtk_widget_set_halign(nn.collapseButton, GTK_ALIGN_END);
     gtk_overlay_add_overlay(GTK_OVERLAY(nn.titleRow), nn.collapseButton);
 
+    for (int right = 0; right < 2; ++right) {
+      nn.headerImages[right] = gtk_image_new();
+      nn.headerButtons[right] = gtk_button_new();
+      gtk_button_set_child(GTK_BUTTON(nn.headerButtons[right]), nn.headerImages[right]);
+      gtk_widget_add_css_class(nn.headerButtons[right], "flat");
+      gtk_widget_set_valign(nn.headerButtons[right], GTK_ALIGN_CENTER);
+      gtk_widget_set_halign(nn.headerButtons[right], right ? GTK_ALIGN_END : GTK_ALIGN_START);
+      gtk_widget_set_margin_start(nn.headerButtons[right], 6);
+      gtk_widget_set_margin_end(nn.headerButtons[right], 6);
+      gtk_widget_set_visible(nn.headerButtons[right], FALSE);
+      g_object_set_data(G_OBJECT(nn.headerButtons[right]), "n8v-header-right", GINT_TO_POINTER(right));
+      connect(nn.headerButtons[right], "clicked", &Gtk4TreeBackend::onHeaderButtonClicked, pn);
+      gtk_overlay_add_overlay(GTK_OVERLAY(nn.titleRow), nn.headerButtons[right]);
+    }
+
     nn.listBox = gtk_list_box_new();
     gtk_widget_add_css_class(nn.listBox, "navigation-sidebar");
     gtk_list_box_set_selection_mode(GTK_LIST_BOX(nn.listBox), GTK_SELECTION_SINGLE);
@@ -2396,6 +2423,14 @@ void Gtk4TreeBackend::applySidebar(NativeNode &nn, const n8v_sidebar_options &o)
   gtk_widget_set_visible(nn.collapseButton, o.collapsed != nullptr && !collapsed);
   gtk_widget_set_visible(nn.collapseButtonBottom, o.collapsed != nullptr && collapsed);
   gtk_widget_set_tooltip_text(nn.collapseButton, "Collapse");
+  for (int right = 0; right < 2; ++right) {
+    const n8v_sidebar_button &b = right ? o.right_button : o.left_button;
+    const bool used = b.icon && *b.icon && !(right && o.collapsed);
+    gtk_widget_set_visible(nn.headerButtons[right], used && !collapsed);
+    if (!used) continue;
+    setIconImage(nn, nn.headerImages[right], b.icon, 16);
+    gtk_widget_set_tooltip_text(nn.headerButtons[right], b.tooltip && *b.tooltip ? b.tooltip : nullptr);
+  }
   gtk_widget_set_margin_top(nn.titleRow, title.empty() ? 6 : 0);
   const float width = collapsed ? kCollapsedSidebarWidth : o.width.mode == N8V_SIZING_FIXED ? o.width.value : 0.0f;
   for (NativeNode *kid : nn.kids)
@@ -2647,6 +2682,16 @@ void Gtk4TreeBackend::apply(NativeNode &nn) {
         }
         if (o.opaque) gtk_widget_add_css_class(nn.outer, "n8v-opaque");
         else gtk_widget_remove_css_class(nn.outer, "n8v-opaque");
+        static bool scrimMade = false;
+        if (o.scrim && !scrimMade) {
+          scrimMade = true;
+          GtkCssProvider *provider = gtk_css_provider_new();
+          gtk_css_provider_load_from_string(provider, ".n8v-scrim { background-color: rgba(0, 0, 0, 0.45); }");
+          gtk_style_context_add_provider_for_display(gtk_widget_get_display(nn.outer), GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+          g_object_unref(provider);
+        }
+        if (o.scrim) gtk_widget_add_css_class(nn.outer, "n8v-scrim");
+        else gtk_widget_remove_css_class(nn.outer, "n8v-scrim");
       },
       [&](const n8v_sidebar_options &o) { applySidebar(nn, o); },
       [&](const n8v_page_options &o) { applyPage(nn, o); },

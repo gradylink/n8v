@@ -17,6 +17,7 @@ using n8v::detail::tree::Node;
 std::deque<Node> nodes;
 Node root;
 std::vector<Node *> openStack;
+std::vector<std::vector<Node *>> hoistedStacks;
 std::deque<std::vector<const char *>> itemArrays;
 
 struct SidebarFrame {
@@ -64,6 +65,7 @@ void beginRecording() {
   openStack.clear();
   itemArrays.clear();
   sidebarFrames.clear();
+  hoistedStacks.clear();
 }
 
 const Node &recordedRoot() { return root; }
@@ -121,6 +123,72 @@ void n8v_open_popover(n8v_popover_options options) {
 }
 void n8v_close_popover(void) { n8v_close_floating(); }
 
+void n8v_open_modal(n8v_modal_options options) {
+  hoistedStacks.push_back(std::move(openStack));
+  openStack.clear();
+
+  n8v_floating_options backdrop{};
+  backdrop.width = n8v_sizing_grow(0, 0);
+  backdrop.height = n8v_sizing_grow(0, 0);
+  backdrop.element_attach_point = N8V_ATTACH_POINT_LEFT_TOP;
+  backdrop.parent_attach_point = N8V_ATTACH_POINT_LEFT_TOP;
+  backdrop.keep_on_screen = true;
+  backdrop.scrim = true;
+  n8v_open_floating(backdrop);
+  n8v_close_floating();
+
+  n8v_floating_options card{};
+  card.width = options.width;
+  card.height = options.height;
+  card.element_attach_point = N8V_ATTACH_POINT_CENTER_CENTER;
+  card.parent_attach_point = N8V_ATTACH_POINT_CENTER_CENTER;
+  card.opaque = true;
+  card.keep_on_screen = true;
+  card.screen_margin = 24.0f;
+  card.on_dismiss = options.on_close;
+  card.on_dismiss_userdata = options.on_close_userdata;
+  card.id = options.id;
+  n8v_open_floating(card);
+
+  n8v_panel_options body{};
+  body.role = N8V_PANEL_ROLE_CARD;
+  body.direction = N8V_DIRECTION_VERTICAL;
+  body.gap = 12;
+  body.width = n8v_sizing_grow(0, 0);
+  n8v_open_panel(body);
+
+  n8v_flex_options header{};
+  header.direction = N8V_DIRECTION_HORIZONTAL;
+  header.gap = 8;
+  header.v_align = N8V_ALIGN_CENTER;
+  header.width = n8v_sizing_grow(0, 0);
+  n8v_open_flex(header);
+  n8v_text_options title{};
+  title.bold = true;
+  _n8v_set_text_opts(title);
+  _n8v_text_commit(options.title ? options.title : "");
+  n8v_flex_options spacer{};
+  spacer.width = n8v_sizing_grow(0, 0);
+  n8v_open_flex(spacer);
+  n8v_close_flex();
+  n8v_button_options close{};
+  close.style = N8V_BUTTON_STYLE_GHOST;
+  close.icon = "close";
+  close.on_click = options.on_close;
+  close.on_click_userdata = options.on_close_userdata;
+  _n8v_set_button_opts(close);
+  _n8v_button_commit("");
+  n8v_close_flex();
+}
+
+void n8v_close_modal(void) {
+  n8v_close_panel();
+  n8v_close_floating();
+  if (hoistedStacks.empty()) return;
+  openStack = std::move(hoistedStacks.back());
+  hoistedStacks.pop_back();
+}
+
 void n8v_open_panel(n8v_panel_options options) {
   options.id = own(options.id);
   appendContainer(options);
@@ -129,6 +197,18 @@ void n8v_close_panel(void) { closeContainer(); }
 
 void n8v_open_sidebar(n8v_sidebar_options options) {
   options.title = own(options.title);
+  if (options.collapsed && options.right_button.icon && *options.right_button.icon) {
+    std::fprintf(
+      stderr,
+      "[n8v] error: sidebar(\"%s\") has both `collapsed` and a right header button: the collapse arrow takes the right slot, so the button is not shown\n",
+      options.title ? options.title : ""
+    );
+    options.right_button = n8v_sidebar_button{};
+  }
+  options.left_button.icon = own(options.left_button.icon);
+  options.left_button.tooltip = own(options.left_button.tooltip);
+  options.right_button.icon = own(options.right_button.icon);
+  options.right_button.tooltip = own(options.right_button.tooltip);
   appendContainer(options);
   sidebarFrames.push_back(SidebarFrame{options.selected, 0});
 }

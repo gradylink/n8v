@@ -124,6 +124,7 @@ struct NativeNode {
   val titleText = val::undefined();
   val collapseTop = val::undefined();
   val collapseBottom = val::undefined();
+  val headerButtons[2] = {val::undefined(), val::undefined()}; // left, right
   val contentArea = val::undefined();
 
   bool floating = false;
@@ -536,6 +537,11 @@ public:
     case Kind::Sidebar:
       if (type == "click") {
         const auto *o = propsOf<n8v_sidebar_options>(node);
+        if (o && (value == "left" || value == "right")) {
+          const n8v_sidebar_button &b = value == "right" ? o->right_button : o->left_button;
+          if (b.on_click) b.on_click(b.on_click_userdata);
+          break;
+        }
         if (!o || !o->collapsed) break;
         *o->collapsed = !*o->collapsed;
         if (o->on_collapse) o->on_collapse(*o->collapsed, o->on_collapse_userdata);
@@ -709,6 +715,7 @@ std::string HtmlTreeBackend::containerCss(NativeNode &nn) {
       },
       [&](const n8v_floating_options &o) {
         out += "display:flex;flex-direction:column;align-items:flex-start;";
+        if (o.scrim) out += "background:rgba(0,0,0,.45);";
         if (o.opaque) {
           out += "background:" + css::cssColor(activePaint().windowBackground()) +
                  ";border-radius:" + css::cssRadius(activePaint().panel(PanelRole::Card, false, false).cornerRadius) + ";";
@@ -1045,6 +1052,10 @@ void HtmlTreeBackend::build(NativeNode &nn) {
     nn.collapseBottom = createEl("button");
     nn.titleEl.call<void>("appendChild", nn.titleText);
     nn.titleEl.call<void>("appendChild", nn.collapseTop);
+    nn.headerButtons[0] = createEl("button");
+    nn.headerButtons[1] = createEl("button");
+    nn.titleEl.call<void>("appendChild", nn.headerButtons[0]);
+    nn.titleEl.call<void>("appendChild", nn.headerButtons[1]);
     nn.contentArea = createEl("div");
     nn.listEl.call<void>("appendChild", nn.titleEl);
     nn.listEl.call<void>("appendChild", nn.collapseBottom);
@@ -1225,7 +1236,7 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
         nn.titleText.set("textContent", title);
         setCss(
           nn.titleEl,
-          std::string("display:") + ((title.empty() && !collapsible) || collapsed ? "none" : "flex") +
+          std::string("display:") + ((title.empty() && !collapsible && !(o.left_button.icon && *o.left_button.icon) && !(o.right_button.icon && *o.right_button.icon)) || collapsed ? "none" : "flex") +
             ";position:relative;align-items:center;justify-content:center;font-weight:bold;color:" + css::cssColor(tp.color) + ";font-family:" + css::cssFontFamily(tp.font) +
             ";font-size:" + css::cssNumber(tp.fontSize) + "px;padding:6px 36px 12px;flex:none;"
         );
@@ -1237,6 +1248,20 @@ void HtmlTreeBackend::apply(NativeNode &nn) {
             "position:absolute;right:6px;top:50%;transform:translateY(-50%);display:" + (collapsible && !collapsed ? "block" : "none") + ";"
         );
         setCss(nn.collapseBottom, arrowCss + css::chevronCss(tp.color, true) + "align-self:center;margin-top:6px;display:" + (collapsed ? "block" : "none") + ";");
+        for (int right = 0; right < 2; ++right) {
+          const n8v_sidebar_button &b = right ? o.right_button : o.left_button;
+          const bool used = b.icon && *b.icon && !(right && collapsible);
+          val &el = nn.headerButtons[right];
+          std::string css = arrowCss + "position:absolute;" + (right ? "right" : "left") + ":6px;top:50%;transform:translateY(-50%);display:" +
+                            (used && !collapsed ? "block" : "none") + ";";
+          if (used)
+            if (const DecodedImage *icon = getOrDecodeIcon(b.icon, 16, tp.color)) css += "background-image:url(\"" + html_assets::imageDataUri(*icon) + "\");";
+          setCss(el, css);
+          if (b.tooltip && *b.tooltip) setAttr(el, "title", b.tooltip);
+          else el.call<void>("removeAttribute", std::string("title"));
+          setAttr(el, "data-n8v-slot", right ? "right" : "left");
+          bindEvents(nn, el, true);
+        }
         setAttr(nn.collapseTop, "title", "Collapse");
         setAttr(nn.collapseBottom, "title", "Expand");
         bindEvents(nn, nn.collapseTop, true);

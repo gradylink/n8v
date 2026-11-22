@@ -641,6 +641,21 @@ inline void openSidebar(const SidebarOptions &options) {
   c_opts.compact = options.compact;
   c_opts.collapsed = options.collapsed;
   if (options.onCollapse) callback_bridge::bridge(callback_bridge::boolChangeClosures, options.onCollapse, c_opts.on_collapse, c_opts.on_collapse_userdata);
+  std::string leftIcon, leftTip, rightIcon, rightTip;
+  if (options.leftButton) {
+    leftIcon = options.leftButton->icon;
+    leftTip = options.leftButton->tooltip;
+    c_opts.left_button.icon = leftIcon.c_str();
+    c_opts.left_button.tooltip = leftTip.c_str();
+    if (options.leftButton->onClick) callback_bridge::bridge(callback_bridge::clickClosures, options.leftButton->onClick, c_opts.left_button.on_click, c_opts.left_button.on_click_userdata);
+  }
+  if (options.rightButton) {
+    rightIcon = options.rightButton->icon;
+    rightTip = options.rightButton->tooltip;
+    c_opts.right_button.icon = rightIcon.c_str();
+    c_opts.right_button.tooltip = rightTip.c_str();
+    if (options.rightButton->onClick) callback_bridge::bridge(callback_bridge::clickClosures, options.rightButton->onClick, c_opts.right_button.on_click, c_opts.right_button.on_click_userdata);
+  }
   n8v_open_sidebar(c_opts);
 }
 
@@ -1007,6 +1022,18 @@ inline void openPopover(PopoverOptions options) {
   n8v_open_popover(c_opts);
 }
 
+inline void openModal(ModalOptions options) {
+  std::string titleStorage(options.title), idStorage(options.id);
+  n8v_modal_options c_opts{};
+  c_opts.title = titleStorage.c_str();
+  c_opts.width = toC(options.width);
+  c_opts.height = toC(options.height);
+  c_opts.id = idStorage.empty() ? nullptr : idStorage.c_str();
+  if (options.onClose) callback_bridge::bridge(callback_bridge::clickClosures, std::move(options.onClose), c_opts.on_close, c_opts.on_close_userdata);
+  n8v_open_modal(c_opts);
+}
+
+inline void closeModal() { n8v_close_modal(); }
 inline void closeFloating() { n8v_close_floating(); }
 inline void closePopover() { n8v_close_popover(); }
 
@@ -1295,6 +1322,7 @@ inline void setCustomPaint(Paint &paint) {
 #define panel(...) for (uint8_t n8v_panelLatch = (n8v::detail::openPanel(__VA_ARGS__), 0); n8v_panelLatch < 1; n8v_panelLatch = 1, n8v::detail::closePanel())
 
 #define popover(...) for (uint8_t n8v_popoverLatch = (n8v::detail::openPopover(__VA_ARGS__), 0); n8v_popoverLatch < 1; n8v_popoverLatch = 1, n8v::detail::closePopover())
+#define modal(...) for (uint8_t n8v_modalLatch = (n8v::detail::openModal(__VA_ARGS__), 0); n8v_modalLatch < 1; n8v_modalLatch = 1, n8v::detail::closeModal())
 #define floating(...) for (uint8_t n8v_floatingLatch = (n8v::detail::openFloating(__VA_ARGS__), 0); n8v_floatingLatch < 1; n8v_floatingLatch = 1, n8v::detail::closeFloating())
 
 #define sidebar(...) for (uint8_t n8v_sidebarLatch = (n8v::detail::openSidebar(__VA_ARGS__), 0); n8v_sidebarLatch < 1; n8v_sidebarLatch = 1, n8v::detail::closeSidebar())

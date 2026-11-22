@@ -416,6 +416,15 @@ typedef struct n8v_icon_options {
   n8v_color tint;
 } n8v_icon_options;
 
+/** A small icon button in a sidebar's header, beside the title. An empty `icon` means the slot is unused. */
+typedef struct n8v_sidebar_button {
+  const char *icon;
+  /** Shown on hover; may be NULL. */
+  const char *tooltip;
+  n8v_click_fn on_click;
+  void *on_click_userdata;
+} n8v_sidebar_button;
+
 typedef struct n8v_sidebar_options {
   const char *title;
   int *selected;
@@ -431,6 +440,10 @@ typedef struct n8v_sidebar_options {
   bool *collapsed;
   n8v_bool_change_fn on_collapse;
   void *on_collapse_userdata;
+  /** The header has a slot on each side of the title. The collapse arrow takes the right one, so `right_button` together with
+      `collapsed` is an error (reported on stderr; the button is dropped). Neither shows while the sidebar is collapsed. */
+  n8v_sidebar_button left_button;
+  n8v_sidebar_button right_button;
 } n8v_sidebar_options;
 
 typedef struct n8v_link_style {
@@ -482,6 +495,9 @@ typedef struct n8v_floating_options {
   void *on_dismiss_userdata;
   bool keep_on_screen;
   float screen_margin;
+  /** Paints the floating element in a translucent dark and keeps pointer input from reaching what is below it (a modal's backdrop).
+      Meant for n8v_open_modal; not every renderer can do it (the terminal one cannot). */
+  bool scrim;
 } n8v_floating_options;
 
 /** Opens a floating child of the currently-open element; it layers on top without affecting
@@ -489,6 +505,22 @@ typedef struct n8v_floating_options {
     n8v_close_floating(). */
 N8V_API void n8v_open_floating(n8v_floating_options options);
 N8V_API void n8v_close_floating(void);
+
+typedef struct n8v_modal_options {
+  const char *title;
+  n8v_sizing width;
+  n8v_sizing height;
+  /** Fired by Escape, a click on the dimmed area outside it, and its close button. The caller stops drawing the modal in answer. */
+  n8v_click_fn on_close;
+  void *on_close_userdata;
+  const char *id;
+} n8v_modal_options;
+
+/** Opens a modal: a titled card centred over the whole window, over a dimmed backdrop that blocks the rest of the UI until it is
+    closed. It is a layer in the same window, not a window of its own, so it works wherever n8v does. Draw it only while it should
+    be open. It is placed at the top of the window wherever in the tree it is opened. Must be paired with n8v_close_modal(). */
+N8V_API void n8v_open_modal(n8v_modal_options options);
+N8V_API void n8v_close_modal(void);
 
 typedef enum n8v_popover_side {
   N8V_POPOVER_SIDE_BELOW,

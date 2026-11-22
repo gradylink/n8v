@@ -45,6 +45,7 @@ EM_JS(void, n8vHtmlInstallListeners, (), {
     e.preventDefault();
     if (justDragged) return;
     var value = '';
+    if (el.hasAttribute('data-n8v-slot')) value = el.getAttribute('data-n8v-slot');
     if (el.hasAttribute('data-n8v-at')) {
       var r = el.getBoundingClientRect();
       value = ((e.clientX - r.left) / Math.max(1, r.width)) + ',' + ((e.clientY - r.top) / Math.max(1, r.height));
