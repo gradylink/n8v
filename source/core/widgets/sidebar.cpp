@@ -524,7 +524,7 @@ bool openPage(const n8v_page_options &opts, int rowOrdinal) {
     bar.floating.attachTo = CLAY_ATTACH_TO_PARENT;
     bar.floating.attachPoints.element = CLAY_ATTACH_POINT_LEFT_CENTER;
     bar.floating.attachPoints.parent = CLAY_ATTACH_POINT_LEFT_CENTER;
-    bar.floating.offset = {collapsed ? 2.0f : 3.0f, 0};
+    bar.floating.offset = {(collapsed ? 2.0f : 3.0f) + (collapsed ? 0.0f : opts.indent), 0};
     bar.floating.pointerCaptureMode = CLAY_POINTER_CAPTURE_MODE_PASSTHROUGH;
     Clay__ConfigureOpenElement(bar);
     Clay__CloseElement();

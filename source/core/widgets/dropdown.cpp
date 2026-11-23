@@ -11,6 +11,7 @@
 
 #include <clay.h>
 
+#include <algorithm>
 #include <deque>
 #include <string>
 #include <string_view>
@@ -73,6 +74,8 @@ namespace n8v::detail::emit {
 
 void dropdown(const n8v_dropdown_options &options, int ordinal) {
   Clay__OpenElement();
+  Clay_ElementId selfId{};
+  selfId.id = Clay_GetOpenElementId();
 
   const bool hovered = Clay_Hovered();
   const bool pressed = hovered && n8v::activeBackend().pointerDown();
@@ -224,16 +227,33 @@ void dropdown(const n8v_dropdown_options &options, int ordinal) {
     Clay_OnHover(dispatchDropdownClose, &dropdownOrdinalStorage.back());
     Clay__CloseElement();
 
-    Clay__OpenElement();
+    const Clay_ElementId popupId = Clay_GetElementIdWithIndex(CLAY_STRING("n8v-dropdown-popup"), (uint32_t)ordinal);
+    const Clay_ElementData buttonBefore = Clay_GetElementData(selfId);
+    const Clay_ElementData popupBefore = Clay_GetElementData(popupId);
+    const Clay_Dimensions window = n8v::activeBackend().windowSize();
+    constexpr float kMargin = 8.0f;
+    const float gap = floatingLabelStyle ? 0.0f : 6.0f;
+    bool opensUp = false;
+    float slide = 0.0f;
+    if (buttonBefore.found && popupBefore.found) {
+      const float below = window.height - (buttonBefore.boundingBox.y + buttonBefore.boundingBox.height) - kMargin;
+      const float above = buttonBefore.boundingBox.y - kMargin;
+      opensUp = popupBefore.boundingBox.height + gap > below && above > below;
+      const float overflow = buttonBefore.boundingBox.x + popupBefore.boundingBox.width - (window.width - kMargin);
+      if (overflow > 0.0f) slide = -std::min(overflow, std::max(0.0f, buttonBefore.boundingBox.x - kMargin));
+    }
+
+    Clay__OpenElementWithId(popupId);
     Clay_ElementDeclaration popupDecl = {};
     popupDecl.layout.layoutDirection = CLAY_TOP_TO_BOTTOM;
-    popupDecl.layout.sizing.width = CLAY_SIZING_GROW(0);
+    popupDecl.layout.sizing.width = CLAY_SIZING_FIT(buttonBefore.found ? buttonBefore.boundingBox.width : 0.0f);
     popupDecl.backgroundColor = n8v::detail::toClay(paint.popupBackground);
     Clay_CornerRadius popupRadius = floatingLabelStyle ? Clay_CornerRadius{0, 0, paint.cornerRadius.topLeft, paint.cornerRadius.topRight} : decl.cornerRadius;
     popupDecl.cornerRadius = popupRadius;
     popupDecl.floating.attachTo = CLAY_ATTACH_TO_PARENT;
-    popupDecl.floating.attachPoints = {CLAY_ATTACH_POINT_LEFT_TOP, CLAY_ATTACH_POINT_LEFT_BOTTOM};
-    if (!floatingLabelStyle) popupDecl.floating.offset.y = 6.0f;
+    popupDecl.floating.attachPoints = opensUp ? Clay_FloatingAttachPoints{CLAY_ATTACH_POINT_LEFT_BOTTOM, CLAY_ATTACH_POINT_LEFT_TOP}
+                                              : Clay_FloatingAttachPoints{CLAY_ATTACH_POINT_LEFT_TOP, CLAY_ATTACH_POINT_LEFT_BOTTOM};
+    popupDecl.floating.offset = {slide, opensUp ? -gap : gap};
     popupDecl.floating.zIndex = 1000;
     Clay__ConfigureOpenElement(popupDecl);
 
