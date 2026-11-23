@@ -5,8 +5,13 @@
 #include <string>
 
 #if defined(_WIN32)
-#include <shellapi.h>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+// clang-format off
 #include <windows.h>
+#include <shellapi.h>
+// clang-format on
 #elif defined(__EMSCRIPTEN__)
 #include <emscripten.h>
 #else
@@ -28,8 +33,12 @@ std::function<bool(std::string_view)> &urlHandler() {
 #if defined(_WIN32)
 
 void openExternally(std::string_view url) {
-  std::string urlStr(url);
-  ShellExecuteA(nullptr, "open", urlStr.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+  if (url.empty()) return;
+  const int n = MultiByteToWideChar(CP_UTF8, 0, url.data(), static_cast<int>(url.size()), nullptr, 0);
+  if (n <= 0) return;
+  std::wstring wide(static_cast<size_t>(n), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, url.data(), static_cast<int>(url.size()), wide.data(), n);
+  ShellExecuteW(nullptr, L"open", wide.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 }
 
 #elif defined(__EMSCRIPTEN__)

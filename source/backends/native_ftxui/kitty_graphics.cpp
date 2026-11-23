@@ -2,7 +2,7 @@
 
 #include "kitty_diacritics.hpp"
 
-#include <unistd.h>
+#include "backends/native_ftxui/tty_compat.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -52,12 +52,7 @@ std::string base64(const uint8_t *data, size_t size) {
 }
 
 void writeAll(const std::string &bytes) {
-  size_t done = 0;
-  while (done < bytes.size()) {
-    const ssize_t n = ::write(STDOUT_FILENO, bytes.data() + done, bytes.size() - done);
-    if (n <= 0) return;
-    done += (size_t)n;
-  }
+  tty::writeStdout(bytes.data(), bytes.size());
 }
 
 bool envIs(const char *name, const char *value) {

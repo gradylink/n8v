@@ -6,6 +6,8 @@
 #include <string>
 #include <system_error>
 
+#include "core/platform/utf8_path.hpp"
+
 namespace n8v::detail {
 
 inline std::string newPastedImagePath(const std::string &extension = "png") {
@@ -26,7 +28,7 @@ inline std::string newPastedImagePath(const std::string &extension = "png") {
   for (int n = 1;; ++n) {
     const std::string name = std::string("image-") + stamp + (n > 1 ? "-" + std::to_string(n) : "") + "." + extension;
     const std::filesystem::path path = dir / name;
-    if (!std::filesystem::exists(path, ec)) return path.string();
+    if (!std::filesystem::exists(path, ec)) return pathToUtf8(path);
   }
 }
 

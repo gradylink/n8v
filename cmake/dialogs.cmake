@@ -2,7 +2,7 @@ set(N8V_HAVE_DBUS FALSE)
 set(N8V_DIALOG_SOURCES source/core/dialogs/file_dialog.cpp source/core/dialogs/message_dialog.cpp source/core/notifications/notification.cpp)
 
 if(WIN32)
-  list(APPEND N8V_DIALOG_SOURCES source/core/dialogs/dialog_win32.cpp source/core/notifications/notification_none.cpp)
+  list(APPEND N8V_DIALOG_SOURCES source/core/dialogs/dialog_win32.cpp source/core/notifications/notification_win32.cpp)
 elseif(APPLE)
   enable_language(OBJCXX)
   list(APPEND N8V_DIALOG_SOURCES source/core/dialogs/dialog_cocoa.mm source/core/notifications/notification_none.cpp)

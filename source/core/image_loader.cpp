@@ -1,5 +1,6 @@
 #include "core/image_loader.hpp"
 
+#include "core/platform/utf8_path.hpp"
 #include "core/webp_decode.hpp"
 
 #define STB_IMAGE_STATIC
@@ -49,7 +50,7 @@ bool decodeInto(const uint8_t *bytes, size_t size, DecodedImage &out) {
 }
 
 bool readFile(const std::string &path, std::vector<uint8_t> &out) {
-  std::ifstream file(path, std::ios::binary | std::ios::ate);
+  std::ifstream file(n8v::detail::pathFromUtf8(path), std::ios::binary | std::ios::ate);
   if (!file) return false;
   std::streamsize size = file.tellg();
   if (size < 0) return false;

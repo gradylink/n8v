@@ -9,6 +9,16 @@
 #include <sstream>
 #include <vector>
 
+#ifdef _WIN32
+
+namespace n8v::detail {
+
+std::string findFreedesktopIconFile(std::string_view) { return {}; }
+
+} // namespace n8v::detail
+
+#else
+
 namespace n8v::detail {
 namespace {
 
@@ -151,3 +161,5 @@ std::string findFreedesktopIconFile(std::string_view name) {
 }
 
 } // namespace n8v::detail
+
+#endif // _WIN32

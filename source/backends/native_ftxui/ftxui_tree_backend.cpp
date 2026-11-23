@@ -22,9 +22,7 @@
 #include <ftxui/screen/string.hpp>
 #include <ftxui/screen/terminal.hpp>
 
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
+#include "backends/native_ftxui/tty_compat.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -525,26 +523,31 @@ size_t byteOffsetOfGlyph(const std::vector<std::string> &glyphs, size_t index) {
 }
 
 int redirectStderrToLog() {
-  if (!isatty(STDERR_FILENO)) return -1;
+  if (!tty::isTty(tty::kStderr)) return -1;
   std::string path;
   if (const char *explicitPath = std::getenv("N8V_TUI_LOG")) path = explicitPath;
   else {
+#ifdef _WIN32
+    const char *localAppData = std::getenv("LOCALAPPDATA");
+    std::string dir = localAppData && *localAppData ? std::string(localAppData) : std::string();
+#else
     const char *state = std::getenv("XDG_STATE_HOME");
     const char *home = std::getenv("HOME");
     std::string dir = state && *state ? std::string(state) : home && *home ? std::string(home) + "/.local/state" : std::string();
+#endif
     if (!dir.empty()) {
       dir += "/n8v";
-      mkdir((dir.substr(0, dir.size() - 4)).c_str(), 0700);
-      mkdir(dir.c_str(), 0700);
+      tty::makeDir(dir.substr(0, dir.size() - 4));
+      tty::makeDir(dir);
       path = dir + "/tui.log";
     }
   }
-  int target = path.empty() ? -1 : open(path.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0600);
-  if (target < 0) target = open("/dev/null", O_WRONLY);
+  int target = path.empty() ? -1 : tty::openLogAppend(path);
+  if (target < 0) target = tty::openNullDevice();
   if (target < 0) return -1;
-  const int saved = dup(STDERR_FILENO);
-  dup2(target, STDERR_FILENO);
-  close(target);
+  const int saved = tty::dupFd(tty::kStderr);
+  tty::dup2Fd(target, tty::kStderr);
+  tty::closeFd(target);
   return saved;
 }
 
@@ -553,7 +556,7 @@ public:
   ~FtxuiTreeBackend() override { shutdown(); }
 
   bool initialize(int, int, std::string_view) override {
-    if (!isatty(STDOUT_FILENO) || !isatty(STDIN_FILENO)) {
+    if (!tty::isTty(tty::kStdout) || !tty::isTty(tty::kStdin)) {
       std::fprintf(stderr, "[n8v] The terminal backend needs an interactive terminal.\n");
       return false;
     }
@@ -649,8 +652,8 @@ public:
     app_.reset();
     root_ = nullptr;
     if (savedStderr_ >= 0) {
-      dup2(savedStderr_, STDERR_FILENO);
-      close(savedStderr_);
+      tty::dup2Fd(savedStderr_, tty::kStderr);
+      tty::closeFd(savedStderr_);
       savedStderr_ = -1;
     }
   }

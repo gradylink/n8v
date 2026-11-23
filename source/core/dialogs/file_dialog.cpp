@@ -44,9 +44,19 @@ std::string fileUriToPath(std::string_view uri) {
   constexpr std::string_view scheme = "file://";
   if (uri.substr(0, scheme.size()) != scheme) return {};
   uri.remove_prefix(scheme.size());
+#ifdef _WIN32
+  std::string uncPrefix;
+#endif
   if (!uri.empty() && uri.front() != '/') {
     size_t slash = uri.find('/');
-    if (slash == std::string_view::npos || uri.substr(0, slash) != "localhost") return {};
+    if (slash == std::string_view::npos) return {};
+    if (uri.substr(0, slash) != "localhost") {
+#ifdef _WIN32
+      uncPrefix = "\\\\" + std::string(uri.substr(0, slash));
+#else
+      return {};
+#endif
+    }
     uri.remove_prefix(slash);
   }
   auto hex = [](char c) { return std::isdigit(static_cast<unsigned char>(c)) ? c - '0' : std::tolower(static_cast<unsigned char>(c)) - 'a' + 10; };
@@ -60,6 +70,11 @@ std::string fileUriToPath(std::string_view uri) {
       out += uri[i];
     }
   }
+#ifdef _WIN32
+  if (uncPrefix.empty() && out.size() >= 3 && out[0] == '/' && std::isalpha(static_cast<unsigned char>(out[1])) && out[2] == ':') out.erase(0, 1);
+  std::replace(out.begin(), out.end(), '/', '\\');
+  out = uncPrefix + out;
+#endif
   return out;
 }
 

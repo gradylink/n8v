@@ -7,6 +7,16 @@
 #include <string>
 #include <string_view>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 namespace n8v {
 namespace {
 
@@ -31,6 +41,7 @@ std::string lowered(std::string s) {
   return s;
 }
 
+#ifndef _WIN32
 std::string commandOutput(const char *command) {
   std::string out;
   if (FILE *pipe = popen(command, "r")) {
@@ -40,6 +51,7 @@ std::string commandOutput(const char *command) {
   }
   return out;
 }
+#endif
 
 bool detectDark() {
   if (const char *forced = std::getenv("N8V_THEME")) {
@@ -50,6 +62,24 @@ bool detectDark() {
   if (const char *gtkTheme = std::getenv("GTK_THEME")) {
     if (lowered(gtkTheme).find("dark") != std::string::npos) return true;
   }
+#ifdef _WIN32
+  DWORD appsUseLightTheme = 1;
+  DWORD size = sizeof(appsUseLightTheme);
+  if (
+    RegGetValueW(
+      HKEY_CURRENT_USER,
+      L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+      L"AppsUseLightTheme",
+      RRF_RT_REG_DWORD,
+      nullptr,
+      &appsUseLightTheme,
+      &size
+    ) == ERROR_SUCCESS
+  ) {
+    return appsUseLightTheme == 0;
+  }
+  return false;
+#else
   const std::string scheme = lowered(commandOutput("gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null"));
   if (scheme.find("prefer-dark") != std::string::npos) return true;
   if (scheme.find("prefer-light") != std::string::npos || scheme.find("default") != std::string::npos) return false;
@@ -65,6 +95,7 @@ bool detectDark() {
     }
   }
   return false;
+#endif
 }
 
 } // namespace

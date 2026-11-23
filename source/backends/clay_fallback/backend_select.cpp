@@ -59,6 +59,9 @@ std::string lowercaseEnv(const char *name) {
 }
 
 NativeToolkit preferredToolkitForDesktop() {
+#ifdef _WIN32
+  return NativeToolkit::Qt;
+#else
   const std::string current = lowercaseEnv("XDG_CURRENT_DESKTOP");
   const std::string session = lowercaseEnv("DESKTOP_SESSION");
 
@@ -72,6 +75,7 @@ NativeToolkit preferredToolkitForDesktop() {
     return NativeToolkit::Qt;
   }
   return NativeToolkit::Gtk;
+#endif
 }
 
 std::unique_ptr<Backend> tryGtk4Backend() {

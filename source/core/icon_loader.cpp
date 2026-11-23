@@ -1,6 +1,7 @@
 #include "core/icon_loader.hpp"
 
 #include "core/icon_registry.hpp"
+#include "core/platform/utf8_path.hpp"
 #include "core/style.hpp"
 
 #include "bundle.hpp"
@@ -125,7 +126,7 @@ const DecodedImage *getOrDecodeIconFromFile(const std::string &filePath, uint16_
   auto it = fileIconCache.find(key);
   if (it != fileIconCache.end()) return &it->second;
 
-  std::ifstream file(filePath, std::ios::binary | std::ios::ate);
+  std::ifstream file(n8v::detail::pathFromUtf8(filePath), std::ios::binary | std::ios::ate);
   if (!file) return nullptr;
   std::streamsize size = file.tellg();
   if (size <= 0) return nullptr;
