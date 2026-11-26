@@ -140,6 +140,9 @@ if(NOT EMSCRIPTEN)
       SDL_GetWindowFlags
   )
   target_include_directories(sdl2_lazy PUBLIC ${_N8V_SDL2_INCLUDE_DIRS})
+  if(TARGET sdl_headers_copy)
+    add_dependencies(sdl2_lazy sdl_headers_copy)
+  endif()
 endif()
 
 cl_import_source(
