@@ -819,8 +819,8 @@ typedef struct n8v_notification_options {
   void *on_done_userdata;
 } n8v_notification_options;
 
-/** Whether the system can show notifications at all (Linux: a notification service on the session bus; the web: the Notification API).
-    Not on Windows and macOS yet. */
+/** Whether the system can show notifications at all (Linux: a notification service on the session bus; Windows: balloon notifications from
+    the notification area; the web: the Notification API). Not on macOS yet. */
 N8V_API bool n8v_notifications_available(void);
 
 /** Names the app in the notification service. `desktop_entry` is the name of its .desktop file without the extension, which lets the

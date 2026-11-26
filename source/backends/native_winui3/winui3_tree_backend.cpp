@@ -437,6 +437,7 @@ struct NativeNode {
   bool hasDrag = false, hasZoom = false, tapActivates = false, multiline = false, hasOnKey = false, hasPaste = false, collapsible = false, isAction = false;
   n8v_submit_mode submitMode = N8V_SUBMIT_ON_ENTER;
   int appliedCompact = -1;
+  double appliedIndent = -1;
   std::string appliedLabel;
   std::atomic<unsigned> userSeq{0}, ackSeq{0};
 
@@ -2469,6 +2470,13 @@ void WinUI3TreeBackend::applyPage(NativeNode &nn, const n8v_page_options &o) {
   if (nn.appliedCompact != (int)compact) {
     if (compact || nn.appliedCompact >= 0) setItemHeight(item, compact ? 32 : 40);
     nn.appliedCompact = (int)compact;
+  }
+
+  const bool collapsed = sidebarProps && sidebarProps->collapsed && *sidebarProps->collapsed;
+  const double indent = collapsed ? 0.0 : std::max(0.0, (double)o.indent);
+  if (indent != nn.appliedIndent) {
+    item.Margin(mux::Thickness{indent, 0, 0, 0});
+    nn.appliedIndent = indent;
   }
 
   const std::string key = std::string(o.image ? o.image : "") + "|" + (o.icon ? o.icon : "") + "|" + std::to_string(o.image_size) + (prefersDark() ? "d" : "l");
