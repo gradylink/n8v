@@ -610,7 +610,7 @@ foreach(_n8v_target ${_n8v_targets})
     target_sources(${_n8v_target} PRIVATE source/backends/native_winui3/winui3_tree_backend.cpp)
     target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_WINUI3_BACKEND)
     target_include_directories(${_n8v_target} SYSTEM PRIVATE ${N8V_WINUI3_INCLUDE_DIRS})
-    target_link_libraries(${_n8v_target} PRIVATE user32 ole32 oleaut32 runtimeobject)
+    target_link_libraries(${_n8v_target} PRIVATE user32 shell32 ole32 oleaut32 runtimeobject)
   endif()
 
   if(N8V_HAVE_FTXUI)

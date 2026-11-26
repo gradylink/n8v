@@ -46,6 +46,7 @@
 #endif
 // clang-format off
 #include <windows.h>
+#include <shellapi.h>
 #include <unknwn.h>
 #undef GetCurrentTime
 
@@ -195,7 +196,6 @@ using BootstrapInitialize2 = HRESULT(WINAPI *)(UINT32 majorMinorVersion, PCWSTR 
 using BootstrapShutdown = void(WINAPI *)();
 
 constexpr UINT32 kWindowsAppSdkMajorMinor = 0x00010008;
-constexpr UINT32 kBootstrapShowUiOnNoMatch = 0x0008;
 
 bool hasPackageIdentity() {
   using GetCurrentPackageFullNameFn = LONG(WINAPI *)(UINT32 *, PWSTR);
@@ -204,6 +204,23 @@ bool hasPackageIdentity() {
   if (!fn) return false;
   UINT32 length = 0;
   return fn(&length, nullptr) != APPMODEL_ERROR_NO_PACKAGE;
+}
+
+void offerRuntimeDownload(const wchar_t *problem, HRESULT hr) {
+  if (std::getenv("N8V_WINUI3_NO_PROMPT")) return;
+  wchar_t text[768];
+  std::swprintf(
+    text,
+    sizeof text / sizeof text[0],
+    L"%ls (error 0x%08lX).\n\n"
+    L"This app draws its window with WinUI 3, which needs the Windows App Runtime 1.8.\n\n"
+    L"Yes: open the download page, install the runtime for your PC, then start the app again.\n"
+    L"No: continue now with the basic look.",
+    problem,
+    (unsigned long)hr
+  );
+  const int choice = MessageBoxW(nullptr, text, L"Windows App Runtime required", MB_YESNO | MB_ICONINFORMATION | MB_SETFOREGROUND);
+  if (choice == IDYES) ShellExecuteW(nullptr, L"open", L"https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads", nullptr, nullptr, SW_SHOWNORMAL);
 }
 
 struct Bootstrap {
@@ -217,14 +234,16 @@ struct Bootstrap {
     module = load();
     if (!module) {
       std::fprintf(stderr, "[n8v] winui3: Microsoft.WindowsAppRuntime.Bootstrap.dll was not found next to the executable\n");
+      offerRuntimeDownload(L"Microsoft.WindowsAppRuntime.Bootstrap.dll is missing next to the program", HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND));
       return false;
     }
     auto init = reinterpret_cast<BootstrapInitialize2>(GetProcAddress(module, "MddBootstrapInitialize2"));
     shutdown = reinterpret_cast<BootstrapShutdown>(GetProcAddress(module, "MddBootstrapShutdown"));
     if (!init) return false;
-    const HRESULT hr = init(kWindowsAppSdkMajorMinor, L"", PackageVersion{0}, kBootstrapShowUiOnNoMatch);
+    const HRESULT hr = init(kWindowsAppSdkMajorMinor, L"", PackageVersion{0}, 0);
     if (FAILED(hr)) {
       std::fprintf(stderr, "[n8v] winui3: the Windows App SDK 1.8 runtime could not be loaded (0x%08lx)\n", (unsigned long)hr);
+      offerRuntimeDownload(L"The Windows App Runtime 1.8 is not installed", hr);
       return false;
     }
     return true;
