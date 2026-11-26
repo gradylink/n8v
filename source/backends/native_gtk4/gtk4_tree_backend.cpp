@@ -653,6 +653,7 @@ public:
       --rootOverlayChildren_;
     }
     if (nn->kind() == Kind::Radio && nn->widget) gtk_check_button_set_group(GTK_CHECK_BUTTON(nn->widget), nullptr);
+    if (nn->kind() == Kind::Video || nn->kind() == Kind::Audio) releaseStreamInBackground(*nn);
     for (GtkWidget *w : nn->owned) g_object_unref(w);
     delete nn;
     node.handle = nullptr;
@@ -660,6 +661,38 @@ public:
 
 private:
   using Kind = NativeKind;
+
+  static void releaseStreamInBackground(NativeNode &nn) {
+    if (!nn.widget) return;
+    GtkMediaStream *stream = nullptr;
+    if (GTK_IS_VIDEO(nn.widget)) {
+      stream = gtk_video_get_media_stream(GTK_VIDEO(nn.widget));
+      if (stream) g_object_ref(stream);
+      gtk_video_set_media_stream(GTK_VIDEO(nn.widget), nullptr);
+    } else if (GTK_IS_PICTURE(nn.widget)) {
+      stream = GTK_MEDIA_STREAM(g_object_get_data(G_OBJECT(nn.widget), "n8v-video-stream"));
+      if (stream) g_object_ref(stream);
+      gtk_picture_set_paintable(GTK_PICTURE(nn.widget), nullptr);
+      g_object_set_data(G_OBJECT(nn.widget), "n8v-video-stream", nullptr);
+    } else if (GTK_IS_MEDIA_CONTROLS(nn.widget)) {
+      stream = GTK_MEDIA_STREAM(g_object_get_data(G_OBJECT(nn.widget), "n8v-audio-stream"));
+      if (stream) g_object_ref(stream);
+      gtk_media_controls_set_media_stream(GTK_MEDIA_CONTROLS(nn.widget), nullptr);
+      g_object_set_data(G_OBJECT(nn.widget), "n8v-audio-stream", nullptr);
+    }
+    if (!stream) return;
+    GThread *thread = g_thread_try_new(
+      "n8v-media-release",
+      [](gpointer data) -> gpointer {
+        g_object_unref(data);
+        return nullptr;
+      },
+      stream,
+      nullptr
+    );
+    if (thread) g_thread_unref(thread);
+    else g_object_unref(stream);
+  }
 
   static bool isSidebarDecoration(Kind kind) { return kind == Kind::SidebarSection || kind == Kind::SidebarDivider; }
   static bool isActionPage(const NativeNode &node) {

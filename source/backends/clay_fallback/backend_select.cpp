@@ -23,6 +23,10 @@
 #include "backends/native_ftxui/ftxui_tree_backend.hpp"
 #endif
 
+#ifdef N8V_HAS_WINUI3_BACKEND
+#include "backends/native_winui3/winui3_tree_backend.hpp"
+#endif
+
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -95,6 +99,15 @@ std::unique_ptr<Backend> tryQtBackend() {
 #endif
   return nullptr;
 }
+
+std::unique_ptr<Backend> tryWinUI3Backend() {
+#ifdef N8V_HAS_WINUI3_BACKEND
+  if (detail::winui3Available()) {
+    return detail::makeWinUI3TreeBackend();
+  }
+#endif
+  return nullptr;
+}
 #endif
 
 std::unique_ptr<Backend> selectBackend() {
@@ -106,6 +119,9 @@ std::unique_ptr<Backend> selectBackend() {
   const auto is = [&](const char *a, const char *b) { return preferredBackend && (std::strcmp(preferredBackend, a) == 0 || std::strcmp(preferredBackend, b) == 0); };
 
   if (!preferredBackend) {
+    if (auto backend = tryWinUI3Backend()) {
+      return backend;
+    }
     const bool qtFirst = preferredToolkitForDesktop() == NativeToolkit::Qt;
     if (auto backend = qtFirst ? tryQtBackend() : tryGtk4Backend()) {
       return backend;
@@ -119,6 +135,10 @@ std::unique_ptr<Backend> selectBackend() {
     }
   } else if (is("qt", "qt6")) {
     if (auto backend = tryQtBackend()) {
+      return backend;
+    }
+  } else if (is("winui3", "winui")) {
+    if (auto backend = tryWinUI3Backend()) {
       return backend;
     }
   }

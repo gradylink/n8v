@@ -67,6 +67,8 @@ if(N8V_BACKEND_GTK4)
         g_main_context_wakeup
         g_timeout_add
         g_source_remove
+        g_thread_try_new
+        g_thread_unref
         g_markup_escape_text
         g_free
         g_free_sized

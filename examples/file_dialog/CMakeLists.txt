@@ -7,3 +7,6 @@ endif()
 if(EMSCRIPTEN)
   set_target_properties(n8v-file-dialog-example PROPERTIES SUFFIX ".html")
 endif()
+
+n8v_embed_manifest(n8v-file-dialog-example)
+n8v_copy_runtime(n8v-file-dialog-example)

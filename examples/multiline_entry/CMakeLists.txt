@@ -7,3 +7,6 @@ endif()
 if(EMSCRIPTEN)
   set_target_properties(n8v-multiline-entry-example PROPERTIES SUFFIX ".html")
 endif()
+
+n8v_embed_manifest(n8v-multiline-entry-example)
+n8v_copy_runtime(n8v-multiline-entry-example)
