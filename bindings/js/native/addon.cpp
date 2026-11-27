@@ -495,6 +495,8 @@ Napi::Value Video(const Napi::CallbackInfo &info) {
   v.controls = BoolOr(o, "controls", false);
   std::string idStorage;
   StrOr(o, "id", v.id, idStorage);
+  WireCallback(o, "onFullscreen", BoolChangeTrampoline, v.on_fullscreen, v.on_fullscreen_userdata);
+  v.is_fullscreen = BoolOr(o, "isFullscreen", false);
   n8v_video(v);
   return info.Env().Undefined();
 }

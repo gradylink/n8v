@@ -116,6 +116,8 @@ type config struct {
 	badgeColor             C.n8v_badge_color
 	stickToBottom          bool
 	onHover                func(bool)
+	onFullscreen           func(bool)
+	isFullscreen           bool
 	onChange               func(int)
 	multiline              bool
 	submitCtrlEnter        bool
@@ -363,6 +365,13 @@ func Muted() Option    { return func(c *config) { c.muted = true } }
 
 // Controls shows play/pause and a seek bar on a Video.
 func Controls() Option { return func(c *config) { c.controls = true } }
+
+// OnFullscreen adds a fullscreen button to a Video's controls and calls fn with true to enter fullscreen and false to leave it.
+// n8v changes nothing itself: the application decides what fullscreen means for its layout.
+func OnFullscreen(fn func(bool)) Option { return func(c *config) { c.onFullscreen = fn } }
+
+// IsFullscreen tells a Video whether the application is showing it fullscreen right now, so its button offers the right action.
+func IsFullscreen(on bool) Option { return func(c *config) { c.isFullscreen = on } }
 
 // Collapsible lets the user fold a Sidebar to a narrow strip of icons. The initial state is read from collapsed and every toggle is
 // written back to it, so the caller can persist it. Use OnToggle to be told when it changes.
@@ -784,9 +793,11 @@ func ImageRGBA(pixels []byte, width, height int, opts ...Option) {
 // Video plays a file or URL (anything with a scheme, like https://).
 func Video(source string, opts ...Option) {
 	c := apply(opts)
+	fullscreen, fullscreenData := boolCallback(c.onFullscreen)
 	C.n8v_video(C.n8v_video_options{
 		source: cstr(source), width: c.width.s, height: c.height.s, rounding: c.rounding,
 		autoplay: C.bool(c.autoplay), loop: C.bool(c.loop), muted: C.bool(c.muted), controls: C.bool(c.controls), id: cstr(c.id),
+		on_fullscreen: fullscreen, on_fullscreen_userdata: fullscreenData, is_fullscreen: C.bool(c.isFullscreen),
 	})
 }
 

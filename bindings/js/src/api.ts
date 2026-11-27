@@ -514,6 +514,13 @@ export interface VideoOptions {
   /** Show play/pause and a seek bar. */
   controls?: boolean;
   id?: string;
+  /**
+   * Adds a fullscreen button to the controls and calls this with true to enter fullscreen and false to leave it. n8v changes
+   * nothing itself: the app decides what fullscreen means for its layout. Without this there is no fullscreen button.
+   */
+  onFullscreen?: (fullscreen: boolean) => void;
+  /** Whether the app is showing this video fullscreen right now, so the button offers the right action and icon. */
+  isFullscreen?: boolean;
 }
 
 export function video(opts: VideoOptions): void {

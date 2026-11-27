@@ -405,6 +405,15 @@ typedef struct n8v_video_options {
   /** Show play/pause and a seek bar. */
   bool controls;
   const char *id;
+  /**
+   * Adds a fullscreen button to the controls and calls this when it is pressed, with true to enter fullscreen and false to
+   * leave it. n8v changes nothing itself: the application decides what fullscreen means for its layout (and what to overlay).
+   * Without this there is no fullscreen button.
+   */
+  n8v_bool_change_fn on_fullscreen;
+  void *on_fullscreen_userdata;
+  /** Whether the application is showing this video fullscreen right now, so the button offers the right action and icon. */
+  bool is_fullscreen;
 } n8v_video_options;
 
 typedef struct n8v_audio_options {

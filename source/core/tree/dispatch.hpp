@@ -28,6 +28,8 @@ void selectPage(PNode &page);
 
 void setSlider(PNode &node, float value);
 
+void requestFullscreen(PNode &node, bool fullscreen);
+
 void setText(PNode &node, std::string_view text);
 
 void submit(PNode &node);

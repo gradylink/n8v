@@ -199,6 +199,9 @@ template <typename V> void visitFields(n8v_video_options &o, V &v) {
   v.num(o.muted);
   v.num(o.controls);
   v.str(o.id);
+  v.ptr(o.on_fullscreen);
+  v.ptr(o.on_fullscreen_userdata);
+  v.num(o.is_fullscreen);
 }
 
 template <typename V> void visitFields(n8v_divider_options &o, V &v) {

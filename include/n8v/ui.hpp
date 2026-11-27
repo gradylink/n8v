@@ -930,6 +930,8 @@ inline void video(VideoOptions options) {
   c_opts.muted = options.muted;
   c_opts.controls = options.controls;
   c_opts.id = options.id.empty() ? nullptr : options.id.c_str();
+  if (options.fullscreen) callback_bridge::bridge(callback_bridge::boolChangeClosures, std::move(options.fullscreen), c_opts.on_fullscreen, c_opts.on_fullscreen_userdata);
+  c_opts.is_fullscreen = options.isFullscreen;
 
   n8v_video(c_opts);
 }

@@ -7,6 +7,7 @@
 #include "core/icon_registry.hpp"
 #include "core/image_loader.hpp"
 #include "core/markdown/image_state.hpp"
+#include "core/media/animated_video.hpp"
 #include "core/open_url.hpp"
 #include "core/paste_file.hpp"
 #include "core/style.hpp"
@@ -16,6 +17,7 @@
 #include "core/tree/props.hpp"
 #include "core/tree/reconcile.hpp"
 #include "core/widgets/page_badge.hpp"
+#include "gtk4_media_view.hpp"
 
 #include <gtk/gtk.h>
 
@@ -665,20 +667,11 @@ private:
   static void releaseStreamInBackground(NativeNode &nn) {
     if (!nn.widget) return;
     GtkMediaStream *stream = nullptr;
-    if (GTK_IS_VIDEO(nn.widget)) {
-      stream = gtk_video_get_media_stream(GTK_VIDEO(nn.widget));
-      if (stream) g_object_ref(stream);
-      gtk_video_set_media_stream(GTK_VIDEO(nn.widget), nullptr);
-    } else if (GTK_IS_PICTURE(nn.widget)) {
+    if (GTK_IS_PICTURE(nn.widget)) {
       stream = GTK_MEDIA_STREAM(g_object_get_data(G_OBJECT(nn.widget), "n8v-video-stream"));
       if (stream) g_object_ref(stream);
       gtk_picture_set_paintable(GTK_PICTURE(nn.widget), nullptr);
       g_object_set_data(G_OBJECT(nn.widget), "n8v-video-stream", nullptr);
-    } else if (GTK_IS_MEDIA_CONTROLS(nn.widget)) {
-      stream = GTK_MEDIA_STREAM(g_object_get_data(G_OBJECT(nn.widget), "n8v-audio-stream"));
-      if (stream) g_object_ref(stream);
-      gtk_media_controls_set_media_stream(GTK_MEDIA_CONTROLS(nn.widget), nullptr);
-      g_object_set_data(G_OBJECT(nn.widget), "n8v-audio-stream", nullptr);
     }
     if (!stream) return;
     GThread *thread = g_thread_try_new(
@@ -737,6 +730,7 @@ private:
   void applyStickyBottom();
   void setIconImage(NativeNode &nn, GtkWidget *image, const char *name, int pixelSize);
   void applyVideo(NativeNode &nn, const n8v_video_options &o);
+  bool applyAnimatedVideo(NativeNode &nn, const n8v_video_options &o);
   void applyAudio(NativeNode &nn, const n8v_audio_options &o);
   void setLabelFromText(GtkWidget *label, const n8v_text_options &o, std::string_view text);
 
@@ -1888,51 +1882,173 @@ void setStreamMuted(GtkMediaStream *stream, bool muted) {
 }
 
 void Gtk4TreeBackend::applyAudio(NativeNode &nn, const n8v_audio_options &o) {
-  const std::string source = o.source ? o.source : "";
-  if (source != nn.videoSource) {
-    nn.videoSource = source;
-    GtkMediaStream *stream = nullptr;
-    if (!source.empty()) {
-      GFile *file = source.find("://") != std::string::npos ? g_file_new_for_uri(source.c_str()) : g_file_new_for_path(source.c_str());
-      stream = gtk_media_file_new_for_file(file);
-      g_object_unref(file);
-    }
-    gtk_media_controls_set_media_stream(GTK_MEDIA_CONTROLS(nn.widget), stream);
-    g_object_set_data_full(G_OBJECT(nn.widget), "n8v-audio-stream", stream, g_object_unref);
-  }
-
-  GtkMediaStream *stream = GTK_MEDIA_STREAM(g_object_get_data(G_OBJECT(nn.widget), "n8v-audio-stream"));
-  if (stream) {
-    gtk_media_stream_set_loop(stream, o.loop);
-    setStreamMuted(stream, o.muted);
-    if (o.autoplay && !g_object_get_data(G_OBJECT(stream), "n8v-autoplayed")) {
-      g_object_set_data(G_OBJECT(stream), "n8v-autoplayed", GINT_TO_POINTER(1));
-      gtk_media_stream_play(stream);
-    }
+  if (MediaView *view = MediaView::of(nn.widget)) {
+    MediaViewOptions options;
+    options.source = o.source ? o.source : "";
+    options.autoplay = o.autoplay;
+    options.loop = o.loop;
+    options.muted = o.muted;
+    view->update(options);
   }
   gtk_widget_set_size_request(nn.widget, o.width.mode == N8V_SIZING_FIXED ? std::max(1, (int)o.width.value) : 320, -1);
 }
 
+struct AnimatedPicture {
+  std::unique_ptr<AnimatedVideo> video;
+  std::string source;
+  bool loop = true;
+  bool autoplay = true;
+  guint tickId = 0;
+};
+
+constexpr const char *kAnimKey = "n8v-anim";
+constexpr const char *kAnimFailedKey = "n8v-anim-failed";
+
+AnimatedPicture *animatedPicture(GtkWidget *widget) { return static_cast<AnimatedPicture *>(g_object_get_data(G_OBJECT(widget), kAnimKey)); }
+
+void dropAnimatedPicture(GtkWidget *widget) {
+  AnimatedPicture *state = animatedPicture(widget);
+  if (!state) return;
+  if (state->tickId) gtk_widget_remove_tick_callback(widget, state->tickId);
+  state->tickId = 0;
+  g_object_set_data(G_OBJECT(widget), kAnimKey, nullptr);
+}
+
+void startPictureStream(GtkWidget *picture, const std::string &source, bool loop, bool autoplay) {
+  GFile *file = source.empty() ? nullptr : source.find("://") != std::string::npos ? g_file_new_for_uri(source.c_str()) : g_file_new_for_path(source.c_str());
+  GtkMediaStream *stream = file ? gtk_media_file_new_for_file(file) : nullptr;
+  gtk_picture_set_paintable(GTK_PICTURE(picture), stream ? GDK_PAINTABLE(stream) : nullptr);
+  g_object_set_data_full(G_OBJECT(picture), "n8v-video-stream", stream, g_object_unref);
+  if (file) g_object_unref(file);
+  if (!stream) return;
+  gtk_media_stream_set_loop(stream, loop);
+  if (autoplay) {
+    g_object_set_data(G_OBJECT(stream), "n8v-autoplayed", GINT_TO_POINTER(1));
+    gtk_media_stream_play(stream);
+  }
+  setStreamMuted(stream, true);
+}
+
+gboolean onAnimatedPictureTick(GtkWidget *widget, GdkFrameClock *, gpointer) {
+  AnimatedPicture *state = animatedPicture(widget);
+  if (!state) return G_SOURCE_REMOVE;
+
+  VideoFrame frame;
+  if (state->video->takeFrame(frame)) {
+    const gsize size = (gsize)frame.rgba.size();
+    auto *pixels = new std::vector<uint8_t>(std::move(frame.rgba));
+    GBytes *bytes = g_bytes_new_with_free_func(pixels->data(), size, +[](gpointer data) { delete static_cast<std::vector<uint8_t> *>(data); }, pixels);
+    GdkTexture *texture = gdk_memory_texture_new(frame.width, frame.height, GDK_MEMORY_R8G8B8A8, bytes, (gsize)frame.width * 4);
+    g_bytes_unref(bytes);
+    gtk_picture_set_paintable(GTK_PICTURE(widget), GDK_PAINTABLE(texture));
+    g_object_unref(texture);
+    return G_SOURCE_CONTINUE;
+  }
+
+  if (state->video->failed()) {
+    const std::string source = state->source;
+    const bool loop = state->loop, autoplay = state->autoplay;
+    state->tickId = 0;
+    g_object_set_data(G_OBJECT(widget), kAnimKey, nullptr);
+    g_object_set_data(G_OBJECT(widget), kAnimFailedKey, GINT_TO_POINTER(1));
+    startPictureStream(widget, source, loop, autoplay);
+    return G_SOURCE_REMOVE;
+  }
+
+  if (!state->video->running()) {
+    state->tickId = 0;
+    return G_SOURCE_REMOVE;
+  }
+  return G_SOURCE_CONTINUE;
+}
+
+void onAnimatedPictureMap(GtkWidget *widget, gpointer) {
+  if (AnimatedPicture *state = animatedPicture(widget)) state->video->setPaused(false);
+}
+
+void onAnimatedPictureUnmap(GtkWidget *widget, gpointer) {
+  if (AnimatedPicture *state = animatedPicture(widget)) state->video->setPaused(true);
+}
+
+bool Gtk4TreeBackend::applyAnimatedVideo(NativeNode &nn, const n8v_video_options &o) {
+  const std::string source = o.source ? o.source : "";
+  const bool wanted = GTK_IS_PICTURE(nn.widget) && !o.controls && o.muted && !source.empty() && AnimatedVideo::available();
+
+  if (!wanted) {
+    if (animatedPicture(nn.widget)) {
+      dropAnimatedPicture(nn.widget);
+      nn.videoSource.clear();
+    }
+    return false;
+  }
+
+  if (source != nn.videoSource) g_object_set_data(G_OBJECT(nn.widget), kAnimFailedKey, nullptr);
+  if (g_object_get_data(G_OBJECT(nn.widget), kAnimFailedKey)) return false;
+
+  AnimatedPicture *state = animatedPicture(nn.widget);
+  if (state && source == nn.videoSource) {
+    state->loop = o.loop;
+    return true;
+  }
+
+  releaseStreamInBackground(nn);
+  dropAnimatedPicture(nn.widget);
+  nn.videoSource = source;
+
+  AnimatedVideoOptions options;
+  options.source = source;
+  const int scale = std::max(1, gtk_widget_get_scale_factor(nn.widget));
+  if (o.width.mode == N8V_SIZING_FIXED) options.maxWidth = std::max(1, (int)std::ceil(o.width.value)) * scale;
+  if (o.height.mode == N8V_SIZING_FIXED) options.maxHeight = std::max(1, (int)std::ceil(o.height.value)) * scale;
+  options.loop = o.loop;
+  options.play = o.autoplay;
+
+  std::unique_ptr<AnimatedVideo> video = AnimatedVideo::open(options);
+  if (!video) {
+    nn.videoSource.clear();
+    return false;
+  }
+  video->setPaused(!gtk_widget_get_mapped(nn.widget));
+
+  auto *fresh = new AnimatedPicture{std::move(video), source, o.loop, o.autoplay, 0};
+  g_object_set_data_full(G_OBJECT(nn.widget), kAnimKey, fresh, +[](gpointer data) { delete static_cast<AnimatedPicture *>(data); });
+  fresh->tickId = gtk_widget_add_tick_callback(nn.widget, onAnimatedPictureTick, nullptr, nullptr);
+  g_signal_connect_data(nn.widget, "map", G_CALLBACK(onAnimatedPictureMap), nullptr, nullptr, (GConnectFlags)0);
+  g_signal_connect_data(nn.widget, "unmap", G_CALLBACK(onAnimatedPictureUnmap), nullptr, nullptr, (GConnectFlags)0);
+  return true;
+}
+
 void Gtk4TreeBackend::applyVideo(NativeNode &nn, const n8v_video_options &o) {
   const std::string source = o.source ? o.source : "";
-  const bool withControls = GTK_IS_VIDEO(nn.widget);
+  MediaView *mediaView = MediaView::of(nn.widget);
+  const bool withControls = mediaView != nullptr;
 
-  if (source != nn.videoSource) {
+  if (mediaView) {
+    MediaViewOptions options;
+    options.source = source;
+    options.autoplay = o.autoplay;
+    options.loop = o.loop;
+    options.muted = o.muted;
+    options.fullscreenButton = o.on_fullscreen != nullptr;
+    options.isFullscreen = o.is_fullscreen;
+    mediaView->update(options);
     nn.videoSource = source;
+  }
+
+  const bool animated = !withControls && applyAnimatedVideo(nn, o);
+
+  if (!withControls && !animated && source != nn.videoSource) {
+    nn.videoSource = source;
+    releaseStreamInBackground(nn);
     GFile *file = source.empty() ? nullptr : source.find("://") != std::string::npos ? g_file_new_for_uri(source.c_str()) : g_file_new_for_path(source.c_str());
-    if (withControls) {
-      gtk_video_set_file(GTK_VIDEO(nn.widget), file);
-    } else {
-      GtkMediaStream *stream = file ? gtk_media_file_new_for_file(file) : nullptr;
-      gtk_picture_set_paintable(GTK_PICTURE(nn.widget), stream ? GDK_PAINTABLE(stream) : nullptr);
-      g_object_set_data_full(G_OBJECT(nn.widget), "n8v-video-stream", stream, g_object_unref);
-    }
+    GtkMediaStream *stream = file ? gtk_media_file_new_for_file(file) : nullptr;
+    gtk_picture_set_paintable(GTK_PICTURE(nn.widget), stream ? GDK_PAINTABLE(stream) : nullptr);
+    g_object_set_data_full(G_OBJECT(nn.widget), "n8v-video-stream", stream, g_object_unref);
     if (file) g_object_unref(file);
   }
 
-  GtkMediaStream *stream = withControls ? gtk_video_get_media_stream(GTK_VIDEO(nn.widget)) : GTK_MEDIA_STREAM(g_object_get_data(G_OBJECT(nn.widget), "n8v-video-stream"));
-  if (withControls) gtk_video_set_loop(GTK_VIDEO(nn.widget), o.loop);
-  else if (stream) gtk_media_stream_set_loop(stream, o.loop);
+  GtkMediaStream *stream = withControls ? nullptr : GTK_MEDIA_STREAM(g_object_get_data(G_OBJECT(nn.widget), "n8v-video-stream"));
+  if (stream) gtk_media_stream_set_loop(stream, o.loop);
   if (stream) {
     if (o.autoplay && !g_object_get_data(G_OBJECT(stream), "n8v-autoplayed")) {
       g_object_set_data(G_OBJECT(stream), "n8v-autoplayed", GINT_TO_POINTER(1));
@@ -2218,9 +2334,11 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
     gtk_widget_add_css_class(nn.outer, "n8v-divider");
     break;
   }
-  case Kind::Audio:
-    nn.outer = nn.widget = gtk_media_controls_new(nullptr);
+  case Kind::Audio: {
+    auto *view = new MediaView(false, nullptr);
+    nn.outer = nn.widget = view->widget();
     break;
+  }
   case Kind::Video: {
     const n8v_video_options *o = std::get_if<n8v_video_options>(&pn.current.props);
     if (o && !o->controls) {
@@ -2228,7 +2346,11 @@ void Gtk4TreeBackend::build(NativeNode &nn) {
       gtk_picture_set_can_shrink(GTK_PICTURE(nn.widget), TRUE);
       gtk_picture_set_content_fit(GTK_PICTURE(nn.widget), GTK_CONTENT_FIT_COVER);
     } else {
-      nn.outer = nn.widget = gtk_video_new();
+      PNode *node = &pn;
+      auto *view = new MediaView(true, [node](bool on) {
+        if (self_ && self_->live_.count(node)) dispatch::requestFullscreen(*node, on);
+      });
+      nn.outer = nn.widget = view->widget();
     }
     gtk_widget_set_overflow(nn.outer, GTK_OVERFLOW_HIDDEN);
     break;

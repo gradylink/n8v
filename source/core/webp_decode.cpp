@@ -4,8 +4,8 @@
 #include <cstring>
 
 #ifdef N8V_HAVE_WEBP
-#include <webp_lazy_vars.h>
-#include <webpdemux_lazy_vars.h>
+#include <n8v_webp_lazy_vars.h>
+#include <n8v_webpdemux_lazy_vars.h>
 
 extern "C" {
 struct WebPData {
@@ -26,13 +26,13 @@ struct WebPAnimInfo {
   uint32_t frame_count;
   uint32_t pad[4];
 };
-uint8_t *WebPDecodeRGBA(const uint8_t *data, size_t data_size, int *width, int *height);
-void WebPFree(void *ptr);
-int WebPAnimDecoderOptionsInitInternal(WebPAnimDecoderOptions *, int);
-WebPAnimDecoder *WebPAnimDecoderNewInternal(const WebPData *, const WebPAnimDecoderOptions *, int);
-int WebPAnimDecoderGetInfo(const WebPAnimDecoder *, WebPAnimInfo *);
-int WebPAnimDecoderGetNext(WebPAnimDecoder *, uint8_t **buf, int *timestamp);
-void WebPAnimDecoderDelete(WebPAnimDecoder *);
+uint8_t *n8v_WebPDecodeRGBA(const uint8_t *data, size_t data_size, int *width, int *height);
+void n8v_WebPFree(void *ptr);
+int n8v_WebPAnimDecoderOptionsInitInternal(WebPAnimDecoderOptions *, int);
+WebPAnimDecoder *n8v_WebPAnimDecoderNewInternal(const WebPData *, const WebPAnimDecoderOptions *, int);
+int n8v_WebPAnimDecoderGetInfo(const WebPAnimDecoder *, WebPAnimInfo *);
+int n8v_WebPAnimDecoderGetNext(WebPAnimDecoder *, uint8_t **buf, int *timestamp);
+void n8v_WebPAnimDecoderDelete(WebPAnimDecoder *);
 }
 
 namespace {
@@ -51,28 +51,28 @@ void saidOnce(const char *what) {
 bool isAnimated(const uint8_t *bytes, size_t size) { return size >= 21 && std::memcmp(bytes + 12, "VP8X", 4) == 0 && (bytes[20] & 0x02) != 0; }
 
 bool decodeFirstFrame(const uint8_t *bytes, size_t size, std::vector<uint8_t> &rgba, int &width, int &height) {
-  if (!lzy_webpdemux_lazy_is_available()) {
+  if (!lzy_n8v_webpdemux_lazy_is_available()) {
     saidOnce("libwebpdemux (for animated ones)");
     return false;
   }
   WebPAnimDecoderOptions options{};
-  if (!WebPAnimDecoderOptionsInitInternal(&options, kDemuxAbiVersion)) return false;
+  if (!n8v_WebPAnimDecoderOptionsInitInternal(&options, kDemuxAbiVersion)) return false;
   options.color_mode = kModeRgba;
   options.use_threads = 0;
   const WebPData data{bytes, size};
-  WebPAnimDecoder *decoder = WebPAnimDecoderNewInternal(&data, &options, kDemuxAbiVersion);
+  WebPAnimDecoder *decoder = n8v_WebPAnimDecoderNewInternal(&data, &options, kDemuxAbiVersion);
   if (!decoder) return false;
   bool ok = false;
   WebPAnimInfo info{};
   uint8_t *frame = nullptr;
   int timestamp = 0;
-  if (WebPAnimDecoderGetInfo(decoder, &info) && info.canvas_width > 0 && info.canvas_height > 0 && WebPAnimDecoderGetNext(decoder, &frame, &timestamp) && frame) {
+  if (n8v_WebPAnimDecoderGetInfo(decoder, &info) && info.canvas_width > 0 && info.canvas_height > 0 && n8v_WebPAnimDecoderGetNext(decoder, &frame, &timestamp) && frame) {
     width = (int)info.canvas_width;
     height = (int)info.canvas_height;
     rgba.assign(frame, frame + (size_t)width * (size_t)height * 4); // the buffer is the decoder's, and goes with it
     ok = true;
   }
-  WebPAnimDecoderDelete(decoder);
+  n8v_WebPAnimDecoderDelete(decoder);
   return ok;
 }
 
@@ -87,17 +87,17 @@ bool looksLikeWebp(const uint8_t *bytes, size_t size) { return size >= 12 && std
 bool decodeWebp(const uint8_t *bytes, size_t size, std::vector<uint8_t> &rgba, int &width, int &height) {
 #ifdef N8V_HAVE_WEBP
   if (!looksLikeWebp(bytes, size)) return false;
-  if (!lzy_webp_lazy_is_available()) {
+  if (!lzy_n8v_webp_lazy_is_available()) {
     saidOnce("libwebp");
     return false;
   }
   if (isAnimated(bytes, size)) return decodeFirstFrame(bytes, size, rgba, width, height);
 
   int w = 0, h = 0;
-  uint8_t *pixels = WebPDecodeRGBA(bytes, size, &w, &h);
+  uint8_t *pixels = n8v_WebPDecodeRGBA(bytes, size, &w, &h);
   if (!pixels) return false;
   rgba.assign(pixels, pixels + (size_t)w * (size_t)h * 4);
-  WebPFree(pixels);
+  n8v_WebPFree(pixels);
   width = w;
   height = h;
   return true;

@@ -446,6 +446,8 @@ endif()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/dialogs.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/webp.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/ffmpeg.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/mpv.cmake")
 
 set(N8V_SOURCES
   ${N8V_DIALOG_SOURCES}
@@ -456,6 +458,8 @@ set(N8V_SOURCES
   source/core/n8v_ffi.c
   source/core/image_loader.cpp
   source/core/webp_decode.cpp
+  source/core/media/animated_video.cpp
+  source/core/media/mpv_player.cpp
   source/core/icon_registry.cpp
   source/core/icon_loader.cpp
   source/core/tree/recorder.cpp
@@ -576,8 +580,18 @@ foreach(_n8v_target ${_n8v_targets})
     target_link_libraries(${_n8v_target} PUBLIC dbus_lazy)
   endif()
   if(N8V_HAVE_WEBP)
-    target_link_libraries(${_n8v_target} PUBLIC webp_lazy webpdemux_lazy)
+    target_link_libraries(${_n8v_target} PUBLIC n8v_webp_lazy n8v_webpdemux_lazy)
     target_compile_definitions(${_n8v_target} PRIVATE N8V_HAVE_WEBP)
+  endif()
+  if(N8V_HAVE_FFMPEG)
+    target_link_libraries(${_n8v_target} PUBLIC ${_N8V_FFMPEG_WRAPPER_TARGETS})
+    target_include_directories(${_n8v_target} PRIVATE "${N8V_FFMPEG_GEN_DIR}")
+    target_compile_definitions(${_n8v_target} PRIVATE N8V_HAVE_FFMPEG)
+  endif()
+  if(N8V_HAVE_MPV)
+    target_link_libraries(${_n8v_target} PUBLIC n8v_mpv_lazy)
+    target_include_directories(${_n8v_target} PRIVATE "${N8V_MPV_GEN_DIR}")
+    target_compile_definitions(${_n8v_target} PRIVATE N8V_HAVE_MPV)
   endif()
   if(WIN32)
     target_link_libraries(${_n8v_target} PRIVATE ole32 shell32 uuid advapi32)
@@ -586,7 +600,7 @@ foreach(_n8v_target ${_n8v_targets})
   endif()
 
   if(N8V_HAVE_GTK4)
-    target_sources(${_n8v_target} PRIVATE source/backends/native_gtk4/gtk4_tree_backend.cpp)
+    target_sources(${_n8v_target} PRIVATE source/backends/native_gtk4/gtk4_tree_backend.cpp source/backends/native_gtk4/gtk4_media_view.cpp)
     target_compile_definitions(${_n8v_target} PRIVATE N8V_HAS_GTK4_BACKEND)
     target_link_libraries(${_n8v_target} PUBLIC gtk4_lazy gobject_lazy glib_lazy gio_lazy pango_lazy)
     if(N8V_HAVE_ADWAITA)
@@ -676,7 +690,13 @@ if(N8V_INSTALL AND NOT EMSCRIPTEN)
     list(APPEND _n8v_lazy_export_targets dbus_lazy)
   endif()
   if(N8V_HAVE_WEBP)
-    list(APPEND _n8v_lazy_export_targets webp_lazy webpdemux_lazy)
+    list(APPEND _n8v_lazy_export_targets n8v_webp_lazy n8v_webpdemux_lazy)
+  endif()
+  if(N8V_HAVE_FFMPEG)
+    list(APPEND _n8v_lazy_export_targets ${_N8V_FFMPEG_WRAPPER_TARGETS})
+  endif()
+  if(N8V_HAVE_MPV)
+    list(APPEND _n8v_lazy_export_targets n8v_mpv_lazy)
   endif()
   if(N8V_HAVE_GTK4)
     list(APPEND _n8v_lazy_export_targets gtk4_lazy gobject_lazy glib_lazy gio_lazy pango_lazy)

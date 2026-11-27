@@ -74,6 +74,7 @@ if(N8V_BACKEND_GTK4)
         g_free_sized
         g_error_free
         g_bytes_new
+        g_bytes_new_with_free_func
         g_bytes_unref
     )
     target_include_directories(glib_lazy PUBLIC ${_N8V_GTK4_INCLUDE_DIRS})

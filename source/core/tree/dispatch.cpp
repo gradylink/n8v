@@ -117,6 +117,11 @@ void setSlider(PNode &node, float value) {
   if (o->on_change) o->on_change(value, o->on_change_userdata);
 }
 
+void requestFullscreen(PNode &node, bool fullscreen) {
+  auto *o = optionsOf<n8v_video_options>(node);
+  if (o && o->on_fullscreen) o->on_fullscreen(fullscreen, o->on_fullscreen_userdata);
+}
+
 void setText(PNode &node, std::string_view text) {
   auto *o = optionsOf<n8v_entry_options>(node);
   if (!o) return;

@@ -213,6 +213,14 @@ struct VideoOptions {
   bool controls = true;
   /** Keeps the player (and its position) across frames when the tree around it changes. */
   std::string id;
+  /**
+   * Adds a fullscreen button to the controls and calls this when it is pressed, with true to enter fullscreen and false to
+   * leave it. n8v changes nothing itself: the application decides what fullscreen means for its layout (and what to overlay).
+   * Without this there is no fullscreen button.
+   */
+  std::function<void(bool)> fullscreen = nullptr;
+  /** Whether the application is showing this video fullscreen right now, so the button offers the right action and icon. */
+  bool isFullscreen = false;
 };
 
 struct AudioOptions {

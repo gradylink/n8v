@@ -3,7 +3,7 @@ option(N8V_WEBP "Decode WebP images, with libwebp loaded at runtime if it is the
 
 if(N8V_WEBP AND NOT EMSCRIPTEN)
   set(N8V_HAVE_WEBP TRUE)
-  lzy_add_wrapper(webp_lazy
+  lzy_add_wrapper(n8v_webp_lazy
     LIBRARY_NAMES
       "libwebp.so.7"
       "libwebp.so"
@@ -14,8 +14,9 @@ if(N8V_WEBP AND NOT EMSCRIPTEN)
     SYMBOLS
       WebPDecodeRGBA
       WebPFree
+    REPLACE_PREFIX WebP n8v_WebP
   )
-  lzy_add_wrapper(webpdemux_lazy
+  lzy_add_wrapper(n8v_webpdemux_lazy
     LIBRARY_NAMES
       "libwebpdemux.so.2"
       "libwebpdemux.so"
@@ -29,5 +30,6 @@ if(N8V_WEBP AND NOT EMSCRIPTEN)
       WebPAnimDecoderGetInfo
       WebPAnimDecoderGetNext
       WebPAnimDecoderDelete
+    REPLACE_PREFIX WebP n8v_WebP
   )
 endif()
